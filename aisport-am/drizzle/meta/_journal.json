@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1787160877142,
+      "tag": "0000_marvelous_wilson_fisk",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1787249590748,
+      "tag": "0001_whole_riptide",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1787329523760,
+      "tag": "0002_lethal_mach_iv",
+      "breakpoints": true
+    }
+  ]
+}
