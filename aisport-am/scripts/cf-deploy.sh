@@ -6,25 +6,14 @@ WORKER_NAME="aisport-am"
 DOMAIN="aisport.am"
 
 echo "== Checking for existing D1 database '$DB_NAME' =="
-DB_ID="$(npx wrangler d1 list --json 2>/dev/null | node -e '
-  let data = "";
-  process.stdin.on("data", (d) => (data += d));
-  process.stdin.on("end", () => {
-    try {
-      const list = JSON.parse(data);
-      const found = list.find((d) => d.name === process.env.DB_NAME_ENV);
-      process.stdout.write(found ? found.uuid : "");
-    } catch (e) {
-      process.stdout.write("");
-    }
-  });
-' DB_NAME_ENV="$DB_NAME")"
+LIST_OUTPUT="$(npx wrangler d1 list 2>/dev/null || true)"
+DB_ID="$(echo "$LIST_OUTPUT" | grep -F "$DB_NAME" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)"
 
 if [ -z "$DB_ID" ]; then
   echo "== D1 database not found, creating it =="
   CREATE_OUTPUT="$(npx wrangler d1 create "$DB_NAME")"
   echo "$CREATE_OUTPUT"
-  DB_ID="$(echo "$CREATE_OUTPUT" | grep -oE 'database_id[[:space:]]*=[[:space:]]*"[^"]+"' | grep -oE '[0-9a-f-]{36}')"
+  DB_ID="$(echo "$CREATE_OUTPUT" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)"
 fi
 
 if [ -z "$DB_ID" ]; then
