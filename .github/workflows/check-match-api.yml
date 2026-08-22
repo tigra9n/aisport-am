@@ -24,6 +24,14 @@ jobs:
           echo "" >> match-check.txt
           echo "=== User-Agent mobile test ===" >> match-check.txt
           curl -s -A "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)" -D - "https://aisport.am/api/live/match/$MATCH_ID?_c=$(date +%s)mobile" >> match-check.txt
+          echo "" >> match-check.txt
+          echo "=== Coverage across matches ===" >> match-check.txt
+          for MID in $(echo "$HOME_HTML" | grep -oE 'fd-[0-9]+' | sort -u | head -8); do
+            CODE=$(curl -s -o /tmp/resp.json -w "%{http_code}" "https://aisport.am/api/live/match/$MID?_c=$(date +%s)")
+            EVENTS=$(cat /tmp/resp.json | grep -oE '"events":\[[^]]*\]' | head -c 60)
+            echo "$MID -> HTTP $CODE ($EVENTS)" >> match-check.txt
+            sleep 1
+          done
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
