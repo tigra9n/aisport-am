@@ -1,0 +1,34 @@
+name: Check Match API
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/check-match-api.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get a live match id and test the API
+        run: |
+          echo "=== Fetching homepage for match ids ===" > match-check.txt
+          HOME_HTML=$(curl -s "https://aisport.am/?_c=$(date +%s)")
+          echo "$HOME_HTML" | grep -oE 'fd-[0-9]+' | sort -u | head -5 >> match-check.txt
+          echo "" >> match-check.txt
+          MATCH_ID=$(echo "$HOME_HTML" | grep -oE 'fd-[0-9]+' | sort -u | head -1)
+          echo "=== Testing /api/live/match/$MATCH_ID ===" >> match-check.txt
+          curl -s -D - "https://aisport.am/api/live/match/$MATCH_ID?_c=$(date +%s)" >> match-check.txt
+          echo "" >> match-check.txt
+          echo "=== User-Agent mobile test ===" >> match-check.txt
+          curl -s -A "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)" -D - "https://aisport.am/api/live/match/$MATCH_ID?_c=$(date +%s)mobile" >> match-check.txt
+      - run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f match-check.txt
+          git commit -m "check [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
