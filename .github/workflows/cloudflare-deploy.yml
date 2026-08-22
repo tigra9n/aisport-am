@@ -49,31 +49,3 @@ jobs:
           git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:deploy-logs --force
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  diagnose:
-    needs: deploy
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Fetch live site and headers
-        run: |
-          echo "=== HEADERS for https://aisport.am/live ===" > diagnose.txt
-          curl -s -D - -o /tmp/body.html "https://aisport.am/live?_diag=$(date +%s)" >> diagnose.txt
-          echo "" >> diagnose.txt
-          echo "=== BODY (first 4000 chars) ===" >> diagnose.txt
-          head -c 4000 /tmp/body.html >> diagnose.txt
-          echo "" >> diagnose.txt
-          echo "=== grep for tell-tale strings ===" >> diagnose.txt
-          grep -o "match-row-link\|match-expand\|ինքնաշխատ\|match-modal\|codex-preview" /tmp/body.html | sort -u >> diagnose.txt || true
-      - name: Upload diagnostic
-        run: |
-          git config user.email "actions@github.com"
-          git config user.name "GitHub Actions"
-          git add -f diagnose.txt
-          git commit -m "Diagnostic output [skip ci]" || true
-          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:diagnose-logs --force
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
