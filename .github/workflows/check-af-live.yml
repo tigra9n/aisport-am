@@ -13,19 +13,47 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check dates and a match popup
+        env:
+          AFKEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
-          echo "=== /live (today, no date param) ===" > af-live-check.txt
-          curl -s "https://aisport.am/live?_c=$(date +%s)" | grep -oE 'af-[0-9]+' | sort -u >> af-live-check.txt
+          echo "=== Page messages per date ===" > af-live-check.txt
+          for D in 2026-08-20 2026-08-21 2026-08-22 2026-08-23 2026-08-24; do
+            echo "--- date=$D ---" >> af-live-check.txt
+            HTML=$(curl -s "https://aisport.am/live?date=$D&_c=$(date +%s)")
+            echo "$HTML" | grep -oE 'af-[0-9]+' | sort -u | wc -l | xargs echo "match count:" >> af-live-check.txt
+            echo "$HTML" | grep -oE 'no-matches\">[^<]*' >> af-live-check.txt || true
+            echo "$HTML" | grep -oE 'Անհասանելի է|Live<' >> af-live-check.txt || true
+            sleep 1
+          done
           echo "" >> af-live-check.txt
-          echo "=== /live?date=2026-08-21 ===" >> af-live-check.txt
-          curl -s "https://aisport.am/live?date=2026-08-21&_c=$(date +%s)" | grep -oE 'af-[0-9]+|fd-[0-9]+' | sort -u >> af-live-check.txt
+          echo "=== Raw API: fixtures for 2026-08-23, tracked leagues ===" >> af-live-check.txt
+          curl -s "https://v3.football.api-sports.io/fixtures?date=2026-08-23" -H "x-apisports-key: $AFKEY" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print('errors:', d.get('errors'))
+print('results:', d.get('results'))
+leagues=set()
+for fx in d.get('response',[]):
+    leagues.add(fx['league']['id'])
+tracked={2,39,140,135,78,61}
+print('tracked leagues present:', leagues & tracked)
+" >> af-live-check.txt
           echo "" >> af-live-check.txt
-          echo "=== /live?date=2026-08-23 ===" >> af-live-check.txt
-          curl -s "https://aisport.am/live?date=2026-08-23&_c=$(date +%s)" | grep -oE 'af-[0-9]+|fd-[0-9]+' | sort -u >> af-live-check.txt
+          echo "=== Raw API: fixtures for 2026-08-20, tracked leagues ===" >> af-live-check.txt
+          curl -s "https://v3.football.api-sports.io/fixtures?date=2026-08-20" -H "x-apisports-key: $AFKEY" | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+print('errors:', d.get('errors'))
+print('results:', d.get('results'))
+leagues=set()
+for fx in d.get('response',[]):
+    leagues.add(fx['league']['id'])
+tracked={2,39,140,135,78,61}
+print('tracked leagues present:', leagues & tracked)
+" >> af-live-check.txt
           echo "" >> af-live-check.txt
-          MID=$(curl -s "https://aisport.am/live?date=2026-08-21&_c=$(date +%s)" | grep -oE 'af-[0-9]+' | sort -u | head -1)
-          echo "=== Popup API for $MID ===" >> af-live-check.txt
-          curl -s -w "\nHTTP %{http_code}\n" "https://aisport.am/api/live/match/$MID?_c=$(date +%s)" >> af-live-check.txt
+          echo "=== Events for the 21st match (goals missing?) ===" >> af-live-check.txt
+          curl -s "https://v3.football.api-sports.io/fixtures/events?fixture=1552733" -H "x-apisports-key: $AFKEY" | head -c 1200 >> af-live-check.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
