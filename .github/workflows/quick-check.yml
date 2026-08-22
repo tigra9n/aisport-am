@@ -2,6 +2,11 @@ name: Quick Site Check
 
 on:
   workflow_dispatch: {}
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/quick-check.yml'
 
 jobs:
   check:
