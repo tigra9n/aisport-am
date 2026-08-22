@@ -1,10 +1,12 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
+import { Suspense } from "react";
 import { LeagueTabs } from "../components/league-tabs";
 import { SiteFooter } from "../components/site-footer";
 import { SiteHeader } from "../components/site-header";
 import { HeroCarousel } from "../components/hero-carousel";
 import { AdSpaces } from "../components/ad-spaces";
+import { MatchModal } from "../components/match-modal";
 import { demoArticles, opinions, trendingTopics, type ArticlePreview } from "../lib/content";
 import { leagues } from "../lib/football";
 import { getStandings } from "../lib/football-server";
@@ -76,7 +78,7 @@ export default async function Home() {
       <section className="live-ribbon" aria-label="Ուղիղ արդյունքներ">
         <div className="site-shell live-ribbon-inner">
           <Link className="live-title" href="/live"><span /> LIVE</Link>
-          <div className="live-ticker"><div className="live-ticker-track">{[...live.matches, ...live.matches].map((match, index) => <Link className="live-ribbon-match" href="/live" key={`${match.id}-${index}`}><small className={match.isLive ? "ticker-live" : ""}>{match.status}</small><strong>{match.home}</strong><b>{match.homeScore ?? "–"}</b><span>:</span><b>{match.awayScore ?? "–"}</b><strong>{match.away}</strong></Link>)}</div></div>
+          <div className="live-ticker"><div className="live-ticker-track">{[...live.matches, ...live.matches].map((match, index) => <Link className="live-ribbon-match" href={`/?match=${match.id}`} scroll={false} key={`${match.id}-${index}`}><small className={match.isLive ? "ticker-live" : ""}>{match.status}</small><strong>{match.home}</strong><b>{match.homeScore ?? "–"}</b><span>:</span><b>{match.awayScore ?? "–"}</b><strong>{match.away}</strong></Link>)}</div></div>
           <Link className="all-scores" href="/live">Բոլոր խաղերը →</Link>
         </div>
       </section>
@@ -141,6 +143,7 @@ export default async function Home() {
       </div>
       <AdSpaces bottom />
       <SiteFooter />
+      <Suspense fallback={null}><MatchModal /></Suspense>
     </main>
   );
 }
