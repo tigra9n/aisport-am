@@ -30,6 +30,12 @@ jobs:
           echo "" >> af-check.txt
           echo "=== Fixtures for today, filtered later ===" >> af-check.txt
           curl -s "https://v3.football.api-sports.io/fixtures?date=$(date -u +%F)&league=39&season=2026" -H "x-apisports-key: $KEY" | head -c 1500 >> af-check.txt
+          echo "" >> af-check.txt
+          echo "=== Fixtures for today WITHOUT season param ===" >> af-check.txt
+          curl -s "https://v3.football.api-sports.io/fixtures?date=$(date -u +%F)&league=39" -H "x-apisports-key: $KEY" | head -c 1500 >> af-check.txt
+          echo "" >> af-check.txt
+          echo "=== Fixtures for today, no league filter at all ===" >> af-check.txt
+          curl -s "https://v3.football.api-sports.io/fixtures?date=$(date -u +%F)" -H "x-apisports-key: $KEY" | head -c 400 >> af-check.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
