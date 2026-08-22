@@ -2,13 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "../../../../components/site-footer";
 import { SiteHeader } from "../../../../components/site-header";
-import { getLiveMatchDetails } from "../../../../lib/live-football-server";
+import { getEnrichedLiveMatchDetails } from "../../../../lib/live-match-details-server";
 
 export const dynamic = "force-dynamic";
 const available=(value:string)=>Boolean(value&&value!=="—"&&value!=="Տվյալ չկա");
 function eventIcon(label:string){const value=label.toLowerCase();if(value.includes("գոլ")||value.includes("11 մետրանոց"))return"⚽";if(value.includes("կարմիր"))return"🟥";if(value.includes("դեղին"))return"🟨";if(value.includes("փոխարին"))return"🔄";if(value.includes("var"))return"📺";return"•"}
 export default async function MatchDetailsPage({params}:{params:Promise<{id:string}>}){
- const {id}=await params;const details=await getLiveMatchDetails(id);if(!details)notFound();const {match}=details;
+ const {id}=await params;const details=await getEnrichedLiveMatchDetails(id);if(!details)notFound();const {match}=details;
  const stats=details.statistics.map(team=>({team:team.team,items:[{label:"xG",value:team.xg},{label:"Գնդակի տիրապետում",value:team.possession},{label:"Հարվածներ դարպասին",value:team.shotsOnGoal},{label:"Ընդհանուր հարվածներ",value:team.totalShots}].filter(item=>available(item.value))})).filter(team=>team.items.length>0);
  return <main><SiteHeader/><div className="site-shell inner-page match-details-page"><Link className="back-live-link" href="/live">← Բոլոր խաղերը</Link><span className="page-kicker">{match.competition}</span><h1 className="match-details-title"><span>{match.home}</span><b>{match.homeScore??"–"} : {match.awayScore??"–"}</b><span>{match.away}</span></h1><div className="match-facts"><span>{match.isLive?`🔴 ${match.status}`:match.status}</span>{available(details.venue)&&<span>🏟 Մարզադաշտ՝ {details.venue}</span>}{available(details.referee)&&<span>👤 Մրցավար՝ {details.referee}</span>}</div>
  {stats.length>0&&<section className="match-stat-grid">{stats.map(team=><article key={team.team}><h2>{team.team}</h2><dl>{team.items.map(item=><div key={item.label}><dt>{item.label}</dt><dd>{item.value}</dd></div>)}</dl></article>)}</section>}
