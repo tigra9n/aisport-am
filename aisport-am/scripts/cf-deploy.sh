@@ -22,20 +22,9 @@ DB_ID="$(npx wrangler d1 list --json 2>/dev/null | node -e '
 
 if [ -z "$DB_ID" ]; then
   echo "== D1 database not found, creating it =="
-  CREATE_OUTPUT="$(npx wrangler d1 create "$DB_NAME" --json)"
-  DB_ID="$(echo "$CREATE_OUTPUT" | node -e '
-    let data = "";
-    process.stdin.on("data", (d) => (data += d));
-    process.stdin.on("end", () => {
-      try {
-        const j = JSON.parse(data);
-        const uuid = j.uuid || (Array.isArray(j) && j[0] && j[0].uuid);
-        process.stdout.write(uuid || "");
-      } catch (e) {
-        process.stdout.write("");
-      }
-    });
-  ')"
+  CREATE_OUTPUT="$(npx wrangler d1 create "$DB_NAME")"
+  echo "$CREATE_OUTPUT"
+  DB_ID="$(echo "$CREATE_OUTPUT" | grep -oE 'database_id[[:space:]]*=[[:space:]]*"[^"]+"' | grep -oE '[0-9a-f-]{36}')"
 fi
 
 if [ -z "$DB_ID" ]; then
