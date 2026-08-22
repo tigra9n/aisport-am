@@ -187,3 +187,6 @@ img{display:block;max-width:100%}
   .match-modal{padding:18px;max-height:92vh}
   .match-modal-tabs{flex-direction:column}
 }
+
+.match-row-link{cursor:pointer;text-decoration:none;color:inherit;transition:background .12s ease}
+.match-row-link:hover{background:var(--surface-2)}
