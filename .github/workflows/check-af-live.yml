@@ -1,0 +1,36 @@
+name: Check API Football Live
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/check-af-live.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check dates and a match popup
+        run: |
+          echo "=== /live (today, no date param) ===" > af-live-check.txt
+          curl -s "https://aisport.am/live?_c=$(date +%s)" | grep -oE 'af-[0-9]+' | sort -u >> af-live-check.txt
+          echo "" >> af-live-check.txt
+          echo "=== /live?date=2026-08-21 ===" >> af-live-check.txt
+          curl -s "https://aisport.am/live?date=2026-08-21&_c=$(date +%s)" | grep -oE 'af-[0-9]+|fd-[0-9]+' | sort -u >> af-live-check.txt
+          echo "" >> af-live-check.txt
+          echo "=== /live?date=2026-08-23 ===" >> af-live-check.txt
+          curl -s "https://aisport.am/live?date=2026-08-23&_c=$(date +%s)" | grep -oE 'af-[0-9]+|fd-[0-9]+' | sort -u >> af-live-check.txt
+          echo "" >> af-live-check.txt
+          MID=$(curl -s "https://aisport.am/live?date=2026-08-21&_c=$(date +%s)" | grep -oE 'af-[0-9]+' | sort -u | head -1)
+          echo "=== Popup API for $MID ===" >> af-live-check.txt
+          curl -s -w "\nHTTP %{http_code}\n" "https://aisport.am/api/live/match/$MID?_c=$(date +%s)" >> af-live-check.txt
+      - run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f af-live-check.txt
+          git commit -m "check [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
