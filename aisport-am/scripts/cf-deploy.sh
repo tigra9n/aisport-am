@@ -5,6 +5,8 @@ DB_NAME="aisport-db"
 WORKER_NAME="aisport-am"
 DOMAIN="aisport.am"
 
+chmod +x scripts/*.sh 2>/dev/null || true
+
 echo "== Checking for existing D1 database '$DB_NAME' =="
 LIST_OUTPUT="$(npx wrangler d1 list 2>/dev/null || true)"
 DB_ID="$(echo "$LIST_OUTPUT" | grep -F "$DB_NAME" | grep -oE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' | head -1)"
