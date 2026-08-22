@@ -13,6 +13,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Get a live match id and test the API
+        env:
+          TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
         run: |
           echo "=== Fetching homepage for match ids ===" > match-check.txt
           HOME_HTML=$(curl -s "https://aisport.am/?_c=$(date +%s)")
@@ -32,6 +34,10 @@ jobs:
             echo "$MID -> HTTP $CODE ($EVENTS)" >> match-check.txt
             sleep 1
           done
+          echo "" >> match-check.txt
+          echo "=== Direct football-data.org single match test ===" >> match-check.txt
+          RAW_ID=$(echo "$MATCH_ID" | sed 's/fd-//')
+          curl -s -D - "https://api.football-data.org/v4/matches/$RAW_ID" -H "X-Auth-Token: ${TOKEN}" | head -c 1500 >> match-check.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
