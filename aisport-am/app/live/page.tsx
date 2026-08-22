@@ -5,6 +5,7 @@ import { LiveAutoRefresh } from "../../components/live-auto-refresh";
 import { AdSpaces } from "../../components/ad-spaces";
 import { getLiveMatches } from "../../lib/live-football-server";
 
+// Sites redeploy trigger: 2026-08-23
 export const dynamic = "force-dynamic";
 const visibleOffsets = Array.from({ length: 15 }, (_, index) => index - 7);
 const weekdays = ["Կիր", "Երկ", "Երք", "Չրք", "Հնգ", "Ուրբ", "Շբթ"];
