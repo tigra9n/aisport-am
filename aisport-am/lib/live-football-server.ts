@@ -31,7 +31,10 @@ async function cachedFetch<T>(cacheKey:string,url:string,headers:Record<string,s
     try{
       const r=await fetch(url,{headers:{...headers,Accept:"application/json"}});
       if(!r.ok)return cached();
-      const payload=await r.json() as T;
+      const payload=await r.json() as T & {errors?:unknown};
+      const errs=(payload as {errors?:unknown})?.errors;
+      const hasErrors=Array.isArray(errs)?errs.length>0:Boolean(errs&&Object.keys(errs as object).length>0);
+      if(hasErrors)return cached();
       await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey,JSON.stringify(payload),Date.now()).run();
       return payload;
     }catch{return cached()}
@@ -88,7 +91,7 @@ export async function getLiveMatches(dayOffset=0,allowProviderRequest=true){
   if(!key)return{matches:[],demo:false,unavailable:true,limited:true,updatedAt};
   const ttl=dayOffset===0?480:1800;
   const data=await cachedFetch<{response?:ApiFootballFixture[]}>(
-    `apifootball:date:${date}`,
+    `apifootball:v2:date:${date}`,
     `https://v3.football.api-sports.io/fixtures?date=${date}`,
     {"x-apisports-key":key},
     ttl,
