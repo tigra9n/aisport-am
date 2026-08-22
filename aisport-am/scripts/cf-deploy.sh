@@ -48,4 +48,9 @@ if [ -n "${FOOTBALL_DATA_TOKEN:-}" ]; then
   echo "$FOOTBALL_DATA_TOKEN" | npx wrangler secret put FOOTBALL_DATA_TOKEN --name "$WORKER_NAME"
 fi
 
+if [ -n "${API_FOOTBALL_KEY:-}" ]; then
+  echo "== Setting API_FOOTBALL_KEY secret on the worker =="
+  echo "$API_FOOTBALL_KEY" | npx wrangler secret put API_FOOTBALL_KEY --name "$WORKER_NAME"
+fi
+
 echo "== Deploy complete =="

@@ -14,7 +14,7 @@ import { getLiveMatches } from "../lib/live-football-server";
 import { getPublishedArticles } from "../lib/articles";
 
 // The live-score request must run in the production Worker. Without this,
-// the page can be prerendered at deploy time and never reach TheSportsDB.
+// the page can be prerendered at deploy time and never reach the live API.
 export const dynamic = "force-dynamic";
 
 const homepageSports = [
@@ -122,7 +122,7 @@ export default async function Home() {
           <aside className="news-sidebar">
             <section className="sidebar-block live-card-block">
               <div className="sidebar-title"><div><span className="live-pulse" />Այսօր՝ ուղիղ</div><Link href="/live">Բոլորը</Link></div>
-              <div className={live.unavailable ? "live-source-strip demo" : "live-source-strip real"}>{live.unavailable ? "TheSportsDB-ն ժամանակավորապես անհասանելի է" : live.limited ? "TheSportsDB Free · մինչև 3 խաղ" : "TheSportsDB · իրական տվյալներ"}</div>
+              <div className={live.unavailable ? "live-source-strip demo" : "live-source-strip real"}>{live.unavailable ? "Live տվյալները ժամանակավորապես անհասանելի են" : "Իրական live տվյալներ"}</div>
               {!live.matches.length && live.unavailable ? <div className="no-matches">Կեղծ հաշիվներ չենք ցուցադրում․ իրական տվյալները շուտով կվերականգնվեն։</div> : null}
               {live.matches.slice(0, 3).map((match) => <div className="score-card" key={match.id}><div><span>{match.competition}</span><b>{match.status}</b></div><p><strong>{match.home}</strong><b>{match.homeScore ?? "–"}</b></p><p><strong>{match.away}</strong><b>{match.awayScore ?? "–"}</b></p></div>)}
             </section>

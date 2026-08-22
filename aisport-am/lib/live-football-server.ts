@@ -2,29 +2,102 @@ import { armenianTeamName } from "./team-names-hy";
 
 export type LiveMatch={id:string;status:string;competition:string;home:string;away:string;homeScore:number|null;awayScore:number|null;isLive:boolean};
 export type LiveMatchDetail={match:LiveMatch;venue:string;referee:string;events:{minute:string;team:string;player:string;assist:string;label:string}[];lineups:{team:string;formation:string;starters:string[];substitutes:string[]}[];statistics:{team:string;possession:string;shotsOnGoal:string;totalShots:string;xg:string}[]};
-type SportsDbEvent={idEvent:string;strLeague?:string|null;strCountry?:string|null;strHomeTeam?:string|null;strAwayTeam?:string|null;intHomeScore?:string|number|null;intAwayScore?:string|number|null;strStatus?:string|null;strProgress?:string|null;strTimestamp?:string|null;dateEvent?:string|null;strTime?:string|null;strVenue?:string|null;strReferee?:string|null};
-type SportsDbTimeline={intTime?:string|number|null;strTimeline?:string|null;strEvent?:string|null;strTeam?:string|null;strPlayer?:string|null;strAssist?:string|null;strDetail?:string|null};
-type SportsDbLineup={strTeam?:string|null;strPlayer?:string|null;strSubstitute?:string|null;strFormation?:string|null};
-type SportsDbStatistic={strTeam?:string|null;strStat?:string|null;intStat?:string|number|null};
-type FootballDataMatch={id:number;utcDate:string;status:string;minute?:number|null;competition:{code:string;name:string};homeTeam:{name:string;shortName?:string};awayTeam:{name:string;shortName?:string};score:{fullTime?:{home:number|null;away:number|null};regularTime?:{home:number|null;away:number|null}}};
+
+type ApiFootballFixture={fixture:{id:number;date:string;venue?:{name?:string|null};referee?:string|null;status:{short:string;elapsed?:number|null}};league:{id:number};teams:{home:{name:string};away:{name:string}};goals:{home:number|null;away:number|null}};
 type SortableMatch=LiveMatch&{priority:number;timestamp:number};
-let cacheTableReady:Promise<unknown>|null=null; const inFlight=new Map<string,Promise<unknown>>(); const FREE_KEY="123";
+
+let cacheTableReady:Promise<unknown>|null=null;
+const inFlight=new Map<string,Promise<unknown>>();
+
 function formatYerevanDate(date:Date){const p=new Intl.DateTimeFormat("en-US",{timeZone:"Asia/Yerevan",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(date);const v=Object.fromEntries(p.map(x=>[x.type,x.value]));return `${v.year}-${v.month}-${v.day}`}
 function yerevanDate(dayOffset=0){const [y,m,d]=formatYerevanDate(new Date()).split("-").map(Number);return new Date(Date.UTC(y,m-1,d+dayOffset)).toISOString().slice(0,10)}
+
 async function ensureCacheTable(db:D1Database){cacheTableReady??=db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();await cacheTableReady}
-async function cachedJson<T>(cacheKey:string,url:string,revalidate:number,allowRequest=true):Promise<T|null>{const {env}=await import("cloudflare:workers");const db=(env as unknown as {DB?:D1Database}).DB;if(!db)return null;await ensureCacheTable(db);const now=Date.now();const row=await db.prepare("SELECT payload,saved_at AS savedAt,retry_after AS retryAfter FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{payload:string;savedAt:number;retryAfter:number}>();const cached=()=>{try{return row?.savedAt?JSON.parse(row.payload) as T:null}catch{return null}};if(row?.savedAt&&now-row.savedAt<revalidate*1000)return cached();if(!allowRequest||(row?.retryAfter??0)>now)return cached();try{const r=await fetch(url,{headers:{Accept:"application/json"}});if(!r.ok)return cached();const payload=await r.json() as T;await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey,JSON.stringify(payload),Date.now()).run();return payload}catch{return cached()}}
-function fetchCached<T>(k:string,u:string,r:number,a=true){const q=`${k}:${a}`,c=inFlight.get(q) as Promise<T|null>|undefined;if(c)return c;const p=cachedJson<T>(k,u,r,a).finally(()=>inFlight.delete(q));inFlight.set(q,p);return p}
-function competitionDetails(nameValue?:string|null,countryValue?:string|null){const n=(nameValue??"").toLowerCase(),c=(countryValue??"").toLowerCase();if(n.includes("champions league"))return{priority:0,label:"Չեմպիոնների լիգա"};if(n.includes("europa league"))return{priority:1,label:"Եվրոպա լիգա"};if(n.includes("conference league"))return{priority:2,label:"Կոնֆերենցիաների լիգա"};if((c.includes("england")||n.includes("english"))&&n.includes("premier league"))return{priority:3,label:"Անգլիայի Պրեմիեր լիգա"};if((c.includes("spain")||n.includes("spanish"))&&(n.includes("la liga")||n.includes("primera")))return{priority:4,label:"Իսպանիայի Լա Լիգա"};if((c.includes("italy")||n.includes("italian"))&&n.includes("serie a"))return{priority:5,label:"Իտալիայի Սերիա Ա"};if((c.includes("germany")||n.includes("german"))&&n.includes("bundesliga"))return{priority:6,label:"Գերմանիայի Բունդեսլիգա"};if((c.includes("france")||n.includes("french"))&&n.includes("ligue 1"))return{priority:7,label:"Ֆրանսիայի Լիգա 1"};return null}
-function footballDataCompetition(code:string){return({CL:{priority:0,label:"Չեմպիոնների լիգա"},PL:{priority:3,label:"Անգլիայի Պրեմիեր լիգա"},PD:{priority:4,label:"Իսպանիայի Լա Լիգա"},SA:{priority:5,label:"Իտալիայի Սերիա Ա"},BL1:{priority:6,label:"Գերմանիայի Բունդեսլիգա"},FL1:{priority:7,label:"Ֆրանսիայի Լիգա 1"}} as Record<string,{priority:number;label:string}>)[code]??null}
-function footballDataStatus(m:FootballDataMatch){if(m.status==="PAUSED")return"Ընդմիջում";if(m.status==="IN_PLAY")return m.minute?`${m.minute}′`:"LIVE";if(m.status==="FINISHED"||m.status==="AWARDED")return"Ավարտված";if(m.status==="POSTPONED")return"Հետաձգված";if(m.status==="CANCELLED")return"Չեղարկված";if(m.status==="SUSPENDED")return"Կասեցված";return new Intl.DateTimeFormat("hy-AM",{timeZone:"Asia/Yerevan",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(m.utcDate))}
-function publicMatch(i:SortableMatch):LiveMatch{return{id:i.id,status:i.status,competition:i.competition,home:i.home,away:i.away,homeScore:i.homeScore,awayScore:i.awayScore,isLive:i.isLive}}
-const TRACKED_COMPETITIONS=["CL","PL","PD","SA","BL1","FL1"];
-async function fetchCompetitionMatches(token:string,code:string,date:string,allow:boolean):Promise<{matches:FootballDataMatch[]|null;fetched:boolean}>{const {env}=await import("cloudflare:workers");const db=(env as unknown as {DB?:D1Database}).DB;if(!db)return{matches:null,fetched:false};await ensureCacheTable(db);const k=`football-data:${code}:${date}`,row=await db.prepare("SELECT payload,saved_at AS savedAt FROM api_cache WHERE cache_key=?").bind(k).first<{payload:string;savedAt:number}>();const old=()=>{try{return row?.savedAt?JSON.parse(row.payload) as FootballDataMatch[]:null}catch{return null}};if(row?.savedAt&&Date.now()-row.savedAt<600000)return{matches:old(),fetched:false};if(!allow)return{matches:old(),fetched:false};try{const r=await fetch(`https://api.football-data.org/v4/competitions/${code}/matches?dateFrom=${date}&dateTo=${date}`,{headers:{"X-Auth-Token":token,Accept:"application/json"}});if(r.status===429){await new Promise(res=>setTimeout(res,2500));const retry=await fetch(`https://api.football-data.org/v4/competitions/${code}/matches?dateFrom=${date}&dateTo=${date}`,{headers:{"X-Auth-Token":token,Accept:"application/json"}});if(!retry.ok)return{matches:old(),fetched:true};const p=await retry.json() as {matches?:FootballDataMatch[]},matches=p.matches??[];await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(k,JSON.stringify(matches),Date.now()).run();return{matches,fetched:true}}if(!r.ok)return{matches:old(),fetched:true};const p=await r.json() as {matches?:FootballDataMatch[]},matches=p.matches??[];await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(k,JSON.stringify(matches),Date.now()).run();return{matches,fetched:true}}catch{return{matches:old(),fetched:true}}}
-async function footballDataMatches(token:string,date:string,allow=true):Promise<FootballDataMatch[]|null>{const collected:FootballDataMatch[]=[];let any=false;for(const code of TRACKED_COMPETITIONS){const {matches,fetched}=await fetchCompetitionMatches(token,code,date,allow);if(matches){collected.push(...matches);any=true}if(fetched)await new Promise(res=>setTimeout(res,650))}return any?collected:null}
-export async function getLiveMatches(dayOffset=0,allowProviderRequest=true){const {env}=await import("cloudflare:workers");const runtime=env as unknown as Record<string,string|undefined>;const date=yerevanDate(Number.isInteger(dayOffset)?Math.max(-7,Math.min(7,dayOffset)):0),updatedAt=new Intl.DateTimeFormat("hy-AM",{timeZone:"Asia/Yerevan",hour:"2-digit",minute:"2-digit"}).format(new Date());if(!runtime.FOOTBALL_DATA_TOKEN)return{matches:[],demo:false,unavailable:true,limited:true,updatedAt};const data=await footballDataMatches(runtime.FOOTBALL_DATA_TOKEN,date,allowProviderRequest);if(!data)return{matches:[],demo:false,unavailable:true,limited:true,updatedAt};const matches=data.map((m):SortableMatch|null=>{const c=footballDataCompetition(m.competition.code);if(!c)return null;const s=m.score.fullTime??m.score.regularTime;return{id:`fd-${m.id}`,status:footballDataStatus(m),competition:c.label,home:armenianTeamName(m.homeTeam.name||m.homeTeam.shortName||""),away:armenianTeamName(m.awayTeam.name||m.awayTeam.shortName||""),homeScore:s?.home??null,awayScore:s?.away??null,isLive:m.status==="IN_PLAY"||m.status==="PAUSED",priority:c.priority,timestamp:new Date(m.utcDate).getTime()}}).filter((x):x is SortableMatch=>Boolean(x)).sort((a,b)=>a.priority-b.priority||Number(b.isLive)-Number(a.isLive)||a.timestamp-b.timestamp);return{matches:matches.map(publicMatch),demo:false,unavailable:false,limited:false,updatedAt}}
-function norm(s:string){return s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/\b(fc|cf|afc|ac|ssc|calcio|football club|club de futbol)\b/g,"").replace(/[^a-z0-9]/g,"")}
-function teamMatch(a:string,b:string){const x=norm(a),y=norm(b);return !!x&&!!y&&(x===y||x.includes(y)||y.includes(x))}
-function eventTimestamp(e:SportsDbEvent){const v=e.strTimestamp||`${e.dateEvent??""}T${e.strTime||"00:00:00"}Z`,n=new Date(v).getTime();return Number.isFinite(n)?n:0}
-function timelineLabel(i:SportsDbTimeline){const v=`${i.strTimeline??""} ${i.strEvent??""} ${i.strDetail??""}`.toLowerCase();if(v.includes("own goal"))return"Ինքնագոլ";if(v.includes("missed penalty"))return"Չիրացված 11 մետրանոց";if(v.includes("penalty")&&v.includes("goal"))return"Գոլ՝ 11 մետրանոցից";if(v.includes("goal"))return"Գոլ";if(v.includes("red"))return"Կարմիր քարտ";if(v.includes("yellow"))return"Դեղին քարտ";if(v.includes("substitution")||v.includes("subst"))return"Փոխարինում";if(v.includes("var"))return"VAR";return i.strTimeline||i.strEvent||i.strDetail||"Իրադարձություն"}
-function statValue(rows:SportsDbStatistic[],team:string,names:string[]){const i=rows.find(r=>(r.strTeam??"").toLowerCase()===team.toLowerCase()&&names.some(n=>(r.strStat??"").toLowerCase().includes(n)));return i?.intStat==null?"—":String(i.intStat)}
-export async function getLiveMatchDetails(id:string):Promise<LiveMatchDetail|null>{const fdId=id.replace(/^fd-/,"");if(!/^\d+$/.test(fdId))return null;const {env}=await import("cloudflare:workers");const runtime=env as unknown as Record<string,string|undefined>;if(!runtime.FOOTBALL_DATA_TOKEN)return null;const r=await fetch(`https://api.football-data.org/v4/matches/${fdId}`,{headers:{"X-Auth-Token":runtime.FOOTBALL_DATA_TOKEN,Accept:"application/json"}});if(!r.ok)return null;const fd=await r.json() as FootballDataMatch;const comp=footballDataCompetition(fd.competition.code);if(!comp)return null;const sc=fd.score.fullTime??fd.score.regularTime;const match:LiveMatch={id:`fd-${fd.id}`,status:footballDataStatus(fd),competition:comp.label,home:armenianTeamName(fd.homeTeam.name||fd.homeTeam.shortName||""),away:armenianTeamName(fd.awayTeam.name||fd.awayTeam.shortName||""),homeScore:sc?.home??null,awayScore:sc?.away??null,isLive:fd.status==="IN_PLAY"||fd.status==="PAUSED"};const date=fd.utcDate.slice(0,10),key=runtime.THESPORTSDB_API_KEY||FREE_KEY,base=`https://www.thesportsdb.com/api/v1/json/${encodeURIComponent(key)}`;const day=await fetchCached<{events?:SportsDbEvent[]|null}>(`thesportsdb:detailsday:${date}`,`${base}/eventsday.php?d=${date}&s=Soccer`,300);const candidates=day?.events??[];const event=candidates.find(e=>teamMatch(e.strHomeTeam||"",fd.homeTeam.name||fd.homeTeam.shortName||"")&&teamMatch(e.strAwayTeam||"",fd.awayTeam.name||fd.awayTeam.shortName||""))??candidates.find(e=>Math.abs(eventTimestamp(e)-new Date(fd.utcDate).getTime())<3*60*60*1000&&teamMatch(e.strHomeTeam||"",fd.homeTeam.name||""));if(!event)return{match,venue:"Տվյալ չկա",referee:"Տվյալ չկա",events:[],lineups:[],statistics:[]};const eid=event.idEvent;const [timelineData,lineupData,statsData]=await Promise.all([fetchCached<{timeline?:SportsDbTimeline[]|null}>(`thesportsdb:timeline:${eid}`,`${base}/lookuptimeline.php?id=${eid}`,300),fetchCached<{lineup?:SportsDbLineup[]|null}>(`thesportsdb:lineup:${eid}`,`${base}/lookuplineup.php?id=${eid}`,1800),fetchCached<{eventstats?:SportsDbStatistic[]|null}>(`thesportsdb:stats:${eid}`,`${base}/lookupeventstats.php?id=${eid}`,300)]);const grouped=new Map<string,SportsDbLineup[]>();for(const row of lineupData?.lineup??[]){const t=row.strTeam||"Թիմ";grouped.set(t,[...(grouped.get(t)??[]),row])}const stats=statsData?.eventstats??[],teams=[event.strHomeTeam||"Տանտեր",event.strAwayTeam||"Հյուր"];return{match,venue:event.strVenue||"Տվյալ չկա",referee:event.strReferee||"Տվյալ չկա",events:(timelineData?.timeline??[]).map(i=>({minute:i.intTime==null?"—":`${i.intTime}′`,team:armenianTeamName(i.strTeam||"—"),player:i.strPlayer||"—",assist:i.strAssist||"—",label:timelineLabel(i)})),lineups:Array.from(grouped.entries()).map(([team,rows])=>({team:armenianTeamName(team),formation:rows.find(x=>x.strFormation)?.strFormation||"—",starters:rows.filter(x=>!/yes|true|1/i.test(x.strSubstitute||"")).map(x=>x.strPlayer||"—"),substitutes:rows.filter(x=>/yes|true|1/i.test(x.strSubstitute||"")).map(x=>x.strPlayer||"—")})),statistics:teams.map(team=>({team:armenianTeamName(team),possession:statValue(stats,team,["possession"]),shotsOnGoal:statValue(stats,team,["shots on goal","shots on target"]),totalShots:statValue(stats,team,["total shots","shots"]),xg:statValue(stats,team,["expected goals","xg"])}))}}
+
+async function cachedFetch<T>(cacheKey:string,url:string,headers:Record<string,string>,revalidateSeconds:number,allowRequest:boolean):Promise<T|null>{
+  const {env}=await import("cloudflare:workers");
+  const db=(env as unknown as {DB?:D1Database}).DB;
+  if(!db)return null;
+  await ensureCacheTable(db);
+  const now=Date.now();
+  const row=await db.prepare("SELECT payload,saved_at AS savedAt FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{payload:string;savedAt:number}>();
+  const cached=()=>{try{return row?.savedAt?JSON.parse(row.payload) as T:null}catch{return null}};
+  if(row?.savedAt&&now-row.savedAt<revalidateSeconds*1000)return cached();
+  if(!allowRequest)return cached();
+  const requestKey=`req:${cacheKey}`;
+  const existing=inFlight.get(requestKey) as Promise<T|null>|undefined;
+  if(existing)return existing;
+  const run=(async()=>{
+    try{
+      const r=await fetch(url,{headers:{...headers,Accept:"application/json"}});
+      if(!r.ok)return cached();
+      const payload=await r.json() as T;
+      await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey,JSON.stringify(payload),Date.now()).run();
+      return payload;
+    }catch{return cached()}
+  })().finally(()=>inFlight.delete(requestKey));
+  inFlight.set(requestKey,run);
+  return run;
+}
+
+const TRACKED_LEAGUES:Record<number,{priority:number;label:string}>={
+  2:{priority:0,label:"Չեմպիոնների լիգա"},
+  39:{priority:3,label:"Անգլիայի Պրեմիեր լիգա"},
+  140:{priority:4,label:"Իսպանիայի Լա Լիգա"},
+  135:{priority:5,label:"Իտալիայի Սերիա Ա"},
+  78:{priority:6,label:"Գերմանիայի Բունդեսլիգա"},
+  61:{priority:7,label:"Ֆրանսիայի Լիգա 1"},
+};
+
+function statusLabel(status:{short:string;elapsed?:number|null}){
+  const s=status.short;
+  if(s==="1H"||s==="2H"||s==="ET"||s==="P"||s==="LIVE")return status.elapsed?`${status.elapsed}′`:"LIVE";
+  if(s==="HT")return"Ընդմիջում";
+  if(s==="FT"||s==="AET"||s==="PEN")return"Ավարտված";
+  if(s==="PST")return"Հետաձգված";
+  if(s==="CANC"||s==="ABD"||s==="AWD"||s==="WO")return"Չեղարկված";
+  if(s==="SUSP"||s==="INT")return"Կասեցված";
+  return null;
+}
+function isLiveStatus(short:string){return["1H","2H","ET","P","LIVE","HT","BT"].includes(short)}
+
+function toSortable(fx:ApiFootballFixture):SortableMatch|null{
+  const league=TRACKED_LEAGUES[fx.league.id];
+  if(!league)return null;
+  const label=statusLabel(fx.fixture.status)??new Intl.DateTimeFormat("hy-AM",{timeZone:"Asia/Yerevan",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(fx.fixture.date));
+  return{
+    id:`af-${fx.fixture.id}`,
+    status:label,
+    competition:league.label,
+    home:armenianTeamName(fx.teams.home.name),
+    away:armenianTeamName(fx.teams.away.name),
+    homeScore:fx.goals.home,
+    awayScore:fx.goals.away,
+    isLive:isLiveStatus(fx.fixture.status.short),
+    priority:league.priority,
+    timestamp:new Date(fx.fixture.date).getTime(),
+  };
+}
+
+export async function getLiveMatches(dayOffset=0,allowProviderRequest=true){
+  const {env}=await import("cloudflare:workers");
+  const runtime=env as unknown as Record<string,string|undefined>;
+  const date=yerevanDate(Number.isInteger(dayOffset)?Math.max(-7,Math.min(7,dayOffset)):0);
+  const updatedAt=new Intl.DateTimeFormat("hy-AM",{timeZone:"Asia/Yerevan",hour:"2-digit",minute:"2-digit"}).format(new Date());
+  const key=runtime.API_FOOTBALL_KEY;
+  if(!key)return{matches:[],demo:false,unavailable:true,limited:true,updatedAt};
+  const ttl=dayOffset===0?480:1800;
+  const data=await cachedFetch<{response?:ApiFootballFixture[]}>(
+    `apifootball:date:${date}`,
+    `https://v3.football.api-sports.io/fixtures?date=${date}`,
+    {"x-apisports-key":key},
+    ttl,
+    allowProviderRequest,
+  );
+  if(!data)return{matches:[],demo:false,unavailable:true,limited:true,updatedAt};
+  const matches=(data.response??[])
+    .map(toSortable)
+    .filter((x):x is SortableMatch=>Boolean(x))
+    .sort((a,b)=>a.priority-b.priority||Number(b.isLive)-Number(a.isLive)||a.timestamp-b.timestamp);
+  return{matches:matches.map(({priority,timestamp,...m})=>m),demo:false,unavailable:false,limited:false,updatedAt};
+}
