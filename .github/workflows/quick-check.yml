@@ -1,0 +1,27 @@
+name: Quick Site Check
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check site
+        run: |
+          echo "=== aisport.am ===" > check.txt
+          curl -s -o /dev/null -w "HTTP %{http_code}\n" "https://aisport.am/?_c=$(date +%s)" >> check.txt
+          echo "=== aisport.am/live ===" >> check.txt
+          curl -s -o /dev/null -w "HTTP %{http_code}\n" "https://aisport.am/live?_c=$(date +%s)" >> check.txt
+          curl -s "https://aisport.am/?_c=$(date +%s)" | grep -o "match-modal\|codex-preview\|AISport" | sort -u >> check.txt || true
+      - run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f check.txt
+          git commit -m "check [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
