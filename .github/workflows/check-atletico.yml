@@ -27,6 +27,10 @@ jobs:
           echo "" >> check-atletico.txt
           echo "=== Raw lineups for 1570344 ===" >> check-atletico.txt
           curl -s "https://v3.football.api-sports.io/fixtures/lineups?fixture=1570344" -H "x-apisports-key: ${AFKEY}" | head -c 400 >> check-atletico.txt
+          echo "" >> check-atletico.txt
+          echo "=== Fresh popup retest (post-TTL) ===" >> check-atletico.txt
+          curl -s "https://aisport.am/api/live/match/af-1570344?_c=$(date +%s)z" > /tmp/p.json
+          python3 /tmp/s.py >> check-atletico.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
