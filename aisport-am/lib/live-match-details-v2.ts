@@ -135,7 +135,7 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
   if(!key)return null;
   const db=(env as unknown as {DB?:D1Database}).DB;
 
-  const cacheKey=`apifootball:v6:match:${fixtureId}`;
+  const cacheKey=`apifootball:v7:match:${fixtureId}`;
   if(db){
     await ensureCacheTable(db);
     const fresh=await readCache(db,cacheKey);
@@ -162,7 +162,7 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
     isLive:isLiveStatus(fx.fixture.status.short),
   };
 
-  const lineupsCacheKey=`apifootball:v5:lineups:${fixtureId}`;
+  const lineupsCacheKey=`apifootball:v7:lineups:${fixtureId}`;
   const cachedLineups=db?await readLineupsCache(db,lineupsCacheKey):null;
   // Both teams must be present. An hour before kickoff it's common for only one
   // side to have published its XI; caching that half-result would otherwise pin
