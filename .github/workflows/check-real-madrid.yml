@@ -25,7 +25,7 @@ jobs:
           echo "=== Search our site for Real Madrid matches ===" >> rm-check.txt
           for D in 2026-08-21 2026-08-22 2026-08-23; do
             echo "--- date=$D ---" >> rm-check.txt
-            curl -s "https://aisport.am/live?date=$D&_c=$(date +%s)" | grep -B2 -A2 "Ռեալ Մադրիդ" | grep -oE "af-[0-9]+" >> rm-check.txt
+            curl -s "https://aisport.am/live?date=$D&_c=$(date +%s)" | grep -B2 -A2 "Ռեալ Մադրիդ" | grep -oE "af-[0-9]+" >> rm-check.txt || echo "not found on $D" >> rm-check.txt
             sleep 1
           done
       - run: |
