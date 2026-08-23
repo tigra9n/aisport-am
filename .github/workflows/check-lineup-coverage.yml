@@ -38,6 +38,9 @@ jobs:
           echo 'l=d.get("lineups",[])' >> /tmp/summarize.py
           echo 'if l: print("team:",l[0].get("team"),"formation:",l[0].get("formation"),"starters:",len(l[0].get("starters",[])))' >> /tmp/summarize.py
           python3 /tmp/summarize.py >> lineup-check.txt
+          echo "" >> lineup-check.txt
+          echo "=== Raw statistics for 1557375 ===" >> lineup-check.txt
+          curl -s "https://v3.football.api-sports.io/fixtures/statistics?fixture=1557375" -H "x-apisports-key: ${AFKEY}" | head -c 700 >> lineup-check.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
