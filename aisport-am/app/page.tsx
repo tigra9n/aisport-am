@@ -124,7 +124,7 @@ export default async function Home() {
               <div className="sidebar-title"><div><span className="live-pulse" />Այսօր՝ ուղիղ</div><Link href="/live">Բոլորը</Link></div>
               <div className={live.unavailable ? "live-source-strip demo" : "live-source-strip real"}>{live.unavailable ? "Live տվյալները ժամանակավորապես անհասանելի են" : "Իրական live տվյալներ"}</div>
               {!live.matches.length && live.unavailable ? <div className="no-matches">Կեղծ հաշիվներ չենք ցուցադրում․ իրական տվյալները շուտով կվերականգնվեն։</div> : null}
-              {live.matches.slice(0, 3).map((match) => <div className="score-card" key={match.id}><div><span>{match.competition}</span><b>{match.status}</b></div><p><strong>{match.home}</strong><b>{match.homeScore ?? "–"}</b></p><p><strong>{match.away}</strong><b>{match.awayScore ?? "–"}</b></p></div>)}
+              {live.matches.slice(0, 3).map((match) => <div className="score-card" key={match.id}><div><span>{match.competition}</span><b>{match.status}</b></div><p><strong className="team-with-logo">{match.homeLogo&&<img src={match.homeLogo} alt="" className="team-logo" loading="lazy" />}{match.home}</strong><b>{match.homeScore ?? "–"}</b></p><p><strong className="team-with-logo">{match.awayLogo&&<img src={match.awayLogo} alt="" className="team-logo" loading="lazy" />}{match.away}</strong><b>{match.awayScore ?? "–"}</b></p></div>)}
             </section>
             <section className="sidebar-block standings-block">
               <div className="sidebar-title"><div>Թոփ 5 առաջնություններ</div><Link href="/standings">Լրիվ</Link></div>

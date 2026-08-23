@@ -173,9 +173,9 @@ export function MatchModal() {
           <>
             <span className="page-kicker">{details.match.competition}</span>
             <h2 className="match-details-title match-modal-title">
-              <span>{details.match.home}</span>
+              <span className="team-with-logo title-team">{details.match.homeLogo && <img src={details.match.homeLogo} alt="" className="team-logo-lg" loading="lazy" />}{details.match.home}</span>
               <b>{details.match.homeScore ?? "–"} : {details.match.awayScore ?? "–"}</b>
-              <span>{details.match.away}</span>
+              <span className="team-with-logo title-team">{details.match.awayLogo && <img src={details.match.awayLogo} alt="" className="team-logo-lg" loading="lazy" />}{details.match.away}</span>
             </h2>
             <div className="match-facts">
               <span>{details.match.isLive ? `🔴 ${details.match.status}` : details.match.status}</span>

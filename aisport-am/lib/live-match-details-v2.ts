@@ -1,7 +1,7 @@
 import { armenianTeamName } from "./team-names-hy";
 import type { LiveMatch, LiveMatchDetail, LineupPlayer } from "./live-football-server";
 
-type ApiFootballFixtureFull={fixture:{id:number;date:string;venue?:{name?:string|null};referee?:string|null;status:{short:string;elapsed?:number|null}};league:{id:number};teams:{home:{name:string};away:{name:string}};goals:{home:number|null;away:number|null}};
+type ApiFootballFixtureFull={fixture:{id:number;date:string;venue?:{name?:string|null};referee?:string|null;status:{short:string;elapsed?:number|null}};league:{id:number};teams:{home:{name:string;logo?:string|null};away:{name:string;logo?:string|null}};goals:{home:number|null;away:number|null}};
 type ApiFootballEvent={time:{elapsed:number;extra?:number|null};team:{name:string};player:{name?:string|null};assist:{name?:string|null};type:string;detail:string};
 type ApiFootballLineupPlayer={player:{name?:string|null;number?:number|null;grid?:string|null}};
 type ApiFootballLineup={team:{name:string};formation?:string|null;startXI:ApiFootballLineupPlayer[];substitutes:ApiFootballLineupPlayer[]};
@@ -244,6 +244,8 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
     competition,
     home:armenianTeamName(fx.teams.home.name),
     away:armenianTeamName(fx.teams.away.name),
+    homeLogo:fx.teams.home.logo??null,
+    awayLogo:fx.teams.away.logo??null,
     homeScore:fx.goals.home,
     awayScore:fx.goals.away,
     isLive:isLiveStatus(fx.fixture.status.short),
