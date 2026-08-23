@@ -13,6 +13,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check
+        env:
+          AFKEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
           curl -s "https://aisport.am/standings?_c=$(date +%s)" > /tmp/s.html
           echo "=== team-badge-logo count ===" > check.txt
@@ -22,6 +24,8 @@ jobs:
           echo "=== sample of first team cell ===" >> check.txt
           grep -oE '<td>[^<]*<img[^>]*>|<td><span className="team-badge"' /tmp/s.html | head -3 >> check.txt
           grep -o 'media.api-sports.io[^"]*' /tmp/s.html | head -5 >> check.txt
+          echo "=== Raw standings API response sample ===" >> check.txt
+          curl -s "https://v3.football.api-sports.io/standings?league=39&season=2026" -H "x-apisports-key: ${AFKEY}" | head -c 600 >> check.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
