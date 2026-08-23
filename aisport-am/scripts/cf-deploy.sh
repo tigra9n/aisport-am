@@ -53,4 +53,9 @@ if [ -n "${API_FOOTBALL_KEY:-}" ]; then
   echo "$API_FOOTBALL_KEY" | npx wrangler secret put API_FOOTBALL_KEY --name "$WORKER_NAME"
 fi
 
+if [ -n "${CRON_TOKEN:-}" ]; then
+  echo "== Setting CRON_TOKEN secret on the worker =="
+  echo "$CRON_TOKEN" | npx wrangler secret put CRON_TOKEN --name "$WORKER_NAME"
+fi
+
 echo "== Deploy complete =="
