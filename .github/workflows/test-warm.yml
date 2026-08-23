@@ -1,0 +1,27 @@
+name: Test Warm Endpoint
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/test-warm.yml']
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Call warm endpoint
+        env:
+          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
+        run: |
+          curl -s -w "\nHTTP %{http_code}\n" "https://aisport.am/api/cron/warm?token=${CRON_TOKEN}" > warm-test.txt
+      - run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f warm-test.txt
+          git commit -m "check [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
