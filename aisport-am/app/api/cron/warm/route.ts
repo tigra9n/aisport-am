@@ -18,17 +18,25 @@ export async function GET(request: Request) {
 
   const results: { date: string; matches: number }[] = [];
   const warmed: string[] = [];
+  const MAX_PER_RUN = 8;
 
+  const candidates: { id: string; priority: number }[] = [];
   for (const offset of [-1, 0]) {
     const { matches } = await getLiveMatches(offset, true);
     results.push({ date: String(offset), matches: matches.length });
     for (const match of matches) {
-      // Skip matches that haven't started yet (no score, not live) — nothing to warm.
+      // Skip matches that haven't started yet — there's nothing to warm.
       if (!match.isLive && match.homeScore === null && match.awayScore === null) continue;
-      await getLiveMatchDetailsV2(match.id);
-      warmed.push(match.id);
+      // Live matches change fastest, so they benefit most from warming; give them priority.
+      candidates.push({ id: match.id, priority: match.isLive ? 0 : 1 });
     }
   }
+  candidates.sort((a, b) => a.priority - b.priority);
 
-  return Response.json({ ok: true, results, warmedCount: warmed.length });
+  for (const candidate of candidates.slice(0, MAX_PER_RUN)) {
+    await getLiveMatchDetailsV2(candidate.id);
+    warmed.push(candidate.id);
+  }
+
+  return Response.json({ ok: true, results, candidateCount: candidates.length, warmedCount: warmed.length });
 }
