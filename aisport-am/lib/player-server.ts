@@ -105,14 +105,17 @@ export async function getPlayerTransfers(playerId: number): Promise<TransferEntr
   const key = runtime.API_FOOTBALL_KEY;
   if (!key) return [];
   const result = await cachedGet<TransferEntry[]>(
-    `apifootball:v1:transfers:${playerId}`,
+    `apifootball:v2:transfers:${playerId}`,
     24 * 60 * 60 * 1000,
     `https://v3.football.api-sports.io/transfers?player=${playerId}`,
     key,
     (json) => {
       const entry = (json as { response?: ApiFootballTransfer[] })?.response?.[0];
       if (!entry?.transfers?.length) return null;
-      return entry.transfers.map((t) => ({
+      return entry.transfers
+        .slice()
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .map((t) => ({
         date: t.date,
         teamOut: armenianTeamName(t.teams.out.name),
         teamOutLogo: t.teams.out.logo ?? null,

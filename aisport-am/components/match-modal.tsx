@@ -44,6 +44,11 @@ function ratingClass(rating: string | null) {
   return "rating-low";
 }
 
+function surname(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : name;
+}
+
 function PitchPlayer({ player, card }: { player: LineupPlayer; card?: "yellow" | "red" }) {
   return (
     <div className="pitch-player">
@@ -52,7 +57,7 @@ function PitchPlayer({ player, card }: { player: LineupPlayer; card?: "yellow" |
         {player.number ?? "•"}
         {card && <i className={`pitch-card ${card}`} />}
       </span>
-      <span className="pitch-player-name">{player.name}</span>
+      <span className="pitch-player-name">{surname(player.name)}</span>
     </div>
   );
 }

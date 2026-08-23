@@ -82,7 +82,7 @@ export function LeagueTabs({ tables, topScorerTables, compact = false }: { table
                     <td>
                       <Link href={`/player/${row.id}`} className="player-with-photo team-cell-link">
                         {row.photo && <img src={row.photo} alt="" className="player-photo" loading="lazy" />}
-                        <strong>{row.name}</strong>
+                        <strong>{row.name}{compact && <span className="player-team-hint"> ({row.team})</span>}</strong>
                       </Link>
                     </td>
                     {!compact ? <td><span className="team-with-logo">{row.teamLogo && <img src={row.teamLogo} alt="" className="team-logo" loading="lazy" />}{row.team}</span></td> : null}
