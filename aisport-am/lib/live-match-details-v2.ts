@@ -135,7 +135,7 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
   if(!key)return null;
   const db=(env as unknown as {DB?:D1Database}).DB;
 
-  const cacheKey=`apifootball:v5:match:${fixtureId}`;
+  const cacheKey=`apifootball:v6:match:${fixtureId}`;
   if(db){
     await ensureCacheTable(db);
     const fresh=await readCache(db,cacheKey);
@@ -169,11 +169,13 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
   // the popup to a single team's lineup for the rest of the match.
   const needLineupsFetch=!cachedLineups||cachedLineups.length<2;
 
-  const [eventsData,lineupsData,statsData]=await Promise.all([
-    fetchJson<{response?:ApiFootballEvent[]}>(`https://v3.football.api-sports.io/fixtures/events?fixture=${fixtureId}`,key),
-    needLineupsFetch?fetchJson<{response?:ApiFootballLineup[]}>(`https://v3.football.api-sports.io/fixtures/lineups?fixture=${fixtureId}`,key):Promise.resolve(null),
-    fetchJson<{response?:ApiFootballStatistics[]}>(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`,key),
-  ]);
+  // Firing all three requests to the same host at once is unreliable from
+  // within a Worker (each succeeds fine on its own via a plain curl, but
+  // concurrent fetches to the same host intermittently drop). Fetch them
+  // one at a time instead — Pro-tier quota easily covers the extra latency.
+  const eventsData=await fetchJson<{response?:ApiFootballEvent[]}>(`https://v3.football.api-sports.io/fixtures/events?fixture=${fixtureId}`,key);
+  const lineupsData=needLineupsFetch?await fetchJson<{response?:ApiFootballLineup[]}>(`https://v3.football.api-sports.io/fixtures/lineups?fixture=${fixtureId}`,key):null;
+  const statsData=await fetchJson<{response?:ApiFootballStatistics[]}>(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`,key);
 
   const freshLineups=(lineupsData?.response??[]).map(l=>({
     team:armenianTeamName(l.team.name),
