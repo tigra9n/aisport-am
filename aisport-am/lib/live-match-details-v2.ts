@@ -66,8 +66,19 @@ async function fetchJson<T>(url:string,key:string):Promise<T|null>{
 // Generic per-section cache: each section (fixture info, events, lineups,
 // statistics) is stored and expired independently, so one section failing
 // to fetch never wipes out or blocks the others from being served/reused.
-async function readSection<T>(db:D1Database,cacheKey:string):Promise<{value:T;fresh:boolean}|null>{
-  const row=await db.prepare("SELECT payload,retry_after AS validUntil FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{payload:string;validUntil:number}>();
+// Reads several cache keys in a single D1 round trip instead of one await
+// per key — this is the fast path when everything is already warm.
+async function readSectionsBatch(db:D1Database,keys:string[]):Promise<Map<string,{payload:string;validUntil:number}>>{
+  const statements=keys.map(k=>db.prepare("SELECT payload,retry_after AS validUntil FROM api_cache WHERE cache_key=?").bind(k));
+  const results=await db.batch<{payload:string;validUntil:number}>(statements);
+  const map=new Map<string,{payload:string;validUntil:number}>();
+  keys.forEach((k,i)=>{
+    const row=results[i]?.results?.[0];
+    if(row)map.set(k,row);
+  });
+  return map;
+}
+function parseSection<T>(row:{payload:string;validUntil:number}|undefined):{value:T;fresh:boolean}|null{
   if(!row)return null;
   try{
     const value=JSON.parse(row.payload) as T;
@@ -148,7 +159,8 @@ function mapStatistics(data:{response?:ApiFootballStatistics[]}|null):StatsSecti
   }));
 }
 
-// Fetch+cache one section: reuse a fresh cached value if present; otherwise
+// Fetch+cache one section. `precached` comes from an earlier batched D1
+// read; if it's already fresh we skip the network entirely. Otherwise we
 // fetch, and only overwrite the cache if the fetch actually returned
 // something (a transient failure keeps whatever was cached before, so a
 // previously-successful section is never wiped out by a later flaky call).
@@ -156,11 +168,12 @@ async function resolveSection<T>(
   db:D1Database|undefined,
   cacheKey:string,
   finished:boolean,
+  precached:{value:T;fresh:boolean}|null,
   isEmpty:(v:T)=>boolean,
   fetcher:()=>Promise<T>,
 ):Promise<T>{
-  const cached=db?await readSection<T>(db,cacheKey):null;
-  if(cached?.fresh)return cached.value;
+  if(precached?.fresh)return precached.value;
+  const cached=precached;
   const result=await fetcher();
   const gotSomething=!isEmpty(result);
   if(db){
@@ -195,16 +208,27 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
   if(db)await ensureCacheTable(db);
 
   const fixtureCacheKey=`apifootball:v8:fixture:${fixtureId}`;
+  const eventsCacheKey=`apifootball:v8:events:${fixtureId}`;
+  const lineupsCacheKey=`apifootball:v8:lineups:${fixtureId}`;
+  const statsCacheKey=`apifootball:v8:stats:${fixtureId}`;
+
+  // One round trip for all four cache entries, instead of four separate
+  // awaited reads — this is what makes an already-warm popup feel instant.
+  const batch=db?await readSectionsBatch(db,[fixtureCacheKey,eventsCacheKey,lineupsCacheKey,statsCacheKey]):new Map();
+  const cachedFixture=parseSection<ApiFootballFixtureFull>(batch.get(fixtureCacheKey));
+  const cachedEvents=parseSection<EventsSection>(batch.get(eventsCacheKey));
+  const cachedLineups=parseSection<LineupsSection>(batch.get(lineupsCacheKey));
+  const cachedStats=parseSection<StatsSection>(batch.get(statsCacheKey));
+
   let fx:ApiFootballFixtureFull|null=null;
-  const cachedFixture=db?await readSection<ApiFootballFixtureFull>(db,fixtureCacheKey):null;
   if(cachedFixture?.fresh){
     fx=cachedFixture.value;
   }else{
     const fixtureData=await fetchJson<{response?:ApiFootballFixtureFull[]}>(`https://v3.football.api-sports.io/fixtures?id=${fixtureId}`,key);
     fx=fixtureData?.response?.[0]??null;
     if(fx){
-      const finished=isFinishedStatus(fx.fixture.status.short);
-      if(db)await writeSection(db,fixtureCacheKey,fx,finished?60*60*6:60);
+      const finishedNow=isFinishedStatus(fx.fixture.status.short);
+      if(db)await writeSection(db,fixtureCacheKey,fx,finishedNow?60*60*6:60);
     }else if(cachedFixture){
       fx=cachedFixture.value;
     }
@@ -226,17 +250,17 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
   };
 
   const events=await resolveSection<EventsSection>(
-    db,`apifootball:v8:events:${fixtureId}`,finished,
+    db,eventsCacheKey,finished,cachedEvents,
     v=>v.length===0,
     async()=>mapEvents(await fetchJson<{response?:ApiFootballEvent[]}>(`https://v3.football.api-sports.io/fixtures/events?fixture=${fixtureId}`,key)),
   );
   const lineups=await resolveSection<LineupsSection>(
-    db,`apifootball:v8:lineups:${fixtureId}`,finished,
+    db,lineupsCacheKey,finished,cachedLineups,
     v=>v.length<2,
     async()=>mapLineups(await fetchJson<{response?:ApiFootballLineup[]}>(`https://v3.football.api-sports.io/fixtures/lineups?fixture=${fixtureId}`,key)),
   );
   const statistics=await resolveSection<StatsSection>(
-    db,`apifootball:v8:stats:${fixtureId}`,finished,
+    db,statsCacheKey,finished,cachedStats,
     v=>v.length===0,
     async()=>mapStatistics(await fetchJson<{response?:ApiFootballStatistics[]}>(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`,key)),
   );
