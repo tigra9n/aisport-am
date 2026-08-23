@@ -35,15 +35,15 @@ let cacheTableReady:Promise<unknown>|null=null;
 async function ensureCacheTable(db:D1Database){cacheTableReady??=db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();await cacheTableReady}
 
 async function fetchJson<T>(url:string,key:string):Promise<T|null>{
-  for(let attempt=0;attempt<3;attempt++){
+  for(let attempt=0;attempt<4;attempt++){
     try{
       const response=await fetch(url,{headers:{"x-apisports-key":key,Accept:"application/json"},cache:"no-store"});
       if(response.status===429){
-        if(attempt<2){await new Promise(r=>setTimeout(r,700));continue}
+        if(attempt<3){await new Promise(r=>setTimeout(r,700));continue}
         return null;
       }
       if(!response.ok){
-        if(attempt<2){await new Promise(r=>setTimeout(r,350));continue}
+        if(attempt<3){await new Promise(r=>setTimeout(r,350));continue}
         return null;
       }
       const payload=await response.json() as T & {errors?:unknown};
@@ -51,12 +51,12 @@ async function fetchJson<T>(url:string,key:string):Promise<T|null>{
       const isRateLimit=Boolean(errs&&typeof errs==="object"&&!Array.isArray(errs)&&"rateLimit" in (errs as object));
       const hasErrors=Array.isArray(errs)?errs.length>0:Boolean(errs&&Object.keys(errs as object).length>0);
       if(hasErrors){
-        if(attempt<2){await new Promise(r=>setTimeout(r,isRateLimit?700:350));continue}
+        if(attempt<3){await new Promise(r=>setTimeout(r,isRateLimit?700:350));continue}
         return null;
       }
       return payload;
     }catch{
-      if(attempt<2){await new Promise(r=>setTimeout(r,350));continue}
+      if(attempt<3){await new Promise(r=>setTimeout(r,350));continue}
       return null;
     }
   }
@@ -85,7 +85,7 @@ async function writeSection<T>(db:D1Database,cacheKey:string,value:T,ttlSeconds:
 //  - finished + empty      -> 30min (confirmed gap for this competition; don't hammer, but allow recovery)
 //  - live/upcoming         -> 60s (state changes fast either way)
 function sectionTtl(finished:boolean,populated:boolean){
-  if(finished)return populated?60*60*6:60*30;
+  if(finished)return populated?60*60*6:60*3;
   return 60;
 }
 
