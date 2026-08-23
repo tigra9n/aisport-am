@@ -16,36 +16,32 @@ jobs:
         env:
           AFKEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
+          echo 'import json,sys' > /tmp/cups.py
+          echo 'd=json.load(sys.stdin)' >> /tmp/cups.py
+          echo 'for i in d.get("response",[]):' >> /tmp/cups.py
+          echo '    if i["league"]["type"]=="Cup": print(i["league"]["id"], i["league"]["name"])' >> /tmp/cups.py
+          echo 'import json,sys' > /tmp/leagues.py
+          echo 'd=json.load(sys.stdin)' >> /tmp/leagues.py
+          echo 'for i in d.get("response",[]):' >> /tmp/leagues.py
+          echo '    print(i["league"]["id"], i["league"]["name"], i["league"]["type"])' >> /tmp/leagues.py
           curl -s "https://v3.football.api-sports.io/status" -H "x-apisports-key: ${AFKEY}" > pro-check.txt
           echo "" >> pro-check.txt
           echo "=== Standings with season now ===" >> pro-check.txt
-          curl -s "https://v3.football.api-sports.io/standings?league=39&season=2026" -H "x-apisports-key: ${AFKEY}" | head -c 500 >> pro-check.txt
+          curl -s "https://v3.football.api-sports.io/standings?league=39&season=2026" -H "x-apisports-key: ${AFKEY}" | head -c 400 >> pro-check.txt
           echo "" >> pro-check.txt
           echo "=== Armenia leagues ===" >> pro-check.txt
-          curl -s "https://v3.football.api-sports.io/leagues?country=Armenia" -H "x-apisports-key: ${AFKEY}" | python3 -c "
-import json,sys
-d=json.load(sys.stdin)
-for item in d.get('response',[]):
-    print(item['league']['id'], item['league']['name'], item['league']['type'])
-" >> pro-check.txt
+          curl -s "https://v3.football.api-sports.io/leagues?country=Armenia" -H "x-apisports-key: ${AFKEY}" | python3 /tmp/leagues.py >> pro-check.txt
           echo "" >> pro-check.txt
           echo "=== England cups ===" >> pro-check.txt
-          curl -s "https://v3.football.api-sports.io/leagues?country=England" -H "x-apisports-key: ${AFKEY}" | python3 -c "
-import json,sys
-d=json.load(sys.stdin)
-for item in d.get('response',[]):
-    if item['league']['type']=='Cup': print(item['league']['id'], item['league']['name'])
-" >> pro-check.txt
-          echo "" >> pro-check.txt
-          echo "=== Spain/Italy/Germany/France cups ===" >> pro-check.txt
-          for C in Spain Italy Germany France; do
-            curl -s "https://v3.football.api-sports.io/leagues?country=$C" -H "x-apisports-key: ${AFKEY}" | python3 -c "
-import json,sys
-d=json.load(sys.stdin)
-for item in d.get('response',[]):
-    if item['league']['type']=='Cup': print(item['league']['id'], item['league']['name'])
-" >> pro-check.txt
-          done
+          curl -s "https://v3.football.api-sports.io/leagues?country=England" -H "x-apisports-key: ${AFKEY}" | python3 /tmp/cups.py >> pro-check.txt
+          echo "=== Spain cups ===" >> pro-check.txt
+          curl -s "https://v3.football.api-sports.io/leagues?country=Spain" -H "x-apisports-key: ${AFKEY}" | python3 /tmp/cups.py >> pro-check.txt
+          echo "=== Italy cups ===" >> pro-check.txt
+          curl -s "https://v3.football.api-sports.io/leagues?country=Italy" -H "x-apisports-key: ${AFKEY}" | python3 /tmp/cups.py >> pro-check.txt
+          echo "=== Germany cups ===" >> pro-check.txt
+          curl -s "https://v3.football.api-sports.io/leagues?country=Germany" -H "x-apisports-key: ${AFKEY}" | python3 /tmp/cups.py >> pro-check.txt
+          echo "=== France cups ===" >> pro-check.txt
+          curl -s "https://v3.football.api-sports.io/leagues?country=France" -H "x-apisports-key: ${AFKEY}" | python3 /tmp/cups.py >> pro-check.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
