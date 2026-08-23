@@ -1,0 +1,31 @@
+name: Verify Player Page
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/verify-player.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check
+        run: |
+          echo "=== Get a player id from Brighton squad ===" > verify-player.txt
+          curl -s "https://aisport.am/team/51?_c=$(date +%s)" | grep -oE '/player/[0-9]+' | sort -u | head -3 >> verify-player.txt
+          PID=$(curl -s "https://aisport.am/team/51?_c=$(date +%s)a" | grep -oE '/player/[0-9]+' | sort -u | head -1 | sed 's#/player/##')
+          echo "testing player $PID" >> verify-player.txt
+          curl -s "https://aisport.am/player/$PID?_c=$(date +%s)" -o /tmp/p.html -w "HTTP %{http_code}\n" >> verify-player.txt
+          grep -oE "Տրանսֆերների պատմություն|transfer-row" /tmp/p.html | sort -u >> verify-player.txt
+          grep -o 'transfer-row' /tmp/p.html | wc -l >> verify-player.txt
+      - run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f verify-player.txt
+          git commit -m "check [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
