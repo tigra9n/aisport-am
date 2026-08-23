@@ -1,0 +1,27 @@
+name: Verify Squad
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/verify-squad.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check squad page for Arsenal (team id 42)
+        run: |
+          curl -s "https://aisport.am/team/42?_c=$(date +%s)" -o /tmp/team.html -w "HTTP %{http_code}\n" > verify-squad.txt
+          grep -oE "Դարպասապահներ|Պաշտպաններ|squad-card" /tmp/team.html | sort -u >> verify-squad.txt
+          grep -o 'squad-card' /tmp/team.html | wc -l >> verify-squad.txt
+      - run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f verify-squad.txt
+          git commit -m "check [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
