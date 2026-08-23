@@ -9,7 +9,7 @@ const teamNames: Record<string, string> = {
   arsenal: "Արսենալ", "aston villa": "Աստոն Վիլա", bournemouth: "Բորնմութ",
   brentford: "Բրենթֆորդ", brighton: "Բրայթոն", burnley: "Բարնլի", chelsea: "Չելսի",
   "crystal palace": "Քրիսթալ Փելաս", everton: "Էվերթոն", fulham: "Ֆուլհեմ",
-  leeds: "Լիդս", liverpool: "Լիվերպուլ", "manchester city": "Մանչեսթեր Սիթի",
+  "hull city": "Հալ Սիթի", leeds: "Լիդս", liverpool: "Լիվերպուլ", "manchester city": "Մանչեսթեր Սիթի",
   "manchester united": "Մանչեսթեր Յունայթեդ", newcastle: "Նյուքասլ",
   "nottingham forest": "Նոթինգհեմ Ֆորեսթ", sunderland: "Սանդերլենդ",
   tottenham: "Տոտենհեմ", "west ham": "Վեսթ Հեմ", wolves: "Վուլվերհեմփթոն",
