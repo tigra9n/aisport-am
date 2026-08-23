@@ -22,15 +22,27 @@ let cacheTableReady:Promise<unknown>|null=null;
 async function ensureCacheTable(db:D1Database){cacheTableReady??=db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();await cacheTableReady}
 
 async function fetchJson<T>(url:string,key:string):Promise<T|null>{
-  try{
-    const response=await fetch(url,{headers:{"x-apisports-key":key,Accept:"application/json"},cache:"no-store"});
-    if(!response.ok)return null;
-    const payload=await response.json() as T & {errors?:unknown};
-    const errs=(payload as {errors?:unknown})?.errors;
-    const hasErrors=Array.isArray(errs)?errs.length>0:Boolean(errs&&Object.keys(errs as object).length>0);
-    if(hasErrors)return null;
-    return payload;
-  }catch{return null}
+  for(let attempt=0;attempt<2;attempt++){
+    try{
+      const response=await fetch(url,{headers:{"x-apisports-key":key,Accept:"application/json"},cache:"no-store"});
+      if(!response.ok){
+        if(attempt===0){await new Promise(r=>setTimeout(r,400));continue}
+        return null;
+      }
+      const payload=await response.json() as T & {errors?:unknown};
+      const errs=(payload as {errors?:unknown})?.errors;
+      const hasErrors=Array.isArray(errs)?errs.length>0:Boolean(errs&&Object.keys(errs as object).length>0);
+      if(hasErrors){
+        if(attempt===0){await new Promise(r=>setTimeout(r,400));continue}
+        return null;
+      }
+      return payload;
+    }catch{
+      if(attempt===0){await new Promise(r=>setTimeout(r,400));continue}
+      return null;
+    }
+  }
+  return null;
 }
 
 async function readCache(db:D1Database,cacheKey:string):Promise<LiveMatchDetail|null>{
@@ -119,10 +131,11 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
     isLive:isLiveStatus(fx.fixture.status.short),
   };
 
+  const delay=(ms:number)=>new Promise(r=>setTimeout(r,ms));
   const [eventsData,lineupsData,statsData]=await Promise.all([
     fetchJson<{response?:ApiFootballEvent[]}>(`https://v3.football.api-sports.io/fixtures/events?fixture=${fixtureId}`,key),
-    fetchJson<{response?:ApiFootballLineup[]}>(`https://v3.football.api-sports.io/fixtures/lineups?fixture=${fixtureId}`,key),
-    fetchJson<{response?:ApiFootballStatistics[]}>(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`,key),
+    delay(120).then(()=>fetchJson<{response?:ApiFootballLineup[]}>(`https://v3.football.api-sports.io/fixtures/lineups?fixture=${fixtureId}`,key)),
+    delay(240).then(()=>fetchJson<{response?:ApiFootballStatistics[]}>(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`,key)),
   ]);
 
   const result:LiveMatchDetail={
