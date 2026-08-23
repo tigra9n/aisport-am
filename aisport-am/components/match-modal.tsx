@@ -131,7 +131,7 @@ export function MatchModal() {
   const matchId = searchParams.get("match");
   const [details, setDetails] = useState<LiveMatchDetail | null>(null);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"events" | "lineups" | "stats">("events");
+  const [tab, setTab] = useState<"events" | "lineups" | "stats" | "h2h" | "prediction">("events");
 
   useEffect(() => {
     if (!matchId) {
@@ -187,6 +187,8 @@ export function MatchModal() {
               <button className={tab === "events" ? "active" : ""} onClick={() => setTab("events")}>Իրադարձություններ</button>
               <button className={tab === "lineups" ? "active" : ""} onClick={() => setTab("lineups")}>Կազմեր</button>
               <button className={tab === "stats" ? "active" : ""} onClick={() => setTab("stats")}>Վիճակագրություն</button>
+              {details.h2h.length > 0 && <button className={tab === "h2h" ? "active" : ""} onClick={() => setTab("h2h")}>Նախկին հանդիպումներ</button>}
+              {details.prediction && <button className={tab === "prediction" ? "active" : ""} onClick={() => setTab("prediction")}>Կանխատեսում</button>}
             </div>
 
             {tab === "events" && (
@@ -270,6 +272,45 @@ export function MatchModal() {
                 ) : (
                   <p className="detail-empty">Վիճակագրական տվյալներ դեռ հասանելի չեն։</p>
                 )}
+              </div>
+            )}
+
+            {tab === "h2h" && (
+              <div className="match-modal-scroll">
+                <div className="h2h-list">
+                  {details.h2h.map((meeting, index) => (
+                    <div className="h2h-row" key={`${meeting.date}-${index}`}>
+                      <span className="h2h-date">{meeting.date}</span>
+                      <span className="h2h-teams">
+                        <b className={meeting.home === homeName ? "h2h-highlight" : ""}>{meeting.home}</b>
+                        <em>{meeting.homeScore ?? "–"} : {meeting.awayScore ?? "–"}</em>
+                        <b className={meeting.away === awayName ? "h2h-highlight" : ""}>{meeting.away}</b>
+                      </span>
+                      <span className="h2h-competition">{meeting.competition}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {tab === "prediction" && details.prediction && (
+              <div className="match-modal-scroll">
+                <div className="prediction-panel">
+                  <div className="prediction-bar">
+                    <div className="prediction-bar-fill home" style={{ width: `${parseInt(details.prediction.homePct, 10) || 0}%` }} />
+                    <div className="prediction-bar-fill draw" style={{ width: `${parseInt(details.prediction.drawPct, 10) || 0}%` }} />
+                    <div className="prediction-bar-fill away" style={{ width: `${parseInt(details.prediction.awayPct, 10) || 0}%` }} />
+                  </div>
+                  <div className="prediction-legend">
+                    <span><b>{details.prediction.homePct}</b>{homeName}</span>
+                    <span><b>{details.prediction.drawPct}</b>Ոչ-ոքի</span>
+                    <span><b>{details.prediction.awayPct}</b>{awayName}</span>
+                  </div>
+                  {available(details.prediction.winnerName ?? "") && (
+                    <p className="prediction-note">Հավանական հաղթող՝ <b>{details.prediction.winnerName}</b></p>
+                  )}
+                  {available(details.prediction.advice ?? "") && <p className="prediction-note">{details.prediction.advice}</p>}
+                </div>
               </div>
             )}
           </>
