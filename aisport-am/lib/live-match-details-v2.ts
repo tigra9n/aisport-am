@@ -135,7 +135,7 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
   if(!key)return null;
   const db=(env as unknown as {DB?:D1Database}).DB;
 
-  const cacheKey=`apifootball:v4:match:${fixtureId}`;
+  const cacheKey=`apifootball:v5:match:${fixtureId}`;
   if(db){
     await ensureCacheTable(db);
     const fresh=await readCache(db,cacheKey);
