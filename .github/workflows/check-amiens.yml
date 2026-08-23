@@ -16,15 +16,15 @@ jobs:
         env:
           AFKEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
-          echo 'import json' > /tmp/s.py
-          echo 'd=json.load(open("/tmp/p.json"))' >> /tmp/s.py
-          echo 'print("lineups:", len(d.get("lineups",[])), "stats:", len(d.get("statistics",[])), "events:", len(d.get("events",[])))' >> /tmp/s.py
-          echo "=== Our popup for af-1552729 ===" > check-amiens.txt
-          curl -s "https://aisport.am/api/live/match/af-1552729?_c=$(date +%s)" > /tmp/p.json
-          python3 /tmp/s.py >> check-amiens.txt
-          echo "" >> check-amiens.txt
-          echo "=== Raw events endpoint ===" >> check-amiens.txt
-          curl -s "https://v3.football.api-sports.io/fixtures/events?fixture=1552729" -H "x-apisports-key: ${AFKEY}" | head -c 500 >> check-amiens.txt
+          echo 'import json' > /tmp/teams.py
+          echo 'd=json.load(sys.stdin)' >> /tmp/teams.py
+          echo 'import sys' >> /tmp/teams.py
+          echo 'd=json.load(sys.stdin)' >> /tmp/teams.py
+          echo 'fx=d["response"][0]' >> /tmp/teams.py
+          echo 'print("home:", fx["teams"]["home"]["name"])' >> /tmp/teams.py
+          echo 'print("away:", fx["teams"]["away"]["name"])' >> /tmp/teams.py
+          echo "=== Raw fixture teams for 1552729 ===" > check-amiens.txt
+          curl -s "https://v3.football.api-sports.io/fixtures?id=1552729" -H "x-apisports-key: ${AFKEY}" | python3 /tmp/teams.py >> check-amiens.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
