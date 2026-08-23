@@ -125,17 +125,14 @@ function statValue(rows:ApiFootballStatItem[],names:string[]){
   return String(row.value);
 }
 
-export let lastDebugReason = "";
-
 export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|null>{
-  lastDebugReason = "";
   const fixtureId=id.replace(/^af-/,"").replace(/^fd-/,"");
-  if(!/^\d+$/.test(fixtureId)){lastDebugReason=`bad id format: ${id}`;return null}
+  if(!/^\d+$/.test(fixtureId))return null;
 
   const {env}=await import("cloudflare:workers");
   const runtime=env as unknown as Record<string,string|undefined>;
   const key=runtime.API_FOOTBALL_KEY;
-  if(!key){lastDebugReason="no API_FOOTBALL_KEY in env";return null}
+  if(!key)return null;
   const db=(env as unknown as {DB?:D1Database}).DB;
 
   const cacheKey=`apifootball:v4:match:${fixtureId}`;
@@ -145,26 +142,14 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
     if(fresh)return fresh;
   }
 
-  let fixtureData:{response?:ApiFootballFixtureFull[]}|null=null;
-  try{
-    const r=await fetch(`https://v3.football.api-sports.io/fixtures?id=${fixtureId}`,{headers:{"x-apisports-key":key,Accept:"application/json"},cache:"no-store"});
-    const bodyText=await r.text();
-    if(!r.ok){
-      lastDebugReason=`fixture http ${r.status}: ${bodyText.slice(0,300)}`;
-    }else{
-      try{fixtureData=JSON.parse(bodyText)}catch{lastDebugReason=`fixture json parse failed: ${bodyText.slice(0,300)}`}
-    }
-  }catch(err){
-    lastDebugReason=`fixture fetch threw: ${String(err)}`;
-  }
+  const fixtureData=await fetchJson<{response?:ApiFootballFixtureFull[]}>(`https://v3.football.api-sports.io/fixtures?id=${fixtureId}`,key);
   const fx=fixtureData?.response?.[0];
   if(!fx){
-    if(!lastDebugReason)lastDebugReason=`fixture fetch returned no data. raw=${JSON.stringify(fixtureData).slice(0,400)}`;
     if(db){const stale=await readStaleCache(db,cacheKey);if(stale)return stale}
     return null;
   }
   const competition=TRACKED_LEAGUES[fx.league.id];
-  if(!competition){lastDebugReason=`untracked league id ${fx.league.id}`;return null}
+  if(!competition)return null;
 
   const match:LiveMatch={
     id:`af-${fx.fixture.id}`,
