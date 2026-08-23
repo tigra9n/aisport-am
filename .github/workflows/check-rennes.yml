@@ -1,0 +1,31 @@
+name: Check Rennes Match
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/check-rennes.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check
+        env:
+          AFKEY: ${{ secrets.API_FOOTBALL_KEY }}
+        run: |
+          echo "=== Our popup, no cache-buster ===" > check-rennes.txt
+          curl -s "https://aisport.am/api/live/match/af-1552735" | head -c 500 >> check-rennes.txt
+          echo "" >> check-rennes.txt
+          echo "=== Raw events for 1552735 ===" >> check-rennes.txt
+          curl -s "https://v3.football.api-sports.io/fixtures/events?fixture=1552735" -H "x-apisports-key: ${AFKEY}" | head -c 400 >> check-rennes.txt
+      - run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f check-rennes.txt
+          git commit -m "check [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
