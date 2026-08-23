@@ -1,0 +1,30 @@
+name: Verify Pro Plan
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/verify-pro.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check plan status
+        env:
+          AFKEY: ${{ secrets.API_FOOTBALL_KEY }}
+        run: |
+          curl -s "https://v3.football.api-sports.io/status" -H "x-apisports-key: ${AFKEY}" > pro-check.txt
+          echo "" >> pro-check.txt
+          echo "=== Standings with season now ===" >> pro-check.txt
+          curl -s "https://v3.football.api-sports.io/standings?league=39&season=2026" -H "x-apisports-key: ${AFKEY}" | head -c 500 >> pro-check.txt
+      - run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f pro-check.txt
+          git commit -m "check [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
