@@ -33,6 +33,9 @@ jobs:
           echo "" >> verify-features.txt
           echo "=== Raw topscorers API for PL ===" >> verify-features.txt
           curl -s "https://v3.football.api-sports.io/players/topscorers?league=39&season=2026" -H "x-apisports-key: ${AFKEY}" | head -c 500 >> verify-features.txt
+          echo "" >> verify-features.txt
+          echo "=== Fresh topscorers page fetch ===" >> verify-features.txt
+          curl -s "https://aisport.am/topscorers?_c=$(date +%s)" | grep -oE "Տվյալ չկա|Թարմացված|Clarke" | sort -u >> verify-features.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
