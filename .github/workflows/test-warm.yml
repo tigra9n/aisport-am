@@ -17,6 +17,10 @@ jobs:
           CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
         run: |
           curl -s -w "\nHTTP %{http_code}\n" "https://aisport.am/api/cron/warm?token=${CRON_TOKEN}" > warm-test.txt
+          echo "" >> warm-test.txt
+          sleep 3
+          echo "=== retry ===" >> warm-test.txt
+          curl -s -w "\nHTTP %{http_code}\n" "https://aisport.am/api/cron/warm?token=${CRON_TOKEN}" >> warm-test.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
