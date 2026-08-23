@@ -30,7 +30,7 @@ jobs:
             echo "--- $CSSURL ---" >> debug.txt
             curl -s "$CSSURL" -o /tmp/style.css
             wc -c /tmp/style.css >> debug.txt
-            grep -o "zone-ucl[a-z:_-]*{[^}]*}" /tmp/style.css | head -3 >> debug.txt
+            grep -o ".\{0,10\}zone-ucl.\{0,120\}" /tmp/style.css | head -5 >> debug.txt
           done
           echo "" >> debug.txt
           echo "=== Raw team stats API for Newcastle (id 34) league 39 season 2026 ===" >> debug.txt
