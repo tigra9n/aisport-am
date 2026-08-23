@@ -1,0 +1,31 @@
+name: Quota and RM Check
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/quota-rm-check.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check quota then Real Madrid
+        env:
+          AFKEY: ${{ secrets.API_FOOTBALL_KEY }}
+        run: |
+          echo "=== Quota ===" > rm2.txt
+          curl -s "https://v3.football.api-sports.io/status" -H "x-apisports-key: ${AFKEY}" >> rm2.txt
+          echo "" >> rm2.txt
+          echo "=== Real Madrid on our site today ===" >> rm2.txt
+          curl -s "https://aisport.am/live?_c=$(date +%s)" | grep -oE '"[^"]*Ռեալ Մադրիդ[^"]*"|af-[0-9]+' >> rm2.txt || echo "no match found" >> rm2.txt
+      - run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f rm2.txt
+          git commit -m "check [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
