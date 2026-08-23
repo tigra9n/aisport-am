@@ -1,0 +1,31 @@
+name: Verify Stats Fix
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/verify-stats-fix.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify statistics now populate
+        run: |
+          echo "=== Our worker API after fix ===" > verify.txt
+          for ID in 1550091 1550092 1550093 1550095 1552731 1552732 1552734 1552736 1552737 1557368; do
+            OURS=$(curl -s "https://aisport.am/api/live/match/af-$ID?_c=$(date +%s)")
+            STATLEN=$(echo "$OURS" | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d.get('statistics',[])))" 2>/dev/null || echo "parse-error")
+            echo "af-$ID -> statistics count: $STATLEN" >> verify.txt
+            sleep 1
+          done
+      - run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f verify.txt
+          git commit -m "check [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
