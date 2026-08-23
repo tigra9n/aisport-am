@@ -28,7 +28,8 @@ async function fetchJson<T>(url:string,key:string):Promise<T|null>{
     try{
       const response=await fetch(url,{headers:{"x-apisports-key":key,Accept:"application/json"},cache:"no-store"});
       if(response.status===429){
-        if(attempt===0){await new Promise(r=>setTimeout(r,2500));continue}
+        // Quota/rate-limit hit: retrying won't help and just burns another call. Fail fast.
+        console.error(`[live-match-details] 429 rate limit on ${url}`);
         return null;
       }
       if(!response.ok){
@@ -40,7 +41,8 @@ async function fetchJson<T>(url:string,key:string):Promise<T|null>{
       const isRateLimit=Boolean(errs&&typeof errs==="object"&&!Array.isArray(errs)&&"rateLimit" in (errs as object));
       const hasErrors=Array.isArray(errs)?errs.length>0:Boolean(errs&&Object.keys(errs as object).length>0);
       if(hasErrors){
-        if(attempt===0){await new Promise(r=>setTimeout(r,isRateLimit?2500:400));continue}
+        if(isRateLimit){console.error(`[live-match-details] rate limit error field on ${url}`);return null}
+        if(attempt===0){await new Promise(r=>setTimeout(r,400));continue}
         return null;
       }
       return payload;
@@ -64,8 +66,22 @@ async function readStaleCache(db:D1Database,cacheKey:string):Promise<LiveMatchDe
 async function writeCache(db:D1Database,cacheKey:string,value:LiveMatchDetail,finished:boolean){
   // Finished matches never change again, so cache them for a long time.
   // Live or not-yet-started matches get a short TTL since state changes fast.
-  const ttlSeconds=finished?60*60*6:90;
+  const ttlSeconds=finished?60*60*6:240;
   const validUntil=Date.now()+ttlSeconds*1000;
+  await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,?) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=excluded.retry_after`).bind(cacheKey,JSON.stringify(value),Date.now(),validUntil).run();
+}
+
+// Lineups are announced ~1h before kickoff and essentially never change once published,
+// unlike score/events/stats. Caching them separately with a long TTL avoids re-fetching
+// (and re-spending API quota on) the lineups endpoint on every refresh cycle.
+type CachedLineups=LiveMatchDetail["lineups"];
+async function readLineupsCache(db:D1Database,cacheKey:string):Promise<CachedLineups|null>{
+  const row=await db.prepare("SELECT payload,retry_after AS validUntil FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{payload:string;validUntil:number}>();
+  if(!row||Date.now()>row.validUntil)return null;
+  try{return JSON.parse(row.payload) as CachedLineups}catch{return null}
+}
+async function writeLineupsCache(db:D1Database,cacheKey:string,value:CachedLineups){
+  const validUntil=Date.now()+60*60*6*1000;
   await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,?) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=excluded.retry_after`).bind(cacheKey,JSON.stringify(value),Date.now(),validUntil).run();
 }
 
@@ -139,11 +155,28 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
   };
 
   const delay=(ms:number)=>new Promise(r=>setTimeout(r,ms));
+  const lineupsCacheKey=`apifootball:v4:lineups:${fixtureId}`;
+  const cachedLineups=db?await readLineupsCache(db,lineupsCacheKey):null;
+  // Both teams must be present. An hour before kickoff it's common for only one
+  // side to have published its XI; caching that half-result would otherwise pin
+  // the popup to a single team's lineup for the rest of the match.
+  const needLineupsFetch=!cachedLineups||cachedLineups.length<2;
+
   const [eventsData,lineupsData,statsData]=await Promise.all([
     fetchJson<{response?:ApiFootballEvent[]}>(`https://v3.football.api-sports.io/fixtures/events?fixture=${fixtureId}`,key),
-    delay(120).then(()=>fetchJson<{response?:ApiFootballLineup[]}>(`https://v3.football.api-sports.io/fixtures/lineups?fixture=${fixtureId}`,key)),
+    needLineupsFetch?delay(120).then(()=>fetchJson<{response?:ApiFootballLineup[]}>(`https://v3.football.api-sports.io/fixtures/lineups?fixture=${fixtureId}`,key)):Promise.resolve(null),
     delay(240).then(()=>fetchJson<{response?:ApiFootballStatistics[]}>(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`,key)),
   ]);
+
+  const freshLineups=(lineupsData?.response??[]).map(l=>({
+    team:armenianTeamName(l.team.name),
+    formation:l.formation||"—",
+    starters:l.startXI.map(p=>({name:p.player.name||"—",number:p.player.number??null,grid:p.player.grid??null})),
+    substitutes:l.substitutes.map(p=>({name:p.player.name||"—",number:p.player.number??null,grid:p.player.grid??null})),
+  }));
+  // If the refetch came back empty (e.g. rate-limited), fall back to whatever we had.
+  const lineups=needLineupsFetch?(freshLineups.length>0?freshLineups:(cachedLineups??[])):(cachedLineups as CachedLineups);
+  if(db&&needLineupsFetch&&freshLineups.length>=2)await writeLineupsCache(db,lineupsCacheKey,freshLineups);
 
   const result:LiveMatchDetail={
     match,
@@ -156,12 +189,7 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
       assist:e.assist.name||"—",
       label:eventLabel(e.type,e.detail),
     })),
-    lineups:(lineupsData?.response??[]).map(l=>({
-      team:armenianTeamName(l.team.name),
-      formation:l.formation||"—",
-      starters:l.startXI.map(p=>({name:p.player.name||"—",number:p.player.number??null,grid:p.player.grid??null})),
-      substitutes:l.substitutes.map(p=>({name:p.player.name||"—",number:p.player.number??null,grid:p.player.grid??null})),
-    })),
+    lineups,
     statistics:(statsData?.response??[]).map(s=>({
       team:armenianTeamName(s.team.name),
       possession:statValue(s.statistics,["ball possession"]),
