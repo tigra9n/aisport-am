@@ -1,0 +1,38 @@
+name: Verify New Features
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/verify-features.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check standings, topscorers, h2h/prediction
+        run: |
+          echo "=== Standings page ===" > verify-features.txt
+          curl -s "https://aisport.am/standings" | grep -oE "Դեմո տվյալներ|Թարմացված" | sort -u >> verify-features.txt
+          echo "" >> verify-features.txt
+          echo "=== Topscorers page ===" >> verify-features.txt
+          curl -s "https://aisport.am/topscorers" -o /tmp/ts.html -w "HTTP %{http_code}\n" >> verify-features.txt
+          grep -oE "Տվյալ չկա|Թարմացված" /tmp/ts.html | sort -u >> verify-features.txt
+          echo "" >> verify-features.txt
+          echo "=== Popup h2h/prediction fields ===" >> verify-features.txt
+          HTML=$(curl -s "https://aisport.am/live?_c=$(date +%s)")
+          MID=$(echo "$HTML" | grep -oE 'af-[0-9]+' | sort -u | head -1)
+          echo "testing $MID" >> verify-features.txt
+          curl -s "https://aisport.am/api/live/match/$MID" | grep -o '"h2h":\[[^]]*\]' | head -c 400 >> verify-features.txt
+          echo "" >> verify-features.txt
+          curl -s "https://aisport.am/api/live/match/$MID" | grep -o '"prediction":[^}]*}' >> verify-features.txt
+      - run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f verify-features.txt
+          git commit -m "check [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
