@@ -12,7 +12,7 @@ const LEAGUE_ID_BY_CODE: Record<string, number> = {
 type ApiFootballStandingsResponse = {
   response?: { league?: { standings?: Array<Array<{
     rank: number;
-    team: { name: string; logo?: string | null };
+    team: { id: number; name: string; logo?: string | null };
     points: number;
     goalsDiff: number;
     all: { played: number; win: number; draw: number; lose: number };
@@ -41,7 +41,7 @@ export async function getStandings(code: string): Promise<{ rows: StandingRow[];
 
   const db = (env as unknown as { DB?: D1Database }).DB;
   const season = currentSeasonYear();
-  const cacheKey = `apifootball:v2:standings:${leagueId}:${season}`;
+  const cacheKey = `apifootball:v3:standings:${leagueId}:${season}`;
 
   if (db) {
     await ensureCacheTable(db);
@@ -65,6 +65,7 @@ export async function getStandings(code: string): Promise<{ rows: StandingRow[];
     const rows: StandingRow[] = table.map((row) => ({
       position: row.rank,
       team: armenianTeamName(row.team.name),
+      teamId: row.team.id,
       teamLogo: row.team.logo ?? null,
       played: row.all.played,
       won: row.all.win,

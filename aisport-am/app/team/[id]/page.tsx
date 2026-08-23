@@ -1,0 +1,63 @@
+import { notFound } from "next/navigation";
+import { SiteFooter } from "../../../components/site-footer";
+import { SiteHeader } from "../../../components/site-header";
+import { getSquad, positionLabel, POSITION_ORDER } from "../../../lib/squad-server";
+
+export const dynamic = "force-dynamic";
+
+export default async function TeamPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const teamId = Number.parseInt(id, 10);
+  if (!Number.isFinite(teamId)) notFound();
+  const squad = await getSquad(teamId);
+  if (!squad) notFound();
+
+  const groups = POSITION_ORDER.map((position) => ({
+    position,
+    players: squad.players.filter((p) => p.position === position),
+  })).filter((g) => g.players.length > 0);
+  const other = squad.players.filter((p) => !POSITION_ORDER.includes(p.position));
+
+  return <main><SiteHeader /><div className="site-shell inner-page">
+    <span className="page-kicker">Ակումբի կազմ</span>
+    <h1 className="page-title team-page-title">
+      {squad.teamLogo && <img src={squad.teamLogo} alt="" className="team-logo-lg" loading="lazy" />}
+      {squad.teamName}
+    </h1>
+    <p className="page-intro">Ակումբի ամբողջական խաղացողների կազմը՝ ըստ դիրքի, համարով և տարիքով։</p>
+    <div className="squad-groups">
+      {groups.map((group) => (
+        <section className="squad-group" key={group.position}>
+          <h2>{positionLabel(group.position)}</h2>
+          <div className="squad-grid">
+            {group.players.map((player) => (
+              <div className="squad-card" key={player.id}>
+                {player.photo ? <img src={player.photo} alt="" className="squad-photo" loading="lazy" /> : <div className="squad-photo squad-photo-placeholder">{player.name.slice(0, 1)}</div>}
+                <div>
+                  <strong>{player.name}</strong>
+                  <span>{player.number ? `#${player.number}` : "—"}{player.age ? ` · ${player.age} տարեկան` : ""}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+      {other.length > 0 && (
+        <section className="squad-group">
+          <h2>Այլ</h2>
+          <div className="squad-grid">
+            {other.map((player) => (
+              <div className="squad-card" key={player.id}>
+                {player.photo ? <img src={player.photo} alt="" className="squad-photo" loading="lazy" /> : <div className="squad-photo squad-photo-placeholder">{player.name.slice(0, 1)}</div>}
+                <div>
+                  <strong>{player.name}</strong>
+                  <span>{player.number ? `#${player.number}` : "—"}{player.age ? ` · ${player.age} տարեկան` : ""}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  </div><SiteFooter /></main>;
+}

@@ -182,6 +182,15 @@ img{display:block;max-width:100%}
 .injuries-columns p{margin:0 0 8px;font-size:9px}
 .injuries-columns b{display:block;color:var(--ink);font-weight:900}
 .injuries-columns span{display:block;color:var(--live);font-size:8px;margin-top:1px}
+.team-page-title{display:flex;align-items:center;gap:16px}
+.squad-groups{display:grid;gap:32px;margin-top:32px}
+.squad-group h2{margin:0 0 16px;font-size:16px;color:var(--green)}
+.squad-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.squad-card{display:flex;align-items:center;gap:12px;padding:12px;border-radius:12px;background:var(--surface);border:1px solid var(--line)}
+.squad-photo{width:44px;height:44px;border-radius:50%;object-fit:cover;flex:none;background:var(--surface-2)}
+.squad-photo-placeholder{display:grid;place-items:center;color:var(--muted);font-weight:950;font-size:16px}
+.squad-card strong{display:block;font-size:12px}
+.squad-card span{display:block;margin-top:2px;color:var(--muted);font-size:9px}
 .subs-teams{display:grid;gap:2px;margin-top:2px}
 .sub-pairs{display:grid;gap:6px}
 .sub-pair-row{display:grid;grid-template-columns:1fr 40px 1fr;align-items:center;gap:8px;font-size:9px}
@@ -292,6 +301,8 @@ img{display:block;max-width:100%}
 .match-row-link{cursor:pointer;text-decoration:none;color:inherit;transition:background .12s ease}
 .match-row-link:hover{background:var(--surface-2)}
 .team-with-logo{display:inline-flex;align-items:center;gap:8px}
+.team-cell-link{display:flex;align-items:center;gap:7px;color:inherit;text-decoration:none}
+.team-cell-link:hover strong{text-decoration:underline}
 .match-row strong:last-of-type.team-with-logo{flex-direction:row-reverse}
 .team-logo{width:20px;height:20px;object-fit:contain;flex:none}
 .score-card .team-logo{width:16px;height:16px}

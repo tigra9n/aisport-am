@@ -314,6 +314,8 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
     competition,
     home:armenianTeamName(fx.teams.home.name),
     away:armenianTeamName(fx.teams.away.name),
+    homeId:fx.teams.home.id??null,
+    awayId:fx.teams.away.id??null,
     homeLogo:fx.teams.home.logo??null,
     awayLogo:fx.teams.away.logo??null,
     homeScore:fx.goals.home,

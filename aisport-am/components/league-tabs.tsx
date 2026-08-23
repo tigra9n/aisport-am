@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { leagues, type StandingRow } from "../lib/football";
 import type { TopScorer } from "../lib/topscorers-server";
@@ -53,7 +54,14 @@ export function LeagueTabs({ tables, topScorerTables, compact = false }: { table
               {rows.map((row) => (
                 <tr key={row.team} className={row.position <= 4 ? "zone-ucl" : row.position === 5 ? "zone-europa" : row.position > rows.length - 3 ? "zone-drop" : ""}>
                   <td><span className="position-marker">{row.position}</span></td>
-                  <td>{row.teamLogo ? <img src={row.teamLogo} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}<strong>{row.team}</strong></td>
+                  <td>{row.teamId ? (
+                    <Link href={`/team/${row.teamId}`} className="team-cell-link">
+                      {row.teamLogo ? <img src={row.teamLogo} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}
+                      <strong>{row.team}</strong>
+                    </Link>
+                  ) : (
+                    <>{row.teamLogo ? <img src={row.teamLogo} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}<strong>{row.team}</strong></>
+                  )}</td>
                   <td>{row.played}</td>
                   {!compact ? <><td>{row.won}</td><td>{row.draw}</td><td>{row.lost}</td><td>{row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}</td></> : null}
                   <td><b>{row.points}</b></td>

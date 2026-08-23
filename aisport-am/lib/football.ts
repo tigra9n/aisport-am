@@ -1,6 +1,7 @@
 export type StandingRow = {
   position: number;
   team: string;
+  teamId: number | null;
   teamLogo: string | null;
   played: number;
   won: number;
@@ -30,6 +31,7 @@ export function demoStandings(code: string): StandingRow[] {
   return (teams[code] ?? teams.PL).map((team, index) => ({
     position: index + 1,
     team,
+    teamId: null,
     teamLogo: null,
     played: 4,
     won: Math.max(0, 4 - Math.floor(index / 2)),

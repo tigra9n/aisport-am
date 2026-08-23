@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { leagues } from "../lib/football";
 import type { TopScorer } from "../lib/topscorers-server";
@@ -37,10 +38,17 @@ export function TopScorersTabs({ tables }: { tables: Record<string, { rows: TopS
                     </span>
                   </td>
                   <td>
-                    <span className="team-with-logo">
-                      {row.teamLogo && <img src={row.teamLogo} alt="" className="team-logo" loading="lazy" />}
-                      {row.team}
-                    </span>
+                    {row.teamId ? (
+                      <Link href={`/team/${row.teamId}`} className="team-with-logo team-cell-link">
+                        {row.teamLogo && <img src={row.teamLogo} alt="" className="team-logo" loading="lazy" />}
+                        {row.team}
+                      </Link>
+                    ) : (
+                      <span className="team-with-logo">
+                        {row.teamLogo && <img src={row.teamLogo} alt="" className="team-logo" loading="lazy" />}
+                        {row.team}
+                      </span>
+                    )}
                   </td>
                   <td>{row.appearances}</td>
                   <td>{row.assists}</td>

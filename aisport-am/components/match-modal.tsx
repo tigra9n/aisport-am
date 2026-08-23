@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { LineupPlayer, LiveMatchDetail } from "../lib/live-football-server";
@@ -198,9 +199,21 @@ export function MatchModal() {
           <>
             <span className="page-kicker">{details.match.competition}</span>
             <h2 className="match-details-title match-modal-title">
-              <span className="team-with-logo title-team">{details.match.homeLogo && <img src={details.match.homeLogo} alt="" className="team-logo-lg" loading="lazy" />}{details.match.home}</span>
+              {details.match.homeId ? (
+                <Link href={`/team/${details.match.homeId}`} className="team-with-logo title-team" onClick={close}>
+                  {details.match.homeLogo && <img src={details.match.homeLogo} alt="" className="team-logo-lg" loading="lazy" />}{details.match.home}
+                </Link>
+              ) : (
+                <span className="team-with-logo title-team">{details.match.homeLogo && <img src={details.match.homeLogo} alt="" className="team-logo-lg" loading="lazy" />}{details.match.home}</span>
+              )}
               <b>{details.match.homeScore ?? "–"} : {details.match.awayScore ?? "–"}</b>
-              <span className="team-with-logo title-team">{details.match.awayLogo && <img src={details.match.awayLogo} alt="" className="team-logo-lg" loading="lazy" />}{details.match.away}</span>
+              {details.match.awayId ? (
+                <Link href={`/team/${details.match.awayId}`} className="team-with-logo title-team" onClick={close}>
+                  {details.match.awayLogo && <img src={details.match.awayLogo} alt="" className="team-logo-lg" loading="lazy" />}{details.match.away}
+                </Link>
+              ) : (
+                <span className="team-with-logo title-team">{details.match.awayLogo && <img src={details.match.awayLogo} alt="" className="team-logo-lg" loading="lazy" />}{details.match.away}</span>
+              )}
             </h2>
             <div className="match-facts">
               <span>{details.match.isLive ? `🔴 ${details.match.status}` : details.match.status}</span>
@@ -350,7 +363,14 @@ export function MatchModal() {
                     {details.standings.map((row) => (
                       <tr key={row.team} className={`${row.team === homeName || row.team === awayName ? "popup-standings-highlight" : ""} ${row.position <= 4 ? "zone-ucl" : row.position === 5 ? "zone-europa" : row.position > details.standings!.length - 3 ? "zone-drop" : ""}`}>
                         <td><span className="position-marker">{row.position}</span></td>
-                        <td>{row.teamLogo ? <img src={row.teamLogo} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}<strong>{row.team}</strong></td>
+                        <td>{row.teamId ? (
+                          <Link href={`/team/${row.teamId}`} className="team-cell-link" onClick={close}>
+                            {row.teamLogo ? <img src={row.teamLogo} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}
+                            <strong>{row.team}</strong>
+                          </Link>
+                        ) : (
+                          <>{row.teamLogo ? <img src={row.teamLogo} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}<strong>{row.team}</strong></>
+                        )}</td>
                         <td>{row.played}</td>
                         <td>{row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}</td>
                         <td><b>{row.points}</b></td>
@@ -370,7 +390,11 @@ export function MatchModal() {
                       <tr key={row.name}>
                         <td><span className="position-marker">{row.rank}</span></td>
                         <td><span className="player-with-photo">{row.photo && <img src={row.photo} alt="" className="player-photo" loading="lazy" />}<strong>{row.name}</strong></span></td>
-                        <td><span className="team-with-logo">{row.teamLogo && <img src={row.teamLogo} alt="" className="team-logo" loading="lazy" />}{row.team}</span></td>
+                        <td>{row.teamId ? (
+                          <Link href={`/team/${row.teamId}`} className="team-with-logo team-cell-link" onClick={close}>{row.teamLogo && <img src={row.teamLogo} alt="" className="team-logo" loading="lazy" />}{row.team}</Link>
+                        ) : (
+                          <span className="team-with-logo">{row.teamLogo && <img src={row.teamLogo} alt="" className="team-logo" loading="lazy" />}{row.team}</span>
+                        )}</td>
                         <td><b>{row.goals}</b></td>
                       </tr>
                     ))}

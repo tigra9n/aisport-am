@@ -1,10 +1,10 @@
 import { armenianTeamName } from "./team-names-hy";
 
-export type LiveMatch={id:string;status:string;competition:string;home:string;away:string;homeLogo:string|null;awayLogo:string|null;homeScore:number|null;awayScore:number|null;isLive:boolean};
+export type LiveMatch={id:string;status:string;competition:string;home:string;away:string;homeId:number|null;awayId:number|null;homeLogo:string|null;awayLogo:string|null;homeScore:number|null;awayScore:number|null;isLive:boolean};
 export type LineupPlayer={name:string;number:number|null;grid:string|null;rating:string|null};
 export type LiveMatchDetail={match:LiveMatch;venue:string;referee:string;events:{minute:string;team:string;player:string;assist:string;label:string}[];lineups:{team:string;formation:string;starters:LineupPlayer[];substitutes:LineupPlayer[]}[];statistics:{team:string;possession:string;shotsOnGoal:string;totalShots:string;xg:string}[];h2h:{date:string;competition:string;home:string;away:string;homeScore:number|null;awayScore:number|null}[];prediction:{winnerName:string|null;comment:string|null;advice:string|null;homePct:string;drawPct:string;awayPct:string}|null;standings:import("./football").StandingRow[]|null;topScorers:import("./topscorers-server").TopScorer[]|null;injuries:{team:string;player:string;reason:string}[]};
 
-type ApiFootballFixture={fixture:{id:number;date:string;venue?:{name?:string|null};referee?:string|null;status:{short:string;elapsed?:number|null}};league:{id:number};teams:{home:{name:string;logo?:string|null};away:{name:string;logo?:string|null}};goals:{home:number|null;away:number|null}};
+type ApiFootballFixture={fixture:{id:number;date:string;venue?:{name?:string|null};referee?:string|null;status:{short:string;elapsed?:number|null}};league:{id:number};teams:{home:{id:number;name:string;logo?:string|null};away:{id:number;name:string;logo?:string|null}};goals:{home:number|null;away:number|null}};
 type SortableMatch=LiveMatch&{priority:number;timestamp:number};
 
 let cacheTableReady:Promise<unknown>|null=null;
@@ -85,6 +85,8 @@ function toSortable(fx:ApiFootballFixture):SortableMatch|null{
     competition:league.label,
     home:armenianTeamName(fx.teams.home.name),
     away:armenianTeamName(fx.teams.away.name),
+    homeId:fx.teams.home.id??null,
+    awayId:fx.teams.away.id??null,
     homeLogo:fx.teams.home.logo??null,
     awayLogo:fx.teams.away.logo??null,
     homeScore:fx.goals.home,
@@ -104,7 +106,7 @@ export async function getLiveMatches(dayOffset=0,allowProviderRequest=true){
   if(!key)return{matches:[],demo:false,unavailable:true,limited:true,updatedAt};
   const ttl=dayOffset===0?480:1800;
   const data=await cachedFetch<{response?:ApiFootballFixture[]}>(
-    `apifootball:v2:date:${date}`,
+    `apifootball:v3:date:${date}`,
     `https://v3.football.api-sports.io/fixtures?date=${date}`,
     {"x-apisports-key":key},
     ttl,
