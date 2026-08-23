@@ -1,5 +1,5 @@
 import { armenianTeamName } from "./team-names-hy";
-import type { LiveMatch, LiveMatchDetail } from "./live-football-server";
+import type { LiveMatch, LiveMatchDetail, LineupPlayer } from "./live-football-server";
 
 type ApiFootballFixtureFull={fixture:{id:number;date:string;venue?:{name?:string|null};referee?:string|null;status:{short:string;elapsed?:number|null}};league:{id:number};teams:{home:{name:string};away:{name:string}};goals:{home:number|null;away:number|null}};
 type ApiFootballEvent={time:{elapsed:number;extra?:number|null};team:{name:string};player:{name?:string|null};assist:{name?:string|null};type:string;detail:string};
@@ -7,6 +7,10 @@ type ApiFootballLineupPlayer={player:{name?:string|null;number?:number|null;grid
 type ApiFootballLineup={team:{name:string};formation?:string|null;startXI:ApiFootballLineupPlayer[];substitutes:ApiFootballLineupPlayer[]};
 type ApiFootballStatItem={type:string;value:string|number|null};
 type ApiFootballStatistics={team:{name:string};statistics:ApiFootballStatItem[]};
+
+type EventsSection=LiveMatchDetail["events"];
+type LineupsSection=LiveMatchDetail["lineups"];
+type StatsSection=LiveMatchDetail["statistics"];
 
 const TRACKED_LEAGUES:Record<number,string>={
   342:"Հայաստանի Պրեմիեր լիգա",
@@ -28,7 +32,6 @@ const TRACKED_LEAGUES:Record<number,string>={
 };
 
 let cacheTableReady:Promise<unknown>|null=null;
-
 async function ensureCacheTable(db:D1Database){cacheTableReady??=db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();await cacheTableReady}
 
 async function fetchJson<T>(url:string,key:string):Promise<T|null>{
@@ -36,12 +39,11 @@ async function fetchJson<T>(url:string,key:string):Promise<T|null>{
     try{
       const response=await fetch(url,{headers:{"x-apisports-key":key,Accept:"application/json"},cache:"no-store"});
       if(response.status===429){
-        if(attempt<2){await new Promise(r=>setTimeout(r,600));continue}
-        console.error(`[live-match-details] 429 rate limit on ${url}`);
+        if(attempt<2){await new Promise(r=>setTimeout(r,700));continue}
         return null;
       }
       if(!response.ok){
-        if(attempt<2){await new Promise(r=>setTimeout(r,300));continue}
+        if(attempt<2){await new Promise(r=>setTimeout(r,350));continue}
         return null;
       }
       const payload=await response.json() as T & {errors?:unknown};
@@ -49,48 +51,42 @@ async function fetchJson<T>(url:string,key:string):Promise<T|null>{
       const isRateLimit=Boolean(errs&&typeof errs==="object"&&!Array.isArray(errs)&&"rateLimit" in (errs as object));
       const hasErrors=Array.isArray(errs)?errs.length>0:Boolean(errs&&Object.keys(errs as object).length>0);
       if(hasErrors){
-        if(attempt<2){await new Promise(r=>setTimeout(r,isRateLimit?600:300));continue}
-        if(isRateLimit)console.error(`[live-match-details] rate limit error field on ${url}`);
+        if(attempt<2){await new Promise(r=>setTimeout(r,isRateLimit?700:350));continue}
         return null;
       }
       return payload;
     }catch{
-      if(attempt<2){await new Promise(r=>setTimeout(r,300));continue}
+      if(attempt<2){await new Promise(r=>setTimeout(r,350));continue}
       return null;
     }
   }
   return null;
 }
 
-async function readCache(db:D1Database,cacheKey:string):Promise<LiveMatchDetail|null>{
+// Generic per-section cache: each section (fixture info, events, lineups,
+// statistics) is stored and expired independently, so one section failing
+// to fetch never wipes out or blocks the others from being served/reused.
+async function readSection<T>(db:D1Database,cacheKey:string):Promise<{value:T;fresh:boolean}|null>{
   const row=await db.prepare("SELECT payload,retry_after AS validUntil FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{payload:string;validUntil:number}>();
-  if(!row||Date.now()>row.validUntil)return null;
-  try{return JSON.parse(row.payload) as LiveMatchDetail}catch{return null}
+  if(!row)return null;
+  try{
+    const value=JSON.parse(row.payload) as T;
+    return{value,fresh:Date.now()<=row.validUntil};
+  }catch{return null}
 }
-async function readStaleCache(db:D1Database,cacheKey:string):Promise<LiveMatchDetail|null>{
-  const row=await db.prepare("SELECT payload FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{payload:string}>();
-  try{return row?JSON.parse(row.payload) as LiveMatchDetail:null}catch{return null}
-}
-async function writeCache(db:D1Database,cacheKey:string,value:LiveMatchDetail,finished:boolean){
-  // Finished matches never change again, so cache them for a long time.
-  // Live or not-yet-started matches get a short TTL since state changes fast.
-  const ttlSeconds=finished?60*60*6:240;
+async function writeSection<T>(db:D1Database,cacheKey:string,value:T,ttlSeconds:number){
   const validUntil=Date.now()+ttlSeconds*1000;
   await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,?) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=excluded.retry_after`).bind(cacheKey,JSON.stringify(value),Date.now(),validUntil).run();
 }
 
-// Lineups are announced ~1h before kickoff and essentially never change once published,
-// unlike score/events/stats. Caching them separately with a long TTL avoids re-fetching
-// (and re-spending API quota on) the lineups endpoint on every refresh cycle.
-type CachedLineups=LiveMatchDetail["lineups"];
-async function readLineupsCache(db:D1Database,cacheKey:string):Promise<CachedLineups|null>{
-  const row=await db.prepare("SELECT payload,retry_after AS validUntil FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{payload:string;validUntil:number}>();
-  if(!row||Date.now()>row.validUntil)return null;
-  try{return JSON.parse(row.payload) as CachedLineups}catch{return null}
-}
-async function writeLineupsCache(db:D1Database,cacheKey:string,value:CachedLineups){
-  const validUntil=Date.now()+60*60*6*1000;
-  await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,?) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=excluded.retry_after`).bind(cacheKey,JSON.stringify(value),Date.now(),validUntil).run();
+// TTL policy per section, given whether the match is finished and whether
+// the freshly-fetched data is non-empty:
+//  - finished + populated  -> 6h (never changes again)
+//  - finished + empty      -> 30min (confirmed gap for this competition; don't hammer, but allow recovery)
+//  - live/upcoming         -> 60s (state changes fast either way)
+function sectionTtl(finished:boolean,populated:boolean){
+  if(finished)return populated?60*60*6:60*30;
+  return 60;
 }
 
 function statusLabel(status:{short:string;elapsed?:number|null}){
@@ -125,6 +121,68 @@ function statValue(rows:ApiFootballStatItem[],names:string[]){
   return String(row.value);
 }
 
+function mapEvents(data:{response?:ApiFootballEvent[]}|null):EventsSection{
+  return(data?.response??[]).map(e=>({
+    minute:e.time.extra?`${e.time.elapsed}+${e.time.extra}′`:`${e.time.elapsed}′`,
+    team:armenianTeamName(e.team.name),
+    player:e.player.name||"—",
+    assist:e.assist.name||"—",
+    label:eventLabel(e.type,e.detail),
+  }));
+}
+function mapLineups(data:{response?:ApiFootballLineup[]}|null):LineupsSection{
+  return(data?.response??[]).map(l=>({
+    team:armenianTeamName(l.team.name),
+    formation:l.formation||"—",
+    starters:l.startXI.map((p):LineupPlayer=>({name:p.player.name||"—",number:p.player.number??null,grid:p.player.grid??null})),
+    substitutes:l.substitutes.map((p):LineupPlayer=>({name:p.player.name||"—",number:p.player.number??null,grid:p.player.grid??null})),
+  }));
+}
+function mapStatistics(data:{response?:ApiFootballStatistics[]}|null):StatsSection{
+  return(data?.response??[]).map(s=>({
+    team:armenianTeamName(s.team.name),
+    possession:statValue(s.statistics,["ball possession"]),
+    shotsOnGoal:statValue(s.statistics,["shots on goal","shots on target"]),
+    totalShots:statValue(s.statistics,["total shots"]),
+    xg:statValue(s.statistics,["expected goals","xg"]),
+  }));
+}
+
+// Fetch+cache one section: reuse a fresh cached value if present; otherwise
+// fetch, and only overwrite the cache if the fetch actually returned
+// something (a transient failure keeps whatever was cached before, so a
+// previously-successful section is never wiped out by a later flaky call).
+async function resolveSection<T>(
+  db:D1Database|undefined,
+  cacheKey:string,
+  finished:boolean,
+  isEmpty:(v:T)=>boolean,
+  fetcher:()=>Promise<T>,
+):Promise<T>{
+  const cached=db?await readSection<T>(db,cacheKey):null;
+  if(cached?.fresh)return cached.value;
+  const result=await fetcher();
+  const gotSomething=!isEmpty(result);
+  if(db){
+    if(gotSomething){
+      // Real data: cache it (long TTL if the match is finished).
+      await writeSection(db,cacheKey,result,sectionTtl(finished,true));
+    }else if(cached&&!isEmpty(cached.value)){
+      // This fetch came back empty but we previously had real data — keep
+      // serving the good cached value; just retry again soon rather than
+      // erasing known-good data because of one flaky call.
+      await writeSection(db,cacheKey,cached.value,60);
+    }else{
+      // Confirmed empty (or first attempt failed): cache the empty result
+      // so we don't hammer the API every single request for data that may
+      // genuinely not exist, but still retry periodically in case it's transient.
+      await writeSection(db,cacheKey,result,sectionTtl(finished,false));
+    }
+  }
+  if(gotSomething)return result;
+  return cached&&!isEmpty(cached.value)?cached.value:result;
+}
+
 export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|null>{
   const fixtureId=id.replace(/^af-/,"").replace(/^fd-/,"");
   if(!/^\d+$/.test(fixtureId))return null;
@@ -134,22 +192,27 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
   const key=runtime.API_FOOTBALL_KEY;
   if(!key)return null;
   const db=(env as unknown as {DB?:D1Database}).DB;
+  if(db)await ensureCacheTable(db);
 
-  const cacheKey=`apifootball:v7:match:${fixtureId}`;
-  if(db){
-    await ensureCacheTable(db);
-    const fresh=await readCache(db,cacheKey);
-    if(fresh)return fresh;
+  const fixtureCacheKey=`apifootball:v8:fixture:${fixtureId}`;
+  let fx:ApiFootballFixtureFull|null=null;
+  const cachedFixture=db?await readSection<ApiFootballFixtureFull>(db,fixtureCacheKey):null;
+  if(cachedFixture?.fresh){
+    fx=cachedFixture.value;
+  }else{
+    const fixtureData=await fetchJson<{response?:ApiFootballFixtureFull[]}>(`https://v3.football.api-sports.io/fixtures?id=${fixtureId}`,key);
+    fx=fixtureData?.response?.[0]??null;
+    if(fx){
+      const finished=isFinishedStatus(fx.fixture.status.short);
+      if(db)await writeSection(db,fixtureCacheKey,fx,finished?60*60*6:60);
+    }else if(cachedFixture){
+      fx=cachedFixture.value;
+    }
   }
-
-  const fixtureData=await fetchJson<{response?:ApiFootballFixtureFull[]}>(`https://v3.football.api-sports.io/fixtures?id=${fixtureId}`,key);
-  const fx=fixtureData?.response?.[0];
-  if(!fx){
-    if(db){const stale=await readStaleCache(db,cacheKey);if(stale)return stale}
-    return null;
-  }
+  if(!fx)return null;
   const competition=TRACKED_LEAGUES[fx.league.id];
   if(!competition)return null;
+  const finished=isFinishedStatus(fx.fixture.status.short);
 
   const match:LiveMatch={
     id:`af-${fx.fixture.id}`,
@@ -162,57 +225,28 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
     isLive:isLiveStatus(fx.fixture.status.short),
   };
 
-  const lineupsCacheKey=`apifootball:v7:lineups:${fixtureId}`;
-  const cachedLineups=db?await readLineupsCache(db,lineupsCacheKey):null;
-  // Both teams must be present. An hour before kickoff it's common for only one
-  // side to have published its XI; caching that half-result would otherwise pin
-  // the popup to a single team's lineup for the rest of the match.
-  const needLineupsFetch=!cachedLineups||cachedLineups.length<2;
+  const events=await resolveSection<EventsSection>(
+    db,`apifootball:v8:events:${fixtureId}`,finished,
+    v=>v.length===0,
+    async()=>mapEvents(await fetchJson<{response?:ApiFootballEvent[]}>(`https://v3.football.api-sports.io/fixtures/events?fixture=${fixtureId}`,key)),
+  );
+  const lineups=await resolveSection<LineupsSection>(
+    db,`apifootball:v8:lineups:${fixtureId}`,finished,
+    v=>v.length<2,
+    async()=>mapLineups(await fetchJson<{response?:ApiFootballLineup[]}>(`https://v3.football.api-sports.io/fixtures/lineups?fixture=${fixtureId}`,key)),
+  );
+  const statistics=await resolveSection<StatsSection>(
+    db,`apifootball:v8:stats:${fixtureId}`,finished,
+    v=>v.length===0,
+    async()=>mapStatistics(await fetchJson<{response?:ApiFootballStatistics[]}>(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`,key)),
+  );
 
-  // Firing all three requests to the same host at once is unreliable from
-  // within a Worker (each succeeds fine on its own via a plain curl, but
-  // concurrent fetches to the same host intermittently drop). Fetch them
-  // one at a time instead — Pro-tier quota easily covers the extra latency.
-  const eventsData=await fetchJson<{response?:ApiFootballEvent[]}>(`https://v3.football.api-sports.io/fixtures/events?fixture=${fixtureId}`,key);
-  const lineupsData=needLineupsFetch?await fetchJson<{response?:ApiFootballLineup[]}>(`https://v3.football.api-sports.io/fixtures/lineups?fixture=${fixtureId}`,key):null;
-  const statsData=await fetchJson<{response?:ApiFootballStatistics[]}>(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`,key);
-
-  const freshLineups=(lineupsData?.response??[]).map(l=>({
-    team:armenianTeamName(l.team.name),
-    formation:l.formation||"—",
-    starters:l.startXI.map(p=>({name:p.player.name||"—",number:p.player.number??null,grid:p.player.grid??null})),
-    substitutes:l.substitutes.map(p=>({name:p.player.name||"—",number:p.player.number??null,grid:p.player.grid??null})),
-  }));
-  // If the refetch came back empty (e.g. rate-limited), fall back to whatever we had.
-  const lineups=needLineupsFetch?(freshLineups.length>0?freshLineups:(cachedLineups??[])):(cachedLineups as CachedLineups);
-  if(db&&needLineupsFetch&&freshLineups.length>=2)await writeLineupsCache(db,lineupsCacheKey,freshLineups);
-
-  const result:LiveMatchDetail={
+  return{
     match,
     venue:fx.fixture.venue?.name||"Տվյալ չկա",
     referee:fx.fixture.referee||"Տվյալ չկա",
-    events:(eventsData?.response??[]).map(e=>({
-      minute:e.time.extra?`${e.time.elapsed}+${e.time.extra}′`:`${e.time.elapsed}′`,
-      team:armenianTeamName(e.team.name),
-      player:e.player.name||"—",
-      assist:e.assist.name||"—",
-      label:eventLabel(e.type,e.detail),
-    })),
+    events,
     lineups,
-    statistics:(statsData?.response??[]).map(s=>({
-      team:armenianTeamName(s.team.name),
-      possession:statValue(s.statistics,["ball possession"]),
-      shotsOnGoal:statValue(s.statistics,["shots on goal","shots on target"]),
-      totalShots:statValue(s.statistics,["total shots"]),
-      xg:statValue(s.statistics,["expected goals","xg"]),
-    })),
+    statistics,
   };
-
-  if(db){
-    const looksIncomplete=result.events.length===0||result.lineups.length===0||result.statistics.length===0;
-    const finished=isFinishedStatus(fx.fixture.status.short)&&!looksIncomplete;
-    await writeCache(db,cacheKey,result,finished);
-  }
-
-  return result;
 }
