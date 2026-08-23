@@ -6,7 +6,7 @@ import { FormEvent, useEffect, useState } from "react";
 const navigation = [
   { label: "Գլխավոր", href: "/", children: [["Վերջին լուրեր", "/#latest"], ["Live", "/live"], ["Փոդքաստներ", "/podcasts"]] },
   { label: "Հայաստան", href: "/armenia", children: [["Հավաքականներ", "/search?q=Հայաստանի+հավաքական"], ["Ակումբներ", "/search?q=հայկական+ակումբներ"], ["Հայ մարզիկներ", "/search?q=հայ+մարզիկներ"]] },
-  { label: "Ֆուտբոլ", href: "/category/football", children: [["Չեմպիոնների լիգա", "/search?q=Չեմպիոնների+լիգա"], ["Թոփ 5 լիգաներ", "/standings"], ["Տրանսֆերներ", "/search?q=տրանսֆերներ"]] },
+  { label: "Ֆուտբոլ", href: "/category/football", children: [["Չեմպիոնների լիգա", "/search?q=Չեմպիոնների+լիգա"], ["Թոփ 5 լիգաներ", "/standings"], ["Գոլահարվածներ", "/topscorers"], ["Տրանսֆերներ", "/search?q=տրանսֆերներ"]] },
   { label: "Բասկետբոլ", href: "/category/basketball", children: [["NBA", "/search?q=NBA"], ["Եվրալիգա", "/search?q=Եվրալիգա"], ["Հայաստան", "/search?q=Հայաստանի+բասկետբոլ"]] },
   { label: "Թենիս", href: "/category/tennis", children: [["ATP", "/search?q=ATP"], ["WTA", "/search?q=WTA"], ["Մեծ սաղավարտ", "/search?q=Մեծ+սաղավարտ"]] },
   { label: "Ֆորմուլա 1", href: "/category/formula-1", children: [["Մրցարշավներ", "/search?q=Ֆորմուլա+1"], ["Վարկանիշ", "/search?q=Ֆորմուլա+1+վարկանիշ"], ["Թիմեր", "/search?q=Ֆորմուլա+1+թիմեր"]] },

@@ -1,0 +1,15 @@
+import { TopScorersTabs } from "../../components/top-scorers-tabs";
+import { SiteFooter } from "../../components/site-footer";
+import { SiteHeader } from "../../components/site-header";
+import { leagues } from "../../lib/football";
+import { getTopScorers } from "../../lib/topscorers-server";
+
+export const dynamic = "force-dynamic";
+
+export default async function TopScorersPage() {
+  const entries = await Promise.all(leagues.map(async (league) => [league.code, await getTopScorers(league.code)] as const));
+  return <main><SiteHeader /><div className="site-shell inner-page">
+    <span className="page-kicker">Եվրոպական ֆուտբոլ</span><h1 className="page-title">Գոլահարվածներ</h1><p className="page-intro">Ընտրեք առաջնությունը և դիտեք սեզոնի լավագույն գոլերախներին՝ գոլերով, փոխանցումներով և խաղացած խաղերով։</p>
+    <section className="full-standings-card"><TopScorersTabs tables={Object.fromEntries(entries)} /></section>
+  </div><SiteFooter /></main>;
+}

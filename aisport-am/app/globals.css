@@ -279,3 +279,6 @@ img{display:block;max-width:100%}
 .score-card .team-logo{width:16px;height:16px}
 .title-team{flex-direction:column;gap:8px}
 .team-logo-lg{width:clamp(32px,5vw,52px);height:clamp(32px,5vw,52px);object-fit:contain}
+.player-with-photo{display:inline-flex;align-items:center;gap:8px}
+.player-photo{width:26px;height:26px;border-radius:50%;object-fit:cover;flex:none;background:var(--surface-2)}
+.topscorers-table td:nth-child(2){min-width:150px}
