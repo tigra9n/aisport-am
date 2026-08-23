@@ -157,7 +157,7 @@ export function MatchModal() {
   const matchId = searchParams.get("match");
   const [details, setDetails] = useState<LiveMatchDetail | null>(null);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"events" | "lineups" | "stats" | "h2h" | "prediction" | "standings" | "topscorers">("events");
+  const [tab, setTab] = useState<"events" | "lineups" | "stats" | "h2h" | "prediction" | "standings" | "topscorers" | "form">("events");
 
   useEffect(() => {
     if (!matchId) {
@@ -226,6 +226,7 @@ export function MatchModal() {
               <button className={tab === "lineups" ? "active" : ""} onClick={() => setTab("lineups")}>Կազմեր</button>
               <button className={tab === "stats" ? "active" : ""} onClick={() => setTab("stats")}>Վիճակագրություն</button>
               {details.h2h.length > 0 && <button className={tab === "h2h" ? "active" : ""} onClick={() => setTab("h2h")}>H2H</button>}
+              {details.formGuide.length > 0 && <button className={tab === "form" ? "active" : ""} onClick={() => setTab("form")}>Ձև</button>}
               {details.prediction && <button className={tab === "prediction" ? "active" : ""} onClick={() => setTab("prediction")}>Կանխատեսում</button>}
               {details.standings && details.standings.length > 0 && <button className={tab === "standings" ? "active" : ""} onClick={() => setTab("standings")}>Աղյուսակ</button>}
               {details.topScorers && details.topScorers.length > 0 && <button className={tab === "topscorers" ? "active" : ""} onClick={() => setTab("topscorers")}>Ռմբարկուներ</button>}
@@ -328,6 +329,29 @@ export function MatchModal() {
                         <b className={meeting.away === awayName ? "h2h-highlight" : ""}>{meeting.away}</b>
                       </span>
                       <span className="h2h-competition">{meeting.competition}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {tab === "form" && details.formGuide.length > 0 && (
+              <div className="match-modal-scroll">
+                <div className="form-guide-columns">
+                  {details.formGuide.map((team) => (
+                    <div className="form-guide-card" key={team.team}>
+                      <strong>{team.team}</strong>
+                      <div className="form-guide-badges">
+                        {team.form.split("").map((letter, index) => (
+                          <span key={index} className={`form-badge ${letter === "W" ? "win" : letter === "D" ? "draw" : "loss"}`}>{letter}</span>
+                        ))}
+                      </div>
+                      <dl className="form-guide-stats">
+                        <div><dt>Խաղ</dt><dd>{team.played}</dd></div>
+                        <div><dt>Հ-Ո-Պ</dt><dd>{team.won}-{team.draw}-{team.lost}</dd></div>
+                        <div><dt>Գոլ (միջին)</dt><dd>{team.goalsForAvg} : {team.goalsAgainstAvg}</dd></div>
+                        <div><dt>«Չոր» խաղեր</dt><dd>{team.cleanSheets}</dd></div>
+                      </dl>
                     </div>
                   ))}
                 </div>

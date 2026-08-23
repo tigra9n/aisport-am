@@ -20,6 +20,13 @@ type ApiFootballPredictions={response?:[{
 type ApiFootballPlayerStats={team:{name:string};players:{player:{name:string};statistics:[{games:{rating:string|null}}]}[]};
 type ApiFootballInjury={player:{name:string};team:{name:string};player_reason?:string|null;reason?:string|null};
 
+type ApiFootballTeamStats={
+  form:string|null;
+  fixtures:{played:{total:number};wins:{total:number};draws:{total:number};loses:{total:number}};
+  goals:{for:{average:{total:string}};against:{average:{total:string}}};
+  clean_sheet:{total:number};
+};
+
 type EventsSection=LiveMatchDetail["events"];
 type LineupsSection=LiveMatchDetail["lineups"];
 type StatsSection=LiveMatchDetail["statistics"];
@@ -27,6 +34,7 @@ type H2HSection=LiveMatchDetail["h2h"];
 type PredictionSection=LiveMatchDetail["prediction"];
 type InjuriesSection=LiveMatchDetail["injuries"];
 type RatingsSection=Record<string,string>;
+type FormGuideSection=LiveMatchDetail["formGuide"];
 
 const TRACKED_LEAGUES:Record<number,string>={
   342:"Հայաստանի Պրեմիեր լիգա",
@@ -223,6 +231,22 @@ function mapPrediction(data:ApiFootballPredictions|null):PredictionSection{
   };
 }
 
+function mapFormGuide(teamName:string,data:{response?:ApiFootballTeamStats}|null):FormGuideSection[number]|null{
+  const stats=data?.response;
+  if(!stats)return null;
+  return{
+    team:teamName,
+    form:(stats.form||"").slice(-5),
+    played:stats.fixtures.played.total,
+    won:stats.fixtures.wins.total,
+    draw:stats.fixtures.draws.total,
+    lost:stats.fixtures.loses.total,
+    goalsForAvg:stats.goals.for.average.total,
+    goalsAgainstAvg:stats.goals.against.average.total,
+    cleanSheets:stats.clean_sheet.total,
+  };
+}
+
 // Fetch+cache one section. `precached` comes from an earlier batched D1
 // read; if it's already fresh we skip the network entirely. Otherwise we
 // fetch, and only overwrite the cache if the fetch actually returned
@@ -381,6 +405,27 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
   const standings=standingsResult&&!standingsResult.demo?standingsResult.rows:null;
   const topScorers=topScorersResult&&!topScorersResult.unavailable?topScorersResult.rows:null;
 
+  // Team form guide (last-5 results, W/D/L record, goal averages). Cached
+  // per team+league+season so it's reused across every match involving
+  // that team in that competition, not just this one fixture.
+  const seasonYear=(()=>{const d=new Date(fx.fixture.date);const m=d.getUTCMonth()+1;return m>=7?d.getUTCFullYear():d.getUTCFullYear()-1})();
+  const formGuideCacheKeyFor=(teamId:number)=>`apifootball:v1:form:${fx.league.id}:${seasonYear}:${teamId}`;
+  const apiKey:string=key;
+  async function resolveFormGuide(teamId:number,teamName:string):Promise<FormGuideSection[number]|null>{
+    if(!db)return mapFormGuide(teamName,await fetchJson<{response?:ApiFootballTeamStats}>(`https://v3.football.api-sports.io/teams/statistics?league=${fx!.league.id}&season=${seasonYear}&team=${teamId}`,apiKey));
+    const cacheKey=formGuideCacheKeyFor(teamId);
+    const cached=await readSection<FormGuideSection[number]>(db,cacheKey);
+    if(cached?.fresh)return cached.value;
+    const result=mapFormGuide(teamName,await fetchJson<{response?:ApiFootballTeamStats}>(`https://v3.football.api-sports.io/teams/statistics?league=${fx!.league.id}&season=${seasonYear}&team=${teamId}`,apiKey));
+    if(result)await writeSection(db,cacheKey,result,finished?60*60*6:60*30);
+    return result??cached?.value??null;
+  }
+  const [homeForm,awayForm]=await Promise.all([
+    resolveFormGuide(fx.teams.home.id,match.home),
+    resolveFormGuide(fx.teams.away.id,match.away),
+  ]);
+  const formGuide=[homeForm,awayForm].filter((f):f is FormGuideSection[number]=>f!==null);
+
   return{
     match,
     venue:fx.fixture.venue?.name||"Տվյալ չկա",
@@ -393,5 +438,6 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
     standings,
     topScorers,
     injuries,
+    formGuide,
   };
 }
