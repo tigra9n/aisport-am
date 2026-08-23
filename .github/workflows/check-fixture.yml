@@ -1,0 +1,37 @@
+name: Check Fixture Detail
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/check-fixture.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check fixture 1557368
+        env:
+          AFKEY: ${{ secrets.API_FOOTBALL_KEY }}
+        run: |
+          echo "=== Fixture info ===" > fixture-check.txt
+          curl -s "https://v3.football.api-sports.io/fixtures?id=1557368" -H "x-apisports-key: $AFKEY" | head -c 1500 >> fixture-check.txt
+          echo "" >> fixture-check.txt
+          echo "=== Events ===" >> fixture-check.txt
+          curl -s "https://v3.football.api-sports.io/fixtures/events?fixture=1557368" -H "x-apisports-key: $AFKEY" | head -c 500 >> fixture-check.txt
+          echo "" >> fixture-check.txt
+          echo "=== Statistics ===" >> fixture-check.txt
+          curl -s "https://v3.football.api-sports.io/fixtures/statistics?fixture=1557368" -H "x-apisports-key: $AFKEY" | head -c 800 >> fixture-check.txt
+          echo "" >> fixture-check.txt
+          echo "=== Lineups ===" >> fixture-check.txt
+          curl -s "https://v3.football.api-sports.io/fixtures/lineups?fixture=1557368" -H "x-apisports-key: $AFKEY" | head -c 500 >> fixture-check.txt
+      - run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f fixture-check.txt
+          git commit -m "check [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
