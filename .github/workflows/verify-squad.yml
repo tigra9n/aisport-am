@@ -21,6 +21,10 @@ jobs:
           grep -o 'squad-card' /tmp/team.html | wc -l >> verify-squad.txt
           echo "=== Raw squad API ===" >> verify-squad.txt
           curl -s "https://v3.football.api-sports.io/players/squads?team=51" -H "x-apisports-key: ${AFKEY}" | head -c 300 >> verify-squad.txt
+          echo "" >> verify-squad.txt
+          echo "=== Retest after full deploy ===" >> verify-squad.txt
+          curl -s "https://aisport.am/team/51?_c=$(date +%s)z" -o /tmp/team2.html -w "HTTP %{http_code}\n" >> verify-squad.txt
+          grep -o 'squad-card' /tmp/team2.html | wc -l >> verify-squad.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
