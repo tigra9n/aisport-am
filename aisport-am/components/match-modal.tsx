@@ -187,7 +187,7 @@ export function MatchModal() {
               <button className={tab === "events" ? "active" : ""} onClick={() => setTab("events")}>Իրադարձություններ</button>
               <button className={tab === "lineups" ? "active" : ""} onClick={() => setTab("lineups")}>Կազմեր</button>
               <button className={tab === "stats" ? "active" : ""} onClick={() => setTab("stats")}>Վիճակագրություն</button>
-              {details.h2h.length > 0 && <button className={tab === "h2h" ? "active" : ""} onClick={() => setTab("h2h")}>Նախկին հանդիպումներ</button>}
+              {details.h2h.length > 0 && <button className={tab === "h2h" ? "active" : ""} onClick={() => setTab("h2h")}>H2H</button>}
               {details.prediction && <button className={tab === "prediction" ? "active" : ""} onClick={() => setTab("prediction")}>Կանխատեսում</button>}
             </div>
 
