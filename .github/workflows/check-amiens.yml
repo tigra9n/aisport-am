@@ -16,9 +16,7 @@ jobs:
         env:
           AFKEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
-          echo 'import json' > /tmp/teams.py
-          echo 'd=json.load(sys.stdin)' >> /tmp/teams.py
-          echo 'import sys' >> /tmp/teams.py
+          echo 'import json,sys' > /tmp/teams.py
           echo 'd=json.load(sys.stdin)' >> /tmp/teams.py
           echo 'fx=d["response"][0]' >> /tmp/teams.py
           echo 'print("home:", fx["teams"]["home"]["name"])' >> /tmp/teams.py
