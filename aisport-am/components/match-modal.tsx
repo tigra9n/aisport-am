@@ -34,11 +34,93 @@ function chunkByRows<T>(items: T[], rows: number[]): T[][] {
   return chunks;
 }
 
-function PitchPlayer({ player }: { player: LineupPlayer }) {
+function PitchPlayer({ player, card }: { player: LineupPlayer; card?: "yellow" | "red" }) {
   return (
     <div className="pitch-player">
-      <span className="pitch-player-dot">{player.number ?? "•"}</span>
+      <span className="pitch-player-dot">
+        {player.number ?? "•"}
+        {card && <i className={`pitch-card ${card}`} />}
+      </span>
       <span className="pitch-player-name">{player.name}</span>
+    </div>
+  );
+}
+
+type CardMap = Map<string, "yellow" | "red">;
+type SubPair = { out: string; in: string; minute: string; side: "home" | "away" };
+
+function buildCardMap(events: LiveMatchDetail["events"]): CardMap {
+  const map: CardMap = new Map();
+  for (const event of events) {
+    if (event.label === "Կարմիր քարտ") map.set(event.player, "red");
+    else if (event.label === "Դեղին քարտ" && !map.has(event.player)) map.set(event.player, "yellow");
+  }
+  return map;
+}
+
+function buildSubPairs(events: LiveMatchDetail["events"], sideOf: (team: string) => "home" | "away" | null): SubPair[] {
+  return events
+    .filter((event) => event.label === "Փոխարինում")
+    .map((event) => ({ out: event.assist, in: event.player, minute: event.minute, side: sideOf(event.team) ?? "home" }))
+    .filter((pair) => pair.out !== "—" && pair.in !== "—");
+}
+
+function SharedPitch({ details, cardMap }: { details: LiveMatchDetail; cardMap: CardMap }) {
+  const [home, away] = details.lineups;
+  const homeRows = formationRows(home.formation);
+  const awayRows = formationRows(away.formation);
+  const homeChunks = (homeRows.length ? chunkByRows(home.starters, homeRows) : [home.starters]).slice().reverse();
+  const awayChunks = awayRows.length ? chunkByRows(away.starters, awayRows) : [away.starters];
+
+  return (
+    <div className="pitch-wrap">
+      <div className="pitch-team-label">
+        <strong>{away.team}</strong>
+        {available(away.formation) && <span>{away.formation}</span>}
+      </div>
+      <div className="pitch shared">
+        {awayChunks.map((row, rowIndex) => (
+          <div className="pitch-row" key={`away-${rowIndex}`}>
+            {row.map((player, playerIndex) => (
+              <PitchPlayer key={`${player.name}-${playerIndex}`} player={player} card={cardMap.get(player.name)} />
+            ))}
+          </div>
+        ))}
+        <div className="pitch-halfway" />
+        {homeChunks.map((row, rowIndex) => (
+          <div className="pitch-row" key={`home-${rowIndex}`}>
+            {row.map((player, playerIndex) => (
+              <PitchPlayer key={`${player.name}-${playerIndex}`} player={player} card={cardMap.get(player.name)} />
+            ))}
+          </div>
+        ))}
+      </div>
+      <div className="pitch-team-label">
+        <strong>{home.team}</strong>
+        {available(home.formation) && <span>{home.formation}</span>}
+      </div>
+    </div>
+  );
+}
+
+function SubstitutionsList({ pairs }: { pairs: SubPair[] }) {
+  if (!pairs.length) return null;
+  return (
+    <div className="subs-list">
+      <h3>Փոխարինումներ</h3>
+      <div className="sub-pairs">
+        {pairs.map((pair, index) => (
+          <div className={`sub-pair-row ${pair.side === "home" ? "is-home" : "is-away"}`} key={`${pair.out}-${pair.in}-${index}`}>
+            {pair.side === "home" && (
+              <span className="sub-pair-names"><b className="sub-out">↓ {pair.out}</b><b className="sub-in">↑ {pair.in}</b></span>
+            )}
+            <span className="sub-pair-minute">{pair.minute}</span>
+            {pair.side !== "home" && (
+              <span className="sub-pair-names right"><b className="sub-out">↓ {pair.out}</b><b className="sub-in">↑ {pair.in}</b></span>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -154,41 +236,27 @@ export function MatchModal() {
 
             {tab === "lineups" && (
               <div className="match-modal-scroll">
-                {details.lineups.length > 0 ? (
-                  <div className="lineups-panel">
-                    {details.lineups.map((lineup, teamIndex) => {
-                      const rows = formationRows(lineup.formation);
-                      const chunks = rows.length ? chunkByRows(lineup.starters, rows) : [lineup.starters];
-                      const flip = teamIndex === 1;
-                      return (
-                        <div className="pitch-wrap" key={lineup.team}>
-                          <div className="pitch-team-label">
-                            <strong>{lineup.team}</strong>
-                            {available(lineup.formation) && <span>{lineup.formation}</span>}
-                          </div>
-                          <div className={`pitch ${flip ? "flip" : ""}`}>
-                            {chunks.map((row, rowIndex) => (
-                              <div className="pitch-row" key={rowIndex}>
-                                {row.map((player, playerIndex) => <PitchPlayer key={`${player.name}-${playerIndex}`} player={player} />)}
-                              </div>
-                            ))}
-                          </div>
-                          {lineup.substitutes.length > 0 && (
-                            <div className="subs-list">
-                              <h3>Պահեստայիններ</h3>
-                              <div className="subs-grid">
-                                {lineup.substitutes.map((player, index) => (
-                                  <span className="subs-chip" key={`${player.name}-${index}`}>
-                                    <b>{player.number ?? "•"}</b>{player.name}
-                                  </span>
-                                ))}
-                              </div>
+                {details.lineups.length === 2 ? (
+                  <>
+                    <SharedPitch details={details} cardMap={buildCardMap(details.events)} />
+                    <SubstitutionsList pairs={buildSubPairs(details.events, sideOf)} />
+                    <div className="subs-teams">
+                      {details.lineups.map((lineup) => (
+                        lineup.substitutes.length > 0 && (
+                          <div className="subs-list" key={lineup.team}>
+                            <h3>{lineup.team} · Պահեստայիններ</h3>
+                            <div className="subs-grid">
+                              {lineup.substitutes.map((player, index) => (
+                                <span className="subs-chip" key={`${player.name}-${index}`}>
+                                  <b>{player.number ?? "•"}</b>{player.name}
+                                </span>
+                              ))}
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  </>
                 ) : (
                   <p className="detail-empty">Կազմերի տվյալներ դեռ հասանելի չեն։</p>
                 )}

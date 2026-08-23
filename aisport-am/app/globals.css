@@ -155,16 +155,27 @@ img{display:block;max-width:100%}
 .pitch-wrap{display:grid;gap:2px;border-radius:16px;overflow:hidden;border:1px solid var(--line)}
 .pitch-team-label{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--surface-2);font-size:10px;font-weight:950}
 .pitch-team-label span{color:var(--muted);font-weight:800}
-.pitch{position:relative;padding:18px 10px;background:
+.pitch{position:relative;padding:14px 10px;background:
   repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 40px,rgba(255,255,255,0) 40px 80px),
   linear-gradient(180deg,#0f3d22,#0a2617)}
 .pitch:before{content:"";position:absolute;inset:10px;border:1.5px solid rgba(255,255,255,.16);border-radius:8px;pointer-events:none}
-.pitch.flip{transform:scaleY(-1)}
-.pitch-row{display:flex;justify-content:space-evenly;margin:14px 0}
-.pitch.flip .pitch-row{transform:scaleY(-1)}
-.pitch-player{display:flex;flex-direction:column;align-items:center;gap:4px;width:64px}
-.pitch-player-dot{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--surface);border:2px solid var(--ink);color:var(--ink);font-size:10px;font-weight:950}
-.pitch-player-name{max-width:64px;overflow:hidden;color:#fff;font-size:8px;font-weight:800;text-align:center;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+.pitch-halfway{height:1.5px;margin:4px 10px;background:rgba(255,255,255,.16)}
+.pitch-row{display:flex;justify-content:space-evenly;margin:12px 0}
+.pitch-player{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;width:60px}
+.pitch-player-dot{position:relative;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--surface);border:2px solid var(--ink);color:var(--ink);font-size:10px;font-weight:950}
+.pitch-player-name{max-width:60px;overflow:hidden;color:#fff;font-size:8px;font-weight:800;text-align:center;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+.pitch-card{position:absolute;top:-3px;right:-5px;width:9px;height:12px;border-radius:1.5px;border:1px solid rgba(0,0,0,.35)}
+.pitch-card.yellow{background:#f2c94c}
+.pitch-card.red{background:#eb4d4b}
+.subs-teams{display:grid;gap:2px;margin-top:2px}
+.sub-pairs{display:grid;gap:6px}
+.sub-pair-row{display:grid;grid-template-columns:1fr 40px 1fr;align-items:center;gap:8px;font-size:9px}
+.sub-pair-names{display:flex;flex-direction:column;gap:2px}
+.sub-pair-names.right{align-items:flex-end;text-align:right}
+.sub-out{color:var(--muted);font-weight:800}
+.sub-in{color:var(--green);font-weight:900}
+.sub-pair-minute{text-align:center;color:var(--muted);font-size:8px;font-weight:900}
+.sub-pair-row.is-away .sub-pair-names:first-child{visibility:hidden}
 .subs-list{padding:14px 16px;background:var(--surface)}
 .subs-list h3{margin:0 0 10px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .subs-grid{display:flex;flex-wrap:wrap;gap:8px}
