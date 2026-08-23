@@ -15,12 +15,16 @@ jobs:
       - name: Check standings endpoint
         env:
           AFKEY: ${{ secrets.API_FOOTBALL_KEY }}
+          FDTOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
         run: |
           echo "=== Standings PL season 2026 ===" > standings-check.txt
           curl -s "https://v3.football.api-sports.io/standings?league=39&season=2026" -H "x-apisports-key: $AFKEY" | head -c 1500 >> standings-check.txt
           echo "" >> standings-check.txt
           echo "=== Standings PL season 2025 ===" >> standings-check.txt
           curl -s "https://v3.football.api-sports.io/standings?league=39&season=2025" -H "x-apisports-key: $AFKEY" | head -c 800 >> standings-check.txt
+          echo "" >> standings-check.txt
+          echo "=== football-data.org account status ===" >> standings-check.txt
+          curl -s "https://api.football-data.org/v4/competitions/PL/standings" -H "X-Auth-Token: ${FDTOKEN}" | head -c 500 >> standings-check.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
