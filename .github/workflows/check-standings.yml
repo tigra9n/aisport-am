@@ -1,0 +1,31 @@
+name: Check Standings API
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/check-standings.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check standings endpoint
+        env:
+          AFKEY: ${{ secrets.API_FOOTBALL_KEY }}
+        run: |
+          echo "=== Standings PL season 2026 ===" > standings-check.txt
+          curl -s "https://v3.football.api-sports.io/standings?league=39&season=2026" -H "x-apisports-key: $AFKEY" | head -c 1500 >> standings-check.txt
+          echo "" >> standings-check.txt
+          echo "=== Standings PL season 2025 ===" >> standings-check.txt
+          curl -s "https://v3.football.api-sports.io/standings?league=39&season=2025" -H "x-apisports-key: $AFKEY" | head -c 800 >> standings-check.txt
+      - run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f standings-check.txt
+          git commit -m "check [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
