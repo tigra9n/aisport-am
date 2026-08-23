@@ -22,6 +22,14 @@ jobs:
           echo "=== Real Madrid last fixture (team 541, La Liga 140) ===" >> rm-check.txt
           curl -s "https://v3.football.api-sports.io/fixtures?team=541&last=1" -H "x-apisports-key: ${AFKEY}" | head -c 1200 >> rm-check.txt
           echo "" >> rm-check.txt
+          echo "=== Real Madrid fixtures around today (team+date) ===" >> rm-check.txt
+          for D in 2026-08-21 2026-08-22 2026-08-23; do
+            echo "--- $D ---" >> rm-check.txt
+            curl -s "https://v3.football.api-sports.io/fixtures?team=541&date=$D" -H "x-apisports-key: ${AFKEY}" | head -c 600 >> rm-check.txt
+            echo "" >> rm-check.txt
+            sleep 1
+          done
+          echo "" >> rm-check.txt
           echo "=== Search our site for Real Madrid matches ===" >> rm-check.txt
           for D in 2026-08-21 2026-08-22 2026-08-23; do
             echo "--- date=$D ---" >> rm-check.txt
