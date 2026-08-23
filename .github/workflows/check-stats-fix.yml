@@ -1,0 +1,39 @@
+name: Check Stats After Fix
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/check-stats-fix.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check
+        env:
+          AFKEY: ${{ secrets.API_FOOTBALL_KEY }}
+        run: |
+          echo 'import json' > /tmp/s.py
+          echo 'd=json.load(open("/tmp/p.json"))' >> /tmp/s.py
+          echo 'print("lineups:", len(d.get("lineups",[])), "stats:", len(d.get("statistics",[])), "events:", len(d.get("events",[])))' >> /tmp/s.py
+          echo "=== Our popup for af-1557375 (fresh cache key v5) ===" > stats-fix-check.txt
+          curl -s "https://aisport.am/api/live/match/af-1557375?_c=$(date +%s)" > /tmp/p.json
+          python3 /tmp/s.py >> stats-fix-check.txt
+          echo "" >> stats-fix-check.txt
+          echo "=== Raw stats endpoint, retried 3x manually ===" >> stats-fix-check.txt
+          for i in 1 2 3; do
+            R=$(curl -s "https://v3.football.api-sports.io/fixtures/statistics?fixture=1557375" -H "x-apisports-key: ${AFKEY}")
+            echo "attempt $i: $(echo "$R" | head -c 150)" >> stats-fix-check.txt
+            sleep 1
+          done
+      - run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f stats-fix-check.txt
+          git commit -m "check [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
