@@ -150,7 +150,30 @@ Object.assign(teamNames, {
   "virtus": "Վիրտուս", "vllaznia shkoder": "Վլազնիա", "vllaznia": "Վլազնիա",
   "zelezničar pancevo": "Ժելեզնիչար Պանչևո", "zeleznicar pancevo": "Ժելեզնիչար Պանչևո",
   "zalgiris vilnius": "Ժալգիրիս Վիլնյուս", "zalgiris": "Ժալգիրիս", "zimbru chisinau": "Զիմբրու",
-  "zimbru": "Զիմբրու", "zire": "Զիրա", "zrinjski": "Զրինսկի Մոստար", "zrinjski mostar": "Զրինսկի Մոստար",
+  "zimbru": "Զիմբրու", "zire": "Զիրա", "zira": "Զիրա", "zrinjski": "Զրինսկի Մոստար", "zrinjski mostar": "Զրինսկի Մոստար",
+});
+
+// 2026/27 promoted clubs across the top-5 leagues.
+Object.assign(teamNames, {
+  // England — promoted to the Premier League
+  "coventry": "Քովենթրի", "coventry city": "Քովենթրի Սիթի",
+  "ipswich": "Իփսվիչ", "ipswich town": "Իփսվիչ Թաուն",
+
+  // Spain — promoted to La Liga
+  "racing santander": "Ռասինգ Սանտանդեր", "racing de santander": "Ռասինգ Սանտանդեր",
+  "deportivo la coruna": "Դեպորտիվո Լա Կորունյա", "deportivo": "Դեպորտիվո",
+  "malaga": "Մալագա",
+
+  // Italy — promoted to Serie A
+  "venezia": "Վենեցիա", "frosinone": "Ֆրոզինոնե", "monza": "Մոնցա",
+
+  // Germany — promoted to the Bundesliga
+  "schalke": "Շալկե", "schalke 04": "Շալկե 04",
+  "elversberg": "Էլվերսբերգ", "sv elversberg": "Էլվերսբերգ",
+  "paderborn": "Պադերբորն", "sc paderborn": "Պադերբորն", "paderborn 07": "Պադերբորն 07",
+
+  // France — promoted to Ligue 1
+  "troyes": "Տրուա", "le mans": "Լը Ման",
 });
 
 function lookupKey(name: string) {
@@ -197,15 +220,46 @@ function transliterate(name: string) {
     result += letters[character.toLowerCase()] ?? character;
     index += 1;
   }
-  return result.replace(/\s+/g, " ").trim();
+  return result
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ")
+    .map((word) => (word ? word[0].toLocaleUpperCase("hy-AM") + word.slice(1) : word))
+    .join(" ");
 }
+
+// Club affixes that carry no identifying information (FC Barcelona == Barcelona).
+// Ordered longest-first so that e.g. "SSC" is preferred over "SS".
+const CLUB_PREFIX = /^(?:\d+\s*\.?\s*)?(?:a\.e\.k\.|f\.c\.|f\.k\.|spvgg|stade|cska|aek|afc|acf|asd|bsc|fbc|fsv|gnk|hnk|ifk|kaa|msv|ogc|rcd|rsc|ssc|ssd|tsg|tsv|vfb|vfl|vfr|ac|as|bk|ca|cd|cf|cs|fc|ff|fk|if|kv|nk|rc|sc|sd|sk|ss|sv|ud|us)\s+/i;
+const CLUB_SUFFIX = /\s+(?:afc|acf|ac|bk|cf|fc|ff|fk|if|sc|sk|sv)$/i;
+const LEADING_NUMBER = /^\d+\s*\.?\s+/;
+const TRAILING_YEAR = /\s+\d{2,4}$/;
 
 export function armenianTeamName(name: string) {
   const key = lookupKey(name);
-  const withoutClubPrefix = key.replace(/^(a\.e\.k\.|aek|afc|ac|cf|cs|fc|fk|gnk|hnk|ifk|nk|rc|sc|sk)\s+/i, "");
-  const withoutClubSuffix = key.replace(/\s+(afc|ac|cf|fc|fk|sc|sk)$/i, "");
-  return teamNames[key]
-    ?? teamNames[withoutClubPrefix]
-    ?? teamNames[withoutClubSuffix]
-    ?? transliterate(name);
+
+  // Try the raw key first, then progressively stripped variants, so that
+  // "1. FC Heidenheim", "FC Heidenheim" and "Heidenheim" all resolve.
+  const variants = new Set<string>([key]);
+  let stripped = key;
+  for (let pass = 0; pass < 3; pass += 1) {
+    const next = stripped.replace(LEADING_NUMBER, "").replace(CLUB_PREFIX, "").replace(CLUB_SUFFIX, "").trim();
+    if (next === stripped || !next) break;
+    stripped = next;
+    variants.add(next);
+  }
+
+  for (const variant of variants) {
+    const hit = teamNames[variant];
+    if (hit) return hit;
+  }
+
+  // Last resort before transliterating: drop a trailing founding year
+  // ("Mainz 05" -> "Mainz"). Tried last so "Schalke 04" keeps its own entry.
+  for (const variant of variants) {
+    const withoutYear = variant.replace(TRAILING_YEAR, "").trim();
+    if (withoutYear && withoutYear !== variant && teamNames[withoutYear]) return teamNames[withoutYear];
+  }
+
+  return transliterate(name);
 }
