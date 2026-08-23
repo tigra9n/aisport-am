@@ -1,0 +1,34 @@
+name: Full E2E Check
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/e2e-check.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check live page and a popup
+        run: |
+          echo "=== /live today ===" > e2e.txt
+          HTML=$(curl -s "https://aisport.am/live?_c=$(date +%s)")
+          echo "$HTML" | grep -oE 'af-[0-9]+' | sort -u | wc -l | xargs echo "match count:" >> e2e.txt
+          echo "$HTML" | grep -oE 'Հայաստանի|Եվրոպա լիգա|Կոնֆերենցիա|գավաթ' | sort -u >> e2e.txt
+          MID=$(echo "$HTML" | grep -oE 'af-[0-9]+' | sort -u | head -1)
+          echo "=== Popup for $MID ===" >> e2e.txt
+          curl -s -w "\nHTTP %{http_code}\n" "https://aisport.am/api/live/match/$MID?_c=$(date +%s)" | head -c 1500 >> e2e.txt
+          echo "" >> e2e.txt
+          echo "=== /standings ===" >> e2e.txt
+          curl -s "https://aisport.am/standings?_c=$(date +%s)" | grep -oE "Դեմո տվյալներ|Թարմացված" | sort -u >> e2e.txt
+      - run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f e2e.txt
+          git commit -m "check [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
