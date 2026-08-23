@@ -5,6 +5,7 @@ import handler from "vinext/server/app-router-entry";
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
+  CRON_TOKEN?: string;
   IMAGES: {
     input(stream: ReadableStream): {
       transform(options: Record<string, unknown>): {
@@ -41,6 +42,16 @@ const worker = {
     }
 
     return handler.fetch(request, env, ctx);
+  },
+
+  // Native Cloudflare Cron Trigger: fires reliably on Cloudflare's own
+  // infrastructure (unlike GitHub Actions schedules, which can lag well
+  // past their nominal interval, especially on lower-traffic repos).
+  async scheduled(_event: unknown, env: Env, ctx: ExecutionContext): Promise<void> {
+    if (!env.CRON_TOKEN) return;
+    ctx.waitUntil(
+      fetch(`https://aisport.am/api/cron/warm?token=${encodeURIComponent(env.CRON_TOKEN)}`).catch(() => {}),
+    );
   },
 };
 
