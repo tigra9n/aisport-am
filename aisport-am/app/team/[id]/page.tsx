@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
 import { SiteHeader } from "../../../components/site-header";
@@ -24,7 +25,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
       {squad.teamLogo && <img src={squad.teamLogo} alt="" className="team-logo-lg" loading="lazy" />}
       {squad.teamName}
     </h1>
-    <p className="page-intro">Ակումբի ամբողջական խաղացողների կազմը՝ ըստ դիրքի, համարով և տարիքով։</p>
+    <p className="page-intro">Ակումբի ամբողջական խաղացողների կազմը՝ ըստ դիրքի, համարով և տարիքով։ Սեղմիր խաղացողի վրա՝ պրոֆիլն ու տրանսֆերները տեսնելու համար։</p>
     {coach && (
       <div className="coach-card">
         {coach.photo ? <img src={coach.photo} alt="" className="squad-photo" loading="lazy" /> : <div className="squad-photo squad-photo-placeholder">{coach.name.slice(0, 1)}</div>}
@@ -41,13 +42,13 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
           <h2>{positionLabel(group.position)}</h2>
           <div className="squad-grid">
             {group.players.map((player) => (
-              <div className="squad-card" key={player.id}>
+              <Link href={`/player/${player.id}`} className="squad-card" key={player.id}>
                 {player.photo ? <img src={player.photo} alt="" className="squad-photo" loading="lazy" /> : <div className="squad-photo squad-photo-placeholder">{player.name.slice(0, 1)}</div>}
                 <div>
                   <strong>{player.name}</strong>
                   <span>{player.number ? `#${player.number}` : "—"}{player.age ? ` · ${player.age} տարեկան` : ""}</span>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </section>
@@ -57,13 +58,13 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
           <h2>Այլ</h2>
           <div className="squad-grid">
             {other.map((player) => (
-              <div className="squad-card" key={player.id}>
+              <Link href={`/player/${player.id}`} className="squad-card" key={player.id}>
                 {player.photo ? <img src={player.photo} alt="" className="squad-photo" loading="lazy" /> : <div className="squad-photo squad-photo-placeholder">{player.name.slice(0, 1)}</div>}
                 <div>
                   <strong>{player.name}</strong>
                   <span>{player.number ? `#${player.number}` : "—"}{player.age ? ` · ${player.age} տարեկան` : ""}</span>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         </section>
