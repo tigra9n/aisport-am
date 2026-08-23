@@ -145,10 +145,21 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
     if(fresh)return fresh;
   }
 
-  const fixtureData=await fetchJson<{response?:ApiFootballFixtureFull[]}>(`https://v3.football.api-sports.io/fixtures?id=${fixtureId}`,key);
+  let fixtureData:{response?:ApiFootballFixtureFull[]}|null=null;
+  try{
+    const r=await fetch(`https://v3.football.api-sports.io/fixtures?id=${fixtureId}`,{headers:{"x-apisports-key":key,Accept:"application/json"},cache:"no-store"});
+    const bodyText=await r.text();
+    if(!r.ok){
+      lastDebugReason=`fixture http ${r.status}: ${bodyText.slice(0,300)}`;
+    }else{
+      try{fixtureData=JSON.parse(bodyText)}catch{lastDebugReason=`fixture json parse failed: ${bodyText.slice(0,300)}`}
+    }
+  }catch(err){
+    lastDebugReason=`fixture fetch threw: ${String(err)}`;
+  }
   const fx=fixtureData?.response?.[0];
   if(!fx){
-    lastDebugReason=`fixture fetch returned no data. raw=${JSON.stringify(fixtureData).slice(0,400)}`;
+    if(!lastDebugReason)lastDebugReason=`fixture fetch returned no data. raw=${JSON.stringify(fixtureData).slice(0,400)}`;
     if(db){const stale=await readStaleCache(db,cacheKey);if(stale)return stale}
     return null;
   }
