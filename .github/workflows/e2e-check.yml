@@ -13,6 +13,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check live page and a popup
+        env:
+          AFKEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
           echo "=== /live today ===" > e2e.txt
           HTML=$(curl -s "https://aisport.am/live?_c=$(date +%s)")
@@ -21,6 +23,16 @@ jobs:
           MID=$(echo "$HTML" | grep -oE 'af-[0-9]+' | sort -u | head -1)
           echo "=== Popup for $MID ===" >> e2e.txt
           curl -s -w "\nHTTP %{http_code}\n" "https://aisport.am/api/live/match/$MID?_c=$(date +%s)" | head -c 1500 >> e2e.txt
+          echo "" >> e2e.txt
+          RAW_ID=$(echo "$MID" | sed 's/af-//')
+          echo "=== Raw fixture $RAW_ID ===" >> e2e.txt
+          curl -s "https://v3.football.api-sports.io/fixtures?id=$RAW_ID" -H "x-apisports-key: ${AFKEY}" | head -c 600 >> e2e.txt
+          echo "" >> e2e.txt
+          echo "=== Try 3 more matches from the list ===" >> e2e.txt
+          for MID2 in $(echo "$HTML" | grep -oE 'af-[0-9]+' | sort -u | sed -n '5,7p'); do
+            echo "--- $MID2 ---" >> e2e.txt
+            curl -s -w " HTTP %{http_code}\n" "https://aisport.am/api/live/match/$MID2?_c=$(date +%s)" | head -c 200 >> e2e.txt
+          done
           echo "" >> e2e.txt
           echo "=== /standings ===" >> e2e.txt
           curl -s "https://aisport.am/standings?_c=$(date +%s)" | grep -oE "Դեմո տվյալներ|Թարմացված" | sort -u >> e2e.txt
