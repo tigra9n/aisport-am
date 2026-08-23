@@ -92,7 +92,7 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
   if(!key)return null;
   const db=(env as unknown as {DB?:D1Database}).DB;
 
-  const cacheKey=`apifootball:v2:match:${fixtureId}`;
+  const cacheKey=`apifootball:v3:match:${fixtureId}`;
   if(db){
     await ensureCacheTable(db);
     const fresh=await readCache(db,cacheKey);
@@ -152,7 +152,7 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
   };
 
   if(db){
-    const looksIncomplete=result.events.length===0&&result.lineups.length===0&&result.statistics.length===0;
+    const looksIncomplete=result.events.length===0||result.lineups.length===0||result.statistics.length===0;
     const finished=isFinishedStatus(fx.fixture.status.short)&&!looksIncomplete;
     await writeCache(db,cacheKey,result,finished);
   }
