@@ -16,9 +16,12 @@ jobs:
         run: |
           curl -s "https://aisport.am/standings?_c=$(date +%s)" > /tmp/s.html
           echo "=== team-badge-logo count ===" > check.txt
-          grep -oc "team-badge-logo" /tmp/s.html >> check.txt || echo 0 >> check.txt
+          grep -o "team-badge-logo" /tmp/s.html | wc -l >> check.txt
           echo "=== team-badge (letter fallback) count ===" >> check.txt
-          grep -oc "class=\"team-badge\"" /tmp/s.html >> check.txt || echo 0 >> check.txt
+          grep -o "class=\"team-badge\"" /tmp/s.html | wc -l >> check.txt
+          echo "=== sample of first team cell ===" >> check.txt
+          grep -oE '<td>[^<]*<img[^>]*>|<td><span className="team-badge"' /tmp/s.html | head -3 >> check.txt
+          grep -o 'media.api-sports.io[^"]*' /tmp/s.html | head -5 >> check.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
