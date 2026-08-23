@@ -1,0 +1,37 @@
+name: Debug Form and Zone
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/debug-form-zone.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check
+        env:
+          AFKEY: ${{ secrets.API_FOOTBALL_KEY }}
+        run: |
+          echo "=== CSS: is the pseudo-element rule actually in the deployed CSS? ===" > debug.txt
+          curl -s "https://aisport.am/live?_c=$(date +%s)" | grep -oE '_next/static/css/[^"]*\.css' | sort -u > /tmp/csslinks.txt
+          cat /tmp/csslinks.txt >> debug.txt
+          CSSURL=$(head -1 /tmp/csslinks.txt)
+          curl -s "https://aisport.am/$CSSURL" > /tmp/style.css
+          echo "" >> debug.txt
+          echo "=== zone-ucl rule in deployed CSS ===" >> debug.txt
+          grep -o "zone-ucl[^}]*}[^}]*}" /tmp/style.css | head -c 500 >> debug.txt
+          echo "" >> debug.txt
+          echo "=== Raw team stats API for Newcastle (id 34) league 39 season 2026 ===" >> debug.txt
+          curl -s "https://v3.football.api-sports.io/teams/statistics?league=39&season=2026&team=34" -H "x-apisports-key: ${AFKEY}" | head -c 800 >> debug.txt
+      - run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f debug.txt
+          git commit -m "check [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
