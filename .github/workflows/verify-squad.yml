@@ -12,11 +12,15 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Check squad page for Arsenal (team id 42)
+      - name: Check squad page for Brighton (confirmed team id 51)
+        env:
+          AFKEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
-          curl -s "https://aisport.am/team/42?_c=$(date +%s)" -o /tmp/team.html -w "HTTP %{http_code}\n" > verify-squad.txt
+          curl -s "https://aisport.am/team/51?_c=$(date +%s)" -o /tmp/team.html -w "HTTP %{http_code}\n" > verify-squad.txt
           grep -oE "Դարպասապահներ|Պաշտպաններ|squad-card" /tmp/team.html | sort -u >> verify-squad.txt
           grep -o 'squad-card' /tmp/team.html | wc -l >> verify-squad.txt
+          echo "=== Raw squad API ===" >> verify-squad.txt
+          curl -s "https://v3.football.api-sports.io/players/squads?team=51" -H "x-apisports-key: ${AFKEY}" | head -c 300 >> verify-squad.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
