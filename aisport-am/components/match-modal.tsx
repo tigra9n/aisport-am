@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import type { LiveMatchDetail } from "../lib/live-football-server";
+import type { LineupPlayer, LiveMatchDetail } from "../lib/live-football-server";
 
 const available = (value: string) => Boolean(value && value !== "—" && value !== "Տվյալ չկա");
 
@@ -16,13 +16,40 @@ function eventIcon(label: string) {
   return "•";
 }
 
+function formationRows(formation: string): number[] {
+  const parts = formation.split("-").map((n) => Number.parseInt(n, 10)).filter((n) => Number.isFinite(n) && n > 0);
+  if (!parts.length) return [];
+  return [1, ...parts];
+}
+
+function chunkByRows<T>(items: T[], rows: number[]): T[][] {
+  const chunks: T[][] = [];
+  let i = 0;
+  for (const size of rows) {
+    chunks.push(items.slice(i, i + size));
+    i += size;
+  }
+  const leftover = items.slice(i);
+  if (leftover.length) chunks.push(leftover);
+  return chunks;
+}
+
+function PitchPlayer({ player }: { player: LineupPlayer }) {
+  return (
+    <div className="pitch-player">
+      <span className="pitch-player-dot">{player.number ?? "•"}</span>
+      <span className="pitch-player-name">{player.name}</span>
+    </div>
+  );
+}
+
 export function MatchModal() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const matchId = searchParams.get("match");
   const [details, setDetails] = useState<LiveMatchDetail | null>(null);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"events" | "stats">("events");
+  const [tab, setTab] = useState<"events" | "lineups" | "stats">("events");
 
   useEffect(() => {
     if (!matchId) {
@@ -46,6 +73,14 @@ export function MatchModal() {
     router.push(query ? `?${query}` : window.location.pathname, { scroll: false });
   };
 
+  const homeName = details?.match.home ?? "";
+  const awayName = details?.match.away ?? "";
+  const sideOf = (team: string): "home" | "away" | null => {
+    if (team === homeName) return "home";
+    if (team === awayName) return "away";
+    return null;
+  };
+
   return (
     <div className="match-modal-overlay" onClick={close}>
       <div className="match-modal" onClick={(event) => event.stopPropagation()}>
@@ -67,84 +102,103 @@ export function MatchModal() {
             </div>
 
             <div className="match-modal-tabs">
-              <button className={tab === "events" ? "active" : ""} onClick={() => setTab("events")}>
-                Իրադարձություններ և կազմեր
-              </button>
-              <button className={tab === "stats" ? "active" : ""} onClick={() => setTab("stats")}>
-                Վիճակագրություն
-              </button>
+              <button className={tab === "events" ? "active" : ""} onClick={() => setTab("events")}>Իրադարձություններ</button>
+              <button className={tab === "lineups" ? "active" : ""} onClick={() => setTab("lineups")}>Կազմեր</button>
+              <button className={tab === "stats" ? "active" : ""} onClick={() => setTab("stats")}>Վիճակագրություն</button>
             </div>
 
             {tab === "events" && (
               <div className="match-detail-columns match-modal-scroll">
-                {details.events.length > 0 && (
+                {details.events.length > 0 ? (
                   <section className="event-timeline">
-                    <h2>Խաղի իրադարձությունները</h2>
-                    {details.events.map((event, index) => (
-                      <article key={`${event.minute}-${event.player}-${index}`}>
-                        <b>{event.minute}</b>
-                        <div>
-                          <strong>{eventIcon(event.label)} {event.label}</strong>
-                          {available(event.player) && (
-                            <span>{event.player}{available(event.assist) ? ` · ասիստ՝ ${event.assist}` : ""}</span>
+                    <div className="timeline-side-heads">
+                      <strong>{homeName}</strong>
+                      <span />
+                      <strong>{awayName}</strong>
+                    </div>
+                    <div className="event-spine">
+                      {details.events.map((event, index) => {
+                        const side = sideOf(event.team);
+                        const rowClass = side === "home" ? "is-home" : side === "away" ? "is-away" : "is-home";
+                        return (
+                          <div key={`${event.minute}-${event.player}-${index}`} className={`event-spine-row ${rowClass}`}>
+                            {rowClass === "is-home" && (
+                              <div className="event-spine-card">
+                                <div className="event-spine-text">
+                                  <strong>{event.label}</strong>
+                                  {available(event.player) && <small>{event.player}{available(event.assist) ? ` · ասիստ՝ ${event.assist}` : ""}</small>}
+                                </div>
+                                <span className="event-spine-icon">{eventIcon(event.label)}</span>
+                              </div>
+                            )}
+                            <span className="event-spine-minute">{event.minute}</span>
+                            {rowClass === "is-away" && (
+                              <div className="event-spine-card">
+                                <span className="event-spine-icon">{eventIcon(event.label)}</span>
+                                <div className="event-spine-text">
+                                  <strong>{event.label}</strong>
+                                  {available(event.player) && <small>{event.player}{available(event.assist) ? ` · ասիստ՝ ${event.assist}` : ""}</small>}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ) : (
+                  <p className="detail-empty">Իրադարձությունների տվյալներ դեռ հասանելի չեն։</p>
+                )}
+              </div>
+            )}
+
+            {tab === "lineups" && (
+              <div className="match-modal-scroll">
+                {details.lineups.length > 0 ? (
+                  <div className="lineups-panel">
+                    {details.lineups.map((lineup, teamIndex) => {
+                      const rows = formationRows(lineup.formation);
+                      const chunks = rows.length ? chunkByRows(lineup.starters, rows) : [lineup.starters];
+                      const flip = teamIndex === 1;
+                      return (
+                        <div className="pitch-wrap" key={lineup.team}>
+                          <div className="pitch-team-label">
+                            <strong>{lineup.team}</strong>
+                            {available(lineup.formation) && <span>{lineup.formation}</span>}
+                          </div>
+                          <div className={`pitch ${flip ? "flip" : ""}`}>
+                            {chunks.map((row, rowIndex) => (
+                              <div className="pitch-row" key={rowIndex}>
+                                {row.map((player, playerIndex) => <PitchPlayer key={`${player.name}-${playerIndex}`} player={player} />)}
+                              </div>
+                            ))}
+                          </div>
+                          {lineup.substitutes.length > 0 && (
+                            <div className="subs-list">
+                              <h3>Պահեստայիններ</h3>
+                              <div className="subs-grid">
+                                {lineup.substitutes.map((player, index) => (
+                                  <span className="subs-chip" key={`${player.name}-${index}`}>
+                                    <b>{player.number ?? "•"}</b>{player.name}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
                           )}
-                          {available(event.team) && <small>{event.team}</small>}
                         </div>
-                      </article>
-                    ))}
-                  </section>
-                )}
-                {details.lineups.length > 0 && (
-                  <section className="lineups-panel">
-                    <h2>Կազմեր</h2>
-                    {details.lineups.map((lineup) => (
-                      <details key={lineup.team}>
-                        <summary>
-                          <strong>{lineup.team}</strong>
-                          {available(lineup.formation) && <span>{lineup.formation}</span>}
-                        </summary>
-                        {lineup.starters.length > 0 && (
-                          <>
-                            <h3>Մեկնարկային կազմ</h3>
-                            <ol>{lineup.starters.map((player, index) => <li key={`${player}-${index}`}>{player}</li>)}</ol>
-                          </>
-                        )}
-                        {lineup.substitutes.length > 0 && (
-                          <>
-                            <h3>Պահեստայիններ</h3>
-                            <ul>{lineup.substitutes.map((player, index) => <li key={`${player}-${index}`}>{player}</li>)}</ul>
-                          </>
-                        )}
-                      </details>
-                    ))}
-                  </section>
-                )}
-                {details.events.length === 0 && details.lineups.length === 0 && (
-                  <p className="detail-empty">Իրադարձությունների և կազմերի տվյալներ դեռ հասանելի չեն։</p>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="detail-empty">Կազմերի տվյալներ դեռ հասանելի չեն։</p>
                 )}
               </div>
             )}
 
             {tab === "stats" && (
               <div className="match-modal-scroll">
-                {details.statistics.length > 0 ? (
-                  <section className="match-stat-grid">
-                    {details.statistics.map((team) => {
-                      const items = [
-                        { label: "xG", value: team.xg },
-                        { label: "Գնդակի տիրապետում", value: team.possession },
-                        { label: "Հարվածներ դարպասին", value: team.shotsOnGoal },
-                        { label: "Ընդհանուր հարվածներ", value: team.totalShots },
-                      ].filter((item) => available(item.value));
-                      if (!items.length) return null;
-                      return (
-                        <article key={team.team}>
-                          <h2>{team.team}</h2>
-                          <dl>{items.map((item) => <div key={item.label}><dt>{item.label}</dt><dd>{item.value}</dd></div>)}</dl>
-                        </article>
-                      );
-                    })}
-                  </section>
+                {details.statistics.length === 2 ? (
+                  <StatBars home={details.statistics[0]} away={details.statistics[1]} />
                 ) : (
                   <p className="detail-empty">Վիճակագրական տվյալներ դեռ հասանելի չեն։</p>
                 )}
@@ -153,6 +207,43 @@ export function MatchModal() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+type TeamStats = { team: string; possession: string; shotsOnGoal: string; totalShots: string; xg: string };
+
+function parseNumber(value: string): number {
+  const match = value.match(/[\d.]+/);
+  return match ? Number.parseFloat(match[0]) : 0;
+}
+
+function StatBars({ home, away }: { home: TeamStats; away: TeamStats }) {
+  const rows: { label: string; home: string; away: string }[] = [
+    { label: "Գնդակի տիրապետում", home: home.possession, away: away.possession },
+    { label: "Հարվածներ դարպասին", home: home.shotsOnGoal, away: away.shotsOnGoal },
+    { label: "Ընդհանուր հարվածներ", home: home.totalShots, away: away.totalShots },
+    { label: "xG", home: home.xg, away: away.xg },
+  ].filter((row) => available(row.home) || available(row.away));
+
+  return (
+    <div className="stat-bars">
+      {rows.map((row) => {
+        const h = parseNumber(row.home);
+        const a = parseNumber(row.away);
+        const total = h + a || 1;
+        const homePct = Math.round((h / total) * 100);
+        const awayPct = 100 - homePct;
+        return (
+          <div className="stat-bar-row" key={row.label}>
+            <b>{available(row.home) ? row.home : "—"}</b>
+            <div className="stat-bar-track home"><div className="stat-bar-fill" style={{ width: `${homePct}%` }} /></div>
+            <span>{row.label}</span>
+            <div className="stat-bar-track away"><div className="stat-bar-fill" style={{ width: `${awayPct}%` }} /></div>
+            <b>{available(row.away) ? row.away : "—"}</b>
+          </div>
+        );
+      })}
     </div>
   );
 }

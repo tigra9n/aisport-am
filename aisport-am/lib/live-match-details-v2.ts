@@ -3,8 +3,8 @@ import type { LiveMatch, LiveMatchDetail } from "./live-football-server";
 
 type ApiFootballFixtureFull={fixture:{id:number;date:string;venue?:{name?:string|null};referee?:string|null;status:{short:string;elapsed?:number|null}};league:{id:number};teams:{home:{name:string};away:{name:string}};goals:{home:number|null;away:number|null}};
 type ApiFootballEvent={time:{elapsed:number;extra?:number|null};team:{name:string};player:{name?:string|null};assist:{name?:string|null};type:string;detail:string};
-type ApiFootballLineupPlayer={player:{name?:string|null}};
-type ApiFootballLineup={team:{name:string};formation?:string|null;startXI:{player:ApiFootballLineupPlayer["player"]}[];substitutes:{player:ApiFootballLineupPlayer["player"]}[]};
+type ApiFootballLineupPlayer={player:{name?:string|null;number?:number|null;grid?:string|null}};
+type ApiFootballLineup={team:{name:string};formation?:string|null;startXI:ApiFootballLineupPlayer[];substitutes:ApiFootballLineupPlayer[]};
 type ApiFootballStatItem={type:string;value:string|number|null};
 type ApiFootballStatistics={team:{name:string};statistics:ApiFootballStatItem[]};
 
@@ -109,7 +109,7 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
   if(!key)return null;
   const db=(env as unknown as {DB?:D1Database}).DB;
 
-  const cacheKey=`apifootball:v3:match:${fixtureId}`;
+  const cacheKey=`apifootball:v4:match:${fixtureId}`;
   if(db){
     await ensureCacheTable(db);
     const fresh=await readCache(db,cacheKey);
@@ -157,8 +157,8 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
     lineups:(lineupsData?.response??[]).map(l=>({
       team:armenianTeamName(l.team.name),
       formation:l.formation||"—",
-      starters:l.startXI.map(p=>p.player.name||"—"),
-      substitutes:l.substitutes.map(p=>p.player.name||"—"),
+      starters:l.startXI.map(p=>({name:p.player.name||"—",number:p.player.number??null,grid:p.player.grid??null})),
+      substitutes:l.substitutes.map(p=>({name:p.player.name||"—",number:p.player.number??null,grid:p.player.grid??null})),
     })),
     statistics:(statsData?.response??[]).map(s=>({
       team:armenianTeamName(s.team.name),

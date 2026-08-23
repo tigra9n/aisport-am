@@ -1,7 +1,8 @@
 import { armenianTeamName } from "./team-names-hy";
 
 export type LiveMatch={id:string;status:string;competition:string;home:string;away:string;homeScore:number|null;awayScore:number|null;isLive:boolean};
-export type LiveMatchDetail={match:LiveMatch;venue:string;referee:string;events:{minute:string;team:string;player:string;assist:string;label:string}[];lineups:{team:string;formation:string;starters:string[];substitutes:string[]}[];statistics:{team:string;possession:string;shotsOnGoal:string;totalShots:string;xg:string}[]};
+export type LineupPlayer={name:string;number:number|null;grid:string|null};
+export type LiveMatchDetail={match:LiveMatch;venue:string;referee:string;events:{minute:string;team:string;player:string;assist:string;label:string}[];lineups:{team:string;formation:string;starters:LineupPlayer[];substitutes:LineupPlayer[]}[];statistics:{team:string;possession:string;shotsOnGoal:string;totalShots:string;xg:string}[]};
 
 type ApiFootballFixture={fixture:{id:number;date:string;venue?:{name?:string|null};referee?:string|null;status:{short:string;elapsed?:number|null}};league:{id:number};teams:{home:{name:string};away:{name:string}};goals:{home:number|null;away:number|null}};
 type SortableMatch=LiveMatch&{priority:number;timestamp:number};
