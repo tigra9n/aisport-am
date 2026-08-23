@@ -32,16 +32,16 @@ let cacheTableReady:Promise<unknown>|null=null;
 async function ensureCacheTable(db:D1Database){cacheTableReady??=db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();await cacheTableReady}
 
 async function fetchJson<T>(url:string,key:string):Promise<T|null>{
-  for(let attempt=0;attempt<2;attempt++){
+  for(let attempt=0;attempt<3;attempt++){
     try{
       const response=await fetch(url,{headers:{"x-apisports-key":key,Accept:"application/json"},cache:"no-store"});
       if(response.status===429){
-        // Quota/rate-limit hit: retrying won't help and just burns another call. Fail fast.
+        if(attempt<2){await new Promise(r=>setTimeout(r,600));continue}
         console.error(`[live-match-details] 429 rate limit on ${url}`);
         return null;
       }
       if(!response.ok){
-        if(attempt===0){await new Promise(r=>setTimeout(r,400));continue}
+        if(attempt<2){await new Promise(r=>setTimeout(r,300));continue}
         return null;
       }
       const payload=await response.json() as T & {errors?:unknown};
@@ -49,13 +49,13 @@ async function fetchJson<T>(url:string,key:string):Promise<T|null>{
       const isRateLimit=Boolean(errs&&typeof errs==="object"&&!Array.isArray(errs)&&"rateLimit" in (errs as object));
       const hasErrors=Array.isArray(errs)?errs.length>0:Boolean(errs&&Object.keys(errs as object).length>0);
       if(hasErrors){
-        if(isRateLimit){console.error(`[live-match-details] rate limit error field on ${url}`);return null}
-        if(attempt===0){await new Promise(r=>setTimeout(r,400));continue}
+        if(attempt<2){await new Promise(r=>setTimeout(r,isRateLimit?600:300));continue}
+        if(isRateLimit)console.error(`[live-match-details] rate limit error field on ${url}`);
         return null;
       }
       return payload;
     }catch{
-      if(attempt===0){await new Promise(r=>setTimeout(r,400));continue}
+      if(attempt<2){await new Promise(r=>setTimeout(r,300));continue}
       return null;
     }
   }
@@ -162,8 +162,7 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
     isLive:isLiveStatus(fx.fixture.status.short),
   };
 
-  const delay=(ms:number)=>new Promise(r=>setTimeout(r,ms));
-  const lineupsCacheKey=`apifootball:v4:lineups:${fixtureId}`;
+  const lineupsCacheKey=`apifootball:v5:lineups:${fixtureId}`;
   const cachedLineups=db?await readLineupsCache(db,lineupsCacheKey):null;
   // Both teams must be present. An hour before kickoff it's common for only one
   // side to have published its XI; caching that half-result would otherwise pin
@@ -172,8 +171,8 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
 
   const [eventsData,lineupsData,statsData]=await Promise.all([
     fetchJson<{response?:ApiFootballEvent[]}>(`https://v3.football.api-sports.io/fixtures/events?fixture=${fixtureId}`,key),
-    needLineupsFetch?delay(120).then(()=>fetchJson<{response?:ApiFootballLineup[]}>(`https://v3.football.api-sports.io/fixtures/lineups?fixture=${fixtureId}`,key)):Promise.resolve(null),
-    delay(240).then(()=>fetchJson<{response?:ApiFootballStatistics[]}>(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`,key)),
+    needLineupsFetch?fetchJson<{response?:ApiFootballLineup[]}>(`https://v3.football.api-sports.io/fixtures/lineups?fixture=${fixtureId}`,key):Promise.resolve(null),
+    fetchJson<{response?:ApiFootballStatistics[]}>(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`,key),
   ]);
 
   const freshLineups=(lineupsData?.response??[]).map(l=>({
