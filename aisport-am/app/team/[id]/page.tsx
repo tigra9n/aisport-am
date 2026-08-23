@@ -27,14 +27,14 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
     </h1>
     <p className="page-intro">Ակումբի ամբողջական խաղացողների կազմը՝ ըստ դիրքի, համարով և տարիքով։ Սեղմիր խաղացողի վրա՝ պրոֆիլն ու տրանսֆերները տեսնելու համար։</p>
     {coach && (
-      <div className="coach-card">
+      <Link href={`/coach/${coach.id}`} className="coach-card">
         {coach.photo ? <img src={coach.photo} alt="" className="squad-photo" loading="lazy" /> : <div className="squad-photo squad-photo-placeholder">{coach.name.slice(0, 1)}</div>}
         <div>
           <span>Գլխավոր մարզիչ</span>
           <strong>{coach.name}</strong>
           <small>{coach.nationality ?? ""}{coach.age ? ` · ${coach.age} տարեկան` : ""}</small>
         </div>
-      </div>
+      </Link>
     )}
     <div className="squad-groups">
       {groups.map((group) => (
