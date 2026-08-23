@@ -28,6 +28,12 @@ jobs:
           echo "" >> standings-check.txt
           echo "=== Live site /standings page ===" >> standings-check.txt
           curl -s "https://aisport.am/standings?_c=$(date +%s)" | grep -oE "Arsenal|demo|Ցուցադրական" | sort -u >> standings-check.txt
+          echo "" >> standings-check.txt
+          echo "=== France FL1 raw standings ===" >> standings-check.txt
+          curl -s "https://api.football-data.org/v4/competitions/FL1/standings" -H "X-Auth-Token: ${FDTOKEN}" | head -c 1200 >> standings-check.txt
+          echo "" >> standings-check.txt
+          echo "=== France FL1 recent matches (finished) ===" >> standings-check.txt
+          curl -s "https://api.football-data.org/v4/competitions/FL1/matches?status=FINISHED" -H "X-Auth-Token: ${FDTOKEN}" | head -c 1200 >> standings-check.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
