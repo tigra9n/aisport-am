@@ -131,7 +131,7 @@ export function MatchModal() {
   const matchId = searchParams.get("match");
   const [details, setDetails] = useState<LiveMatchDetail | null>(null);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"events" | "lineups" | "stats" | "h2h" | "prediction">("events");
+  const [tab, setTab] = useState<"events" | "lineups" | "stats" | "h2h" | "prediction" | "standings" | "topscorers">("events");
 
   useEffect(() => {
     if (!matchId) {
@@ -189,6 +189,8 @@ export function MatchModal() {
               <button className={tab === "stats" ? "active" : ""} onClick={() => setTab("stats")}>Վիճակագրություն</button>
               {details.h2h.length > 0 && <button className={tab === "h2h" ? "active" : ""} onClick={() => setTab("h2h")}>H2H</button>}
               {details.prediction && <button className={tab === "prediction" ? "active" : ""} onClick={() => setTab("prediction")}>Կանխատեսում</button>}
+              {details.standings && details.standings.length > 0 && <button className={tab === "standings" ? "active" : ""} onClick={() => setTab("standings")}>Աղյուսակ</button>}
+              {details.topScorers && details.topScorers.length > 0 && <button className={tab === "topscorers" ? "active" : ""} onClick={() => setTab("topscorers")}>Ռմբարկուներ</button>}
             </div>
 
             {tab === "events" && (
@@ -311,6 +313,43 @@ export function MatchModal() {
                   )}
                   {available(details.prediction.advice ?? "") && <p className="prediction-note">{details.prediction.advice}</p>}
                 </div>
+              </div>
+            )}
+
+            {tab === "standings" && details.standings && (
+              <div className="match-modal-scroll">
+                <table className="standings-table popup-standings-table">
+                  <thead><tr><th>#</th><th>Թիմ</th><th>Խ</th><th>ԳՏ</th><th>Մ</th></tr></thead>
+                  <tbody>
+                    {details.standings.map((row) => (
+                      <tr key={row.team} className={`${row.team === homeName || row.team === awayName ? "popup-standings-highlight" : ""} ${row.position <= 4 ? "zone-ucl" : row.position === 5 ? "zone-europa" : row.position > details.standings!.length - 3 ? "zone-drop" : ""}`}>
+                        <td><span className="position-marker">{row.position}</span></td>
+                        <td>{row.teamLogo ? <img src={row.teamLogo} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}<strong>{row.team}</strong></td>
+                        <td>{row.played}</td>
+                        <td>{row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}</td>
+                        <td><b>{row.points}</b></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            {tab === "topscorers" && details.topScorers && (
+              <div className="match-modal-scroll">
+                <table className="standings-table popup-standings-table">
+                  <thead><tr><th>#</th><th>Խաղացող</th><th>Թիմ</th><th>Գ</th></tr></thead>
+                  <tbody>
+                    {details.topScorers.slice(0, 10).map((row) => (
+                      <tr key={row.name}>
+                        <td><span className="position-marker">{row.rank}</span></td>
+                        <td><span className="player-with-photo">{row.photo && <img src={row.photo} alt="" className="player-photo" loading="lazy" />}<strong>{row.name}</strong></span></td>
+                        <td><span className="team-with-logo">{row.teamLogo && <img src={row.teamLogo} alt="" className="team-logo" loading="lazy" />}{row.team}</span></td>
+                        <td><b>{row.goals}</b></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
           </>

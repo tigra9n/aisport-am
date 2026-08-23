@@ -12,7 +12,7 @@ const LEAGUE_ID_BY_CODE: Record<string, number> = {
 type ApiFootballStandingsResponse = {
   response?: { league?: { standings?: Array<Array<{
     rank: number;
-    team: { name: string };
+    team: { name: string; logo?: string | null };
     points: number;
     goalsDiff: number;
     all: { played: number; win: number; draw: number; lose: number };
@@ -65,6 +65,7 @@ export async function getStandings(code: string): Promise<{ rows: StandingRow[];
     const rows: StandingRow[] = table.map((row) => ({
       position: row.rank,
       team: armenianTeamName(row.team.name),
+      teamLogo: row.team.logo ?? null,
       played: row.all.played,
       won: row.all.win,
       draw: row.all.draw,

@@ -30,7 +30,7 @@ export function LeagueTabs({ tables, compact = false }: { tables: Record<string,
       <div className="standings-scroll">
         <table className="standings-table">
           <thead><tr><th>#</th><th>Թիմ</th><th>Խ</th>{!compact ? <><th>Հ</th><th>Ո</th><th>Պ</th><th>ԳՏ</th></> : null}<th>Մ</th></tr></thead>
-          <tbody>{rows.map((row) => <tr key={row.team} className={row.position <= 4 ? "zone-ucl" : row.position === 5 ? "zone-europa" : row.position > rows.length - 3 ? "zone-drop" : ""}><td><span className="position-marker">{row.position}</span></td><td><span className="team-badge">{row.team.slice(0, 1)}</span><strong>{row.team}</strong></td><td>{row.played}</td>{!compact ? <><td>{row.won}</td><td>{row.draw}</td><td>{row.lost}</td><td>{row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}</td></> : null}<td><b>{row.points}</b></td></tr>)}</tbody>
+          <tbody>{rows.map((row) => <tr key={row.team} className={row.position <= 4 ? "zone-ucl" : row.position === 5 ? "zone-europa" : row.position > rows.length - 3 ? "zone-drop" : ""}><td><span className="position-marker">{row.position}</span></td><td>{row.teamLogo ? <img src={row.teamLogo} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}<strong>{row.team}</strong></td><td>{row.played}</td>{!compact ? <><td>{row.won}</td><td>{row.draw}</td><td>{row.lost}</td><td>{row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}</td></> : null}<td><b>{row.points}</b></td></tr>)}</tbody>
         </table>
       </div>
       {!compact ? <div className="zone-legend"><span className="ucl">Չեմպիոնների լիգա</span><span className="europa">Եվրոպա լիգա</span><span className="drop">Իջեցման գոտի</span></div> : null}

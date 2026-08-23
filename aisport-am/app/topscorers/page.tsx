@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function TopScorersPage() {
   const entries = await Promise.all(leagues.map(async (league) => [league.code, await getTopScorers(league.code)] as const));
   return <main><SiteHeader /><div className="site-shell inner-page">
-    <span className="page-kicker">Եվրոպական ֆուտբոլ</span><h1 className="page-title">Գոլահարվածներ</h1><p className="page-intro">Ընտրեք առաջնությունը և դիտեք սեզոնի լավագույն գոլերախներին՝ գոլերով, փոխանցումներով և խաղացած խաղերով։ <Link href="/standings">Դիտել աղյուսակները →</Link></p>
+    <span className="page-kicker">Եվրոպական ֆուտբոլ</span><h1 className="page-title">Ռմբարկուներ</h1><p className="page-intro">Ընտրեք առաջնությունը և դիտեք սեզոնի լավագույն ռմբարկուներին՝ գոլերով, փոխանցումներով և խաղացած խաղերով։ <Link href="/standings">Դիտել աղյուսակները →</Link></p>
     <section className="full-standings-card"><TopScorersTabs tables={Object.fromEntries(entries)} /></section>
   </div><SiteFooter /></main>;
 }

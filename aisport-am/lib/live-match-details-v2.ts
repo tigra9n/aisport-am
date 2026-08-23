@@ -1,5 +1,9 @@
 import { armenianTeamName } from "./team-names-hy";
 import type { LiveMatch, LiveMatchDetail, LineupPlayer } from "./live-football-server";
+import { getStandings } from "./football-server";
+import { getTopScorers } from "./topscorers-server";
+
+const LEAGUE_CODE_BY_ID:Record<number,string>={39:"PL",140:"PD",135:"SA",78:"BL1",61:"FL1"};
 
 type ApiFootballFixtureFull={fixture:{id:number;date:string;venue?:{name?:string|null};referee?:string|null;status:{short:string;elapsed?:number|null}};league:{id:number};teams:{home:{id:number;name:string;logo?:string|null};away:{id:number;name:string;logo?:string|null}};goals:{home:number|null;away:number|null}};
 type ApiFootballEvent={time:{elapsed:number;extra?:number|null};team:{name:string};player:{name?:string|null};assist:{name?:string|null};type:string;detail:string};
@@ -326,6 +330,16 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
     async()=>mapH2H(await fetchJson<{response?:ApiFootballH2HFixture[]}>(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${fx.teams.home.id}-${fx.teams.away.id}&last=5`,key)),
   );
 
+  // Standings and top scorers only make sense for the 5 domestic leagues
+  // (cups/CL don't have a simple table). These functions already manage
+  // their own caching, so just call them directly.
+  const leagueCode=LEAGUE_CODE_BY_ID[fx.league.id];
+  const [standingsResult,topScorersResult]=leagueCode
+    ?await Promise.all([getStandings(leagueCode),getTopScorers(leagueCode)])
+    :[null,null];
+  const standings=standingsResult&&!standingsResult.demo?standingsResult.rows:null;
+  const topScorers=topScorersResult&&!topScorersResult.unavailable?topScorersResult.rows:null;
+
   return{
     match,
     venue:fx.fixture.venue?.name||"Տվյալ չկա",
@@ -335,5 +349,7 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
     statistics,
     h2h,
     prediction,
+    standings,
+    topScorers,
   };
 }
