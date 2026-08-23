@@ -34,9 +34,19 @@ function chunkByRows<T>(items: T[], rows: number[]): T[][] {
   return chunks;
 }
 
+function ratingClass(rating: string | null) {
+  if (!rating) return "";
+  const value = Number.parseFloat(rating);
+  if (Number.isNaN(value)) return "";
+  if (value >= 7.5) return "rating-high";
+  if (value >= 6) return "rating-mid";
+  return "rating-low";
+}
+
 function PitchPlayer({ player, card }: { player: LineupPlayer; card?: "yellow" | "red" }) {
   return (
     <div className="pitch-player">
+      {player.rating && <span className={`pitch-rating ${ratingClass(player.rating)}`}>{player.rating}</span>}
       <span className="pitch-player-dot">
         {player.number ?? "•"}
         {card && <i className={`pitch-card ${card}`} />}
@@ -120,6 +130,21 @@ function SubstitutionsList({ pairs }: { pairs: SubPair[] }) {
             )}
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function InjuriesList({ injuries, homeName, awayName }: { injuries: LiveMatchDetail["injuries"]; homeName: string; awayName: string }) {
+  if (!injuries.length) return null;
+  const home = injuries.filter((i) => i.team === homeName);
+  const away = injuries.filter((i) => i.team === awayName);
+  return (
+    <div className="injuries-list">
+      <h3>Բացակայողներ</h3>
+      <div className="injuries-columns">
+        <div>{home.map((i, idx) => <p key={`h-${idx}`}><b>{i.player}</b><span>{i.reason}</span></p>)}</div>
+        <div>{away.map((i, idx) => <p key={`a-${idx}`}><b>{i.player}</b><span>{i.reason}</span></p>)}</div>
       </div>
     </div>
   );
@@ -260,6 +285,7 @@ export function MatchModal() {
                         )
                       ))}
                     </div>
+                    <InjuriesList injuries={details.injuries} homeName={homeName} awayName={awayName} />
                   </>
                 ) : (
                   <p className="detail-empty">Կազմերի տվյալներ դեռ հասանելի չեն։</p>

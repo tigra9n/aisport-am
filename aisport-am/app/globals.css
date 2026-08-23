@@ -172,6 +172,16 @@ img{display:block;max-width:100%}
 .pitch-card{position:absolute;top:-3px;right:-5px;width:9px;height:12px;border-radius:1.5px;border:1px solid rgba(0,0,0,.35)}
 .pitch-card.yellow{background:#f2c94c}
 .pitch-card.red{background:#eb4d4b}
+.pitch-rating{display:inline-grid;place-items:center;min-width:22px;height:15px;padding:0 3px;margin-bottom:2px;border-radius:4px;font-size:8px;font-weight:950;color:#fff}
+.pitch-rating.rating-high{background:#2fb872}
+.pitch-rating.rating-mid{background:#e08a1e}
+.pitch-rating.rating-low{background:#d94f4f}
+.injuries-list{margin-top:2px;padding:14px 16px;border-radius:14px;background:var(--surface);border:1px solid var(--line)}
+.injuries-list h3{margin:0 0 10px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.injuries-columns{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.injuries-columns p{margin:0 0 8px;font-size:9px}
+.injuries-columns b{display:block;color:var(--ink);font-weight:900}
+.injuries-columns span{display:block;color:var(--live);font-size:8px;margin-top:1px}
 .subs-teams{display:grid;gap:2px;margin-top:2px}
 .sub-pairs{display:grid;gap:6px}
 .sub-pair-row{display:grid;grid-template-columns:1fr 40px 1fr;align-items:center;gap:8px;font-size:9px}

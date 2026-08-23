@@ -17,11 +17,16 @@ type ApiFootballPredictions={response?:[{
   teams:{home:{name:string};away:{name:string}};
 }]};
 
+type ApiFootballPlayerStats={team:{name:string};players:{player:{name:string};statistics:[{games:{rating:string|null}}]}[]};
+type ApiFootballInjury={player:{name:string};team:{name:string};player_reason?:string|null;reason?:string|null};
+
 type EventsSection=LiveMatchDetail["events"];
 type LineupsSection=LiveMatchDetail["lineups"];
 type StatsSection=LiveMatchDetail["statistics"];
 type H2HSection=LiveMatchDetail["h2h"];
 type PredictionSection=LiveMatchDetail["prediction"];
+type InjuriesSection=LiveMatchDetail["injuries"];
+type RatingsSection=Record<string,string>;
 
 const TRACKED_LEAGUES:Record<number,string>={
   342:"Հայաստանի Պրեմիեր լիգա",
@@ -156,12 +161,29 @@ function mapEvents(data:{response?:ApiFootballEvent[]}|null):EventsSection{
     label:eventLabel(e.type,e.detail),
   }));
 }
-function mapLineups(data:{response?:ApiFootballLineup[]}|null):LineupsSection{
+function mapLineups(data:{response?:ApiFootballLineup[]}|null,ratings:RatingsSection):LineupsSection{
   return(data?.response??[]).map(l=>({
     team:armenianTeamName(l.team.name),
     formation:l.formation||"—",
-    starters:l.startXI.map((p):LineupPlayer=>({name:p.player.name||"—",number:p.player.number??null,grid:p.player.grid??null})),
-    substitutes:l.substitutes.map((p):LineupPlayer=>({name:p.player.name||"—",number:p.player.number??null,grid:p.player.grid??null})),
+    starters:l.startXI.map((p):LineupPlayer=>({name:p.player.name||"—",number:p.player.number??null,grid:p.player.grid??null,rating:p.player.name?ratings[p.player.name]??null:null})),
+    substitutes:l.substitutes.map((p):LineupPlayer=>({name:p.player.name||"—",number:p.player.number??null,grid:p.player.grid??null,rating:p.player.name?ratings[p.player.name]??null:null})),
+  }));
+}
+function mapRatings(data:{response?:ApiFootballPlayerStats[]}|null):RatingsSection{
+  const ratings:RatingsSection={};
+  for(const team of data?.response??[]){
+    for(const entry of team.players){
+      const rating=entry.statistics[0]?.games.rating;
+      if(entry.player.name&&rating)ratings[entry.player.name]=Number(rating).toFixed(1);
+    }
+  }
+  return ratings;
+}
+function mapInjuries(data:{response?:ApiFootballInjury[]}|null):InjuriesSection{
+  return(data?.response??[]).map(i=>({
+    team:armenianTeamName(i.team.name),
+    player:i.player.name,
+    reason:i.player_reason||i.reason||"Վնասվածք",
   }));
 }
 function mapStatistics(data:{response?:ApiFootballStatistics[]}|null):StatsSection{
@@ -249,20 +271,24 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
   const db=(env as unknown as {DB?:D1Database}).DB;
   if(db)await ensureCacheTable(db);
 
-  const fixtureCacheKey=`apifootball:v8:fixture:${fixtureId}`;
-  const eventsCacheKey=`apifootball:v8:events:${fixtureId}`;
-  const lineupsCacheKey=`apifootball:v8:lineups:${fixtureId}`;
-  const statsCacheKey=`apifootball:v8:stats:${fixtureId}`;
-  const predictionCacheKey=`apifootball:v8:prediction:${fixtureId}`;
+  const fixtureCacheKey=`apifootball:v9:fixture:${fixtureId}`;
+  const eventsCacheKey=`apifootball:v9:events:${fixtureId}`;
+  const lineupsCacheKey=`apifootball:v9:lineups:${fixtureId}`;
+  const statsCacheKey=`apifootball:v9:stats:${fixtureId}`;
+  const predictionCacheKey=`apifootball:v9:prediction:${fixtureId}`;
+  const ratingsCacheKey=`apifootball:v9:ratings:${fixtureId}`;
+  const injuriesCacheKey=`apifootball:v9:injuries:${fixtureId}`;
 
   // One round trip for all cache entries, instead of separate awaited
   // reads — this is what makes an already-warm popup feel instant.
-  const batch=db?await readSectionsBatch(db,[fixtureCacheKey,eventsCacheKey,lineupsCacheKey,statsCacheKey,predictionCacheKey]):new Map();
+  const batch=db?await readSectionsBatch(db,[fixtureCacheKey,eventsCacheKey,lineupsCacheKey,statsCacheKey,predictionCacheKey,ratingsCacheKey,injuriesCacheKey]):new Map();
   const cachedFixture=parseSection<ApiFootballFixtureFull>(batch.get(fixtureCacheKey));
   const cachedEvents=parseSection<EventsSection>(batch.get(eventsCacheKey));
   const cachedLineups=parseSection<LineupsSection>(batch.get(lineupsCacheKey));
   const cachedStats=parseSection<StatsSection>(batch.get(statsCacheKey));
   const cachedPrediction=parseSection<PredictionSection>(batch.get(predictionCacheKey));
+  const cachedRatings=parseSection<RatingsSection>(batch.get(ratingsCacheKey));
+  const cachedInjuries=parseSection<InjuriesSection>(batch.get(injuriesCacheKey));
 
   let fx:ApiFootballFixtureFull|null=null;
   if(cachedFixture?.fresh){
@@ -300,15 +326,28 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
     v=>v.length===0,
     async()=>mapEvents(await fetchJson<{response?:ApiFootballEvent[]}>(`https://v3.football.api-sports.io/fixtures/events?fixture=${fixtureId}`,key)),
   );
+  const ratings=await resolveSection<RatingsSection>(
+    db,ratingsCacheKey,finished,cachedRatings,
+    v=>Object.keys(v).length===0,
+    async()=>mapRatings(await fetchJson<{response?:ApiFootballPlayerStats[]}>(`https://v3.football.api-sports.io/fixtures/players?fixture=${fixtureId}`,key)),
+  );
   const lineups=await resolveSection<LineupsSection>(
     db,lineupsCacheKey,finished,cachedLineups,
     v=>v.length<2,
-    async()=>mapLineups(await fetchJson<{response?:ApiFootballLineup[]}>(`https://v3.football.api-sports.io/fixtures/lineups?fixture=${fixtureId}`,key)),
+    async()=>mapLineups(await fetchJson<{response?:ApiFootballLineup[]}>(`https://v3.football.api-sports.io/fixtures/lineups?fixture=${fixtureId}`,key),ratings),
   );
   const statistics=await resolveSection<StatsSection>(
     db,statsCacheKey,finished,cachedStats,
     v=>v.length===0,
     async()=>mapStatistics(await fetchJson<{response?:ApiFootballStatistics[]}>(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`,key)),
+  );
+
+  // Injuries are pre-match info (who's ruled out) and barely change once
+  // set, so the standard section TTL policy works well here too.
+  const injuries=await resolveSection<InjuriesSection>(
+    db,injuriesCacheKey,finished,cachedInjuries,
+    v=>v.length===0,
+    async()=>mapInjuries(await fetchJson<{response?:ApiFootballInjury[]}>(`https://v3.football.api-sports.io/injuries?fixture=${fixtureId}`,key)),
   );
 
   // Predictions are generated pre-match and don't meaningfully change once
@@ -322,7 +361,7 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
   // Head-to-head history is keyed by the team pair (not the fixture), so
   // it can be reused across every future meeting between these two teams.
   const teamPairKey=[fx.teams.home.id,fx.teams.away.id].sort((a,b)=>a-b).join("-");
-  const h2hCacheKey=`apifootball:v8:h2h:${teamPairKey}`;
+  const h2hCacheKey=`apifootball:v9:h2h:${teamPairKey}`;
   const cachedH2H=db?await readSection<H2HSection>(db,h2hCacheKey):null;
   const h2h=await resolveSection<H2HSection>(
     db,h2hCacheKey,true,cachedH2H,
@@ -351,5 +390,6 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
     prediction,
     standings,
     topScorers,
+    injuries,
   };
 }
