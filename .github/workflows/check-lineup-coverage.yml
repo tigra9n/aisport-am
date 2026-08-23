@@ -23,6 +23,12 @@ jobs:
 
           echo "=== Today's PL fixtures ===" > lineup-check.txt
           curl -s "https://v3.football.api-sports.io/fixtures?league=39&season=2026&date=2026-08-23" -H "x-apisports-key: ${AFKEY}" | python3 /tmp/fx.py >> lineup-check.txt
+          echo "" >> lineup-check.txt
+          echo "=== Lineups for Newcastle vs Liverpool (1557375, live 2H) ===" >> lineup-check.txt
+          curl -s "https://v3.football.api-sports.io/fixtures/lineups?fixture=1557375" -H "x-apisports-key: ${AFKEY}" | head -c 600 >> lineup-check.txt
+          echo "" >> lineup-check.txt
+          echo "=== Our popup for it ===" >> lineup-check.txt
+          curl -s "https://aisport.am/api/live/match/af-1557375?_c=$(date +%s)" | head -c 1000 >> lineup-check.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
