@@ -41,7 +41,7 @@ export async function getStandings(code: string): Promise<{ rows: StandingRow[];
 
   const db = (env as unknown as { DB?: D1Database }).DB;
   const season = currentSeasonYear();
-  const cacheKey = `apifootball:v1:standings:${leagueId}:${season}`;
+  const cacheKey = `apifootball:v2:standings:${leagueId}:${season}`;
 
   if (db) {
     await ensureCacheTable(db);

@@ -10,6 +10,7 @@ import { MatchModal } from "../components/match-modal";
 import { demoArticles, opinions, trendingTopics, type ArticlePreview } from "../lib/content";
 import { leagues } from "../lib/football";
 import { getStandings } from "../lib/football-server";
+import { getTopScorers } from "../lib/topscorers-server";
 import { getLiveMatches } from "../lib/live-football-server";
 import { getPublishedArticles } from "../lib/articles";
 
@@ -48,15 +49,17 @@ async function homepageArticles(): Promise<ArticlePreview[]> {
 }
 
 export default async function Home() {
-  const [articles, standings, live] = await Promise.all([
+  const [articles, standings, scorers, live] = await Promise.all([
     homepageArticles(),
     Promise.all(leagues.map(async (league) => [league.code, await getStandings(league.code)] as const)),
+    Promise.all(leagues.map(async (league) => [league.code, await getTopScorers(league.code)] as const)),
     // The home page only reads the shared live cache. This prevents crawlers
     // and ordinary news-page traffic from spending the free API quota or
     // extending a provider rate-limit window.
     getLiveMatches(0),
   ]);
   const tables = Object.fromEntries(standings);
+  const scorerTables = Object.fromEntries(scorers);
   const headlineStream = articles.slice(1, 10);
   const heroArticles = articles.slice(0, 6);
   const sportSections = homepageSports.map((sport) => {
@@ -128,7 +131,7 @@ export default async function Home() {
             </section>
             <section className="sidebar-block standings-block">
               <div className="sidebar-title"><div>Թոփ 5 առաջնություններ</div><Link href="/standings">Լրիվ</Link></div>
-              <LeagueTabs tables={tables} compact />
+              <LeagueTabs tables={tables} topScorerTables={scorerTables} compact />
             </section>
             <section className="telegram-card"><span>➤</span><div><strong>AISport-ը Telegram-ում</strong><p>Թարմ լուրերը ստացեք առաջինը</p></div><button type="button">Միանալ</button></section>
           </aside>

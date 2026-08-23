@@ -4,11 +4,15 @@ import { SiteFooter } from "../../components/site-footer";
 import { SiteHeader } from "../../components/site-header";
 import { leagues } from "../../lib/football";
 import { getStandings } from "../../lib/football-server";
+import { getTopScorers } from "../../lib/topscorers-server";
 
 export default async function StandingsPage() {
-  const entries = await Promise.all(leagues.map(async (league) => [league.code, await getStandings(league.code)] as const));
+  const [standingsEntries, scorerEntries] = await Promise.all([
+    Promise.all(leagues.map(async (league) => [league.code, await getStandings(league.code)] as const)),
+    Promise.all(leagues.map(async (league) => [league.code, await getTopScorers(league.code)] as const)),
+  ]);
   return <main><SiteHeader /><div className="site-shell inner-page">
-    <span className="page-kicker">Եվրոպական ֆուտբոլ</span><h1 className="page-title">Թոփ 5 առաջնություններ</h1><p className="page-intro">Ընտրեք առաջնությունը և դիտեք մրցաշարային ամբողջական աղյուսակը՝ խաղեր, հաղթանակներ, ոչ-ոքիներ, պարտություններ, գոլերի տարբերություն և միավորներ։ <Link href="/topscorers">Դիտել ռմբարկուներին →</Link></p>
-    <section className="full-standings-card"><LeagueTabs tables={Object.fromEntries(entries)} /></section>
+    <span className="page-kicker">Եվրոպական ֆուտբոլ</span><h1 className="page-title">Թոփ 5 առաջնություններ</h1><p className="page-intro">Ընտրեք առաջնությունը և անցեք Աղյուսակ/Ռմբարկուներ միջև՝ ուղիղ ներքևի կոճակներով, առանց էջ փոխելու։ <Link href="/topscorers">Ամբողջական ռմբարկուների ցուցակը →</Link></p>
+    <section className="full-standings-card"><LeagueTabs tables={Object.fromEntries(standingsEntries)} topScorerTables={Object.fromEntries(scorerEntries)} /></section>
   </div><SiteFooter /></main>;
 }

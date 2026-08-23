@@ -2,12 +2,19 @@
 
 import { useState } from "react";
 import { leagues, type StandingRow } from "../lib/football";
+import type { TopScorer } from "../lib/topscorers-server";
 
-export function LeagueTabs({ tables, compact = false }: { tables: Record<string, { rows: StandingRow[]; demo: boolean }>; compact?: boolean }) {
+type StandingsTables = Record<string, { rows: StandingRow[]; demo: boolean }>;
+type TopScorerTables = Record<string, { rows: TopScorer[]; unavailable: boolean }>;
+
+export function LeagueTabs({ tables, topScorerTables, compact = false }: { tables: StandingsTables; topScorerTables?: TopScorerTables; compact?: boolean }) {
   const [active, setActive] = useState("PL");
+  const [mode, setMode] = useState<"standings" | "topscorers">("standings");
   const selected = leagues.find((league) => league.code === active) ?? leagues[0];
-  const data = tables[active];
-  const rows = data?.rows ?? [];
+  const standingsData = tables[active];
+  const rows = standingsData?.rows ?? [];
+  const scorerRows = topScorerTables?.[active]?.rows ?? [];
+  const showToggle = Boolean(topScorerTables);
 
   return (
     <div className={`league-widget ${compact ? "compact" : ""}`}>
@@ -26,14 +33,65 @@ export function LeagueTabs({ tables, compact = false }: { tables: Record<string,
           <span aria-hidden="true">⌄</span>
         </div>
       </div>
-      <div className="table-title"><div><span>{selected.country}</span><strong>{selected.name}</strong></div>{data?.demo ? <small>Դեմո տվյալներ</small> : <small className="live-data">Թարմացված</small>}</div>
-      <div className="standings-scroll">
-        <table className="standings-table">
-          <thead><tr><th>#</th><th>Թիմ</th><th>Խ</th>{!compact ? <><th>Հ</th><th>Ո</th><th>Պ</th><th>ԳՏ</th></> : null}<th>Մ</th></tr></thead>
-          <tbody>{rows.map((row) => <tr key={row.team} className={row.position <= 4 ? "zone-ucl" : row.position === 5 ? "zone-europa" : row.position > rows.length - 3 ? "zone-drop" : ""}><td><span className="position-marker">{row.position}</span></td><td>{row.teamLogo ? <img src={row.teamLogo} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}<strong>{row.team}</strong></td><td>{row.played}</td>{!compact ? <><td>{row.won}</td><td>{row.draw}</td><td>{row.lost}</td><td>{row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}</td></> : null}<td><b>{row.points}</b></td></tr>)}</tbody>
-        </table>
+      <div className="table-title">
+        <div><span>{selected.country}</span><strong>{selected.name}</strong></div>
+        {showToggle ? (
+          <div className="mode-toggle">
+            <button className={mode === "standings" ? "active" : ""} onClick={() => setMode("standings")}>Աղյուսակ</button>
+            <button className={mode === "topscorers" ? "active" : ""} onClick={() => setMode("topscorers")}>Ռմբարկուներ</button>
+          </div>
+        ) : (
+          standingsData?.demo ? <small>Դեմո տվյալներ</small> : <small className="live-data">Թարմացված</small>
+        )}
       </div>
-      {!compact ? <div className="zone-legend"><span className="ucl">Չեմպիոնների լիգա</span><span className="europa">Եվրոպա լիգա</span><span className="drop">Իջեցման գոտի</span></div> : null}
+
+      {mode === "standings" ? (
+        <div className="standings-scroll">
+          <table className="standings-table">
+            <thead><tr><th>#</th><th>Թիմ</th><th>Խ</th>{!compact ? <><th>Հ</th><th>Ո</th><th>Պ</th><th>ԳՏ</th></> : null}<th>Մ</th></tr></thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.team} className={row.position <= 4 ? "zone-ucl" : row.position === 5 ? "zone-europa" : row.position > rows.length - 3 ? "zone-drop" : ""}>
+                  <td><span className="position-marker">{row.position}</span></td>
+                  <td>{row.teamLogo ? <img src={row.teamLogo} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}<strong>{row.team}</strong></td>
+                  <td>{row.played}</td>
+                  {!compact ? <><td>{row.won}</td><td>{row.draw}</td><td>{row.lost}</td><td>{row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}</td></> : null}
+                  <td><b>{row.points}</b></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="standings-scroll">
+          {scorerRows.length > 0 ? (
+            <table className="standings-table topscorers-table">
+              <thead><tr><th>#</th><th>Խաղացող</th>{!compact ? <th>Թիմ</th> : null}{!compact ? <th>Խ</th> : null}{!compact ? <th>Ա</th> : null}<th>Գ</th></tr></thead>
+              <tbody>
+                {(compact ? scorerRows.slice(0, 5) : scorerRows).map((row) => (
+                  <tr key={row.name}>
+                    <td><span className="position-marker">{row.rank}</span></td>
+                    <td>
+                      <span className="player-with-photo">
+                        {row.photo && <img src={row.photo} alt="" className="player-photo" loading="lazy" />}
+                        <strong>{row.name}</strong>
+                      </span>
+                    </td>
+                    {!compact ? <td><span className="team-with-logo">{row.teamLogo && <img src={row.teamLogo} alt="" className="team-logo" loading="lazy" />}{row.team}</span></td> : null}
+                    {!compact ? <td>{row.appearances}</td> : null}
+                    {!compact ? <td>{row.assists}</td> : null}
+                    <td><b>{row.goals}</b></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="detail-empty">Տվյալները հասանելի չեն այս պահին։</p>
+          )}
+        </div>
+      )}
+
+      {!compact && mode === "standings" ? <div className="zone-legend"><span className="ucl">Չեմպիոնների լիգա</span><span className="europa">Եվրոպա լիգա</span><span className="drop">Իջեցման գոտի</span></div> : null}
     </div>
   );
 }
