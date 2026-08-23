@@ -16,9 +16,9 @@ jobs:
         run: |
           curl -s "https://aisport.am/standings?_c=$(date +%s)" > /tmp/s.html
           echo "=== team-badge-logo count ===" > check.txt
-          grep -oc "team-badge-logo" /tmp/s.html >> check.txt
+          grep -oc "team-badge-logo" /tmp/s.html >> check.txt || echo 0 >> check.txt
           echo "=== team-badge (letter fallback) count ===" >> check.txt
-          grep -oc "class=\"team-badge\"" /tmp/s.html >> check.txt
+          grep -oc "class=\"team-badge\"" /tmp/s.html >> check.txt || echo 0 >> check.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
