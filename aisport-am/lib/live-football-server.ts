@@ -46,6 +46,8 @@ async function cachedFetch<T>(cacheKey:string,url:string,headers:Record<string,s
 
 const TRACKED_LEAGUES:Record<number,{priority:number;label:string}>={
   2:{priority:0,label:"Չեմպիոնների լիգա"},
+  3:{priority:1,label:"Եվրոպա լիգա"},
+  4:{priority:2,label:"Կոնֆերենցիա լիգա"},
   39:{priority:3,label:"Անգլիայի Պրեմիեր լիգա"},
   140:{priority:4,label:"Իսպանիայի Լա Լիգա"},
   135:{priority:5,label:"Իտալիայի Սերիա Ա"},

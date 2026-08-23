@@ -10,6 +10,8 @@ type ApiFootballStatistics={team:{name:string};statistics:ApiFootballStatItem[]}
 
 const TRACKED_LEAGUES:Record<number,string>={
   2:"Չեմպիոնների լիգա",
+  3:"Եվրոպա լիգա",
+  4:"Կոնֆերենցիա լիգա",
   39:"Անգլիայի Պրեմիեր լիգա",
   140:"Իսպանիայի Լա Լիգա",
   135:"Իտալիայի Սերիա Ա",
