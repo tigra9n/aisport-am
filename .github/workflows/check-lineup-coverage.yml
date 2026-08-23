@@ -21,6 +21,12 @@ jobs:
           echo "" >> lineup-check.txt
           echo "=== Raw lineups endpoint for 1581504 ===" >> lineup-check.txt
           curl -s "https://v3.football.api-sports.io/fixtures/lineups?fixture=1581504" -H "x-apisports-key: ${AFKEY}" | head -c 800 >> lineup-check.txt
+          echo "" >> lineup-check.txt
+          echo "=== Sample a Premier League match today ===" >> lineup-check.txt
+          HTML=$(curl -s "https://aisport.am/live?_c=$(date +%s)")
+          PL_ID=$(echo "$HTML" | grep -B3 "Անգլիայի Պրեմիեր լիգա" | grep -oE "af-[0-9]+" | head -1)
+          echo "trying $PL_ID" >> lineup-check.txt
+          curl -s "https://aisport.am/api/live/match/$PL_ID?_c=$(date +%s)" | head -c 1000 >> lineup-check.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
