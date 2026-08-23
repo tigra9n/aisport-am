@@ -1,0 +1,34 @@
+name: Verify Sequential Fetch
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/verify-sequential.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check
+        run: |
+          echo 'import json' > /tmp/s.py
+          echo 'd=json.load(open("/tmp/p.json"))' >> /tmp/s.py
+          echo 'print("lineups:", len(d.get("lineups",[])), "stats:", len(d.get("statistics",[])), "events:", len(d.get("events",[])))' >> /tmp/s.py
+          echo "=== Popup for af-1557375, run 1 ===" > verify-seq.txt
+          curl -s "https://aisport.am/api/live/match/af-1557375?_c=$(date +%s)a" > /tmp/p.json
+          python3 /tmp/s.py >> verify-seq.txt
+          sleep 3
+          echo "=== Popup for af-1557375, run 2 (different fixture too) ===" >> verify-seq.txt
+          curl -s "https://aisport.am/api/live/match/af-1557374?_c=$(date +%s)b" > /tmp/p.json
+          python3 /tmp/s.py >> verify-seq.txt
+      - run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f verify-seq.txt
+          git commit -m "check [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
