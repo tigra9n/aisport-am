@@ -41,6 +41,13 @@ jobs:
           echo "" >> lineup-check.txt
           echo "=== Raw statistics for 1557375 ===" >> lineup-check.txt
           curl -s "https://v3.football.api-sports.io/fixtures/statistics?fixture=1557375" -H "x-apisports-key: ${AFKEY}" | head -c 700 >> lineup-check.txt
+          echo "" >> lineup-check.txt
+          echo "=== Our popup AFTER cache bump ===" >> lineup-check.txt
+          curl -s "https://aisport.am/api/live/match/af-1557375?_c=$(date +%s)" > /tmp/popup2.json
+          echo 'import json' > /tmp/s2.py
+          echo 'd=json.load(open("/tmp/popup2.json"))' >> /tmp/s2.py
+          echo 'print("lineups:", len(d.get("lineups",[])), "stats:", len(d.get("statistics",[])), "events:", len(d.get("events",[])))' >> /tmp/s2.py
+          python3 /tmp/s2.py >> lineup-check.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
