@@ -13,9 +13,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check the popup API
+        env:
+          AFKEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
           echo "=== Popup API for af-1557368 ===" > recheck.txt
           curl -s -w "\nHTTP %{http_code}\n" "https://aisport.am/api/live/match/af-1557368?_c=$(date +%s)" >> recheck.txt
+          echo "" >> recheck.txt
+          echo "=== Quota status ===" >> recheck.txt
+          curl -s "https://v3.football.api-sports.io/status" -H "x-apisports-key: ${AFKEY}" >> recheck.txt
+          echo "" >> recheck.txt
+          echo "=== Direct events call ===" >> recheck.txt
+          curl -s "https://v3.football.api-sports.io/fixtures/events?fixture=1557368" -H "x-apisports-key: ${AFKEY}" | head -c 400 >> recheck.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
