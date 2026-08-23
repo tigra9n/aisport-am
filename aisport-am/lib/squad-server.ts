@@ -26,6 +26,57 @@ export function positionLabel(position: string) {
   return POSITION_LABEL[position] ?? position;
 }
 
+export type Coach = { name: string; photo: string | null; nationality: string | null; age: number | null };
+
+type ApiFootballCoach = {
+  name: string;
+  photo?: string | null;
+  nationality?: string | null;
+  age?: number | null;
+  career: { team: { id: number }; end: string | null }[];
+};
+
+export async function getCoach(teamId: number): Promise<Coach | null> {
+  const { env } = await import("cloudflare:workers");
+  const runtime = env as unknown as Record<string, string | undefined>;
+  const key = runtime.API_FOOTBALL_KEY;
+  if (!key) return null;
+
+  const db = (env as unknown as { DB?: D1Database }).DB;
+  const cacheKey = `apifootball:v1:coach:${teamId}`;
+
+  if (db) {
+    await ensureCacheTable(db);
+    const row = await db.prepare("SELECT payload,saved_at AS savedAt FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{ payload: string; savedAt: number }>();
+    if (row?.savedAt && Date.now() - row.savedAt < 24 * 60 * 60 * 1000) {
+      try { return JSON.parse(row.payload) as Coach; } catch { /* refetch */ }
+    }
+  }
+
+  try {
+    const response = await fetch(`https://v3.football.api-sports.io/coachs?team=${teamId}`, {
+      headers: { "x-apisports-key": key, Accept: "application/json" },
+    });
+    if (!response.ok) throw new Error(`http ${response.status}`);
+    const data = await response.json() as { response?: ApiFootballCoach[] };
+    // The endpoint returns every coach who's managed the team; the current
+    // one is whichever entry has no end date on their stint with this team.
+    const current = data.response?.find((c) => c.career.some((stint) => stint.team.id === teamId && !stint.end)) ?? data.response?.[0];
+    if (!current) throw new Error("empty");
+    const coach: Coach = { name: current.name, photo: current.photo ?? null, nationality: current.nationality ?? null, age: current.age ?? null };
+    if (db) {
+      await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey, JSON.stringify(coach), Date.now()).run();
+    }
+    return coach;
+  } catch {
+    if (db) {
+      const stale = await db.prepare("SELECT payload FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{ payload: string }>();
+      if (stale) { try { return JSON.parse(stale.payload) as Coach; } catch { /* fall through */ } }
+    }
+    return null;
+  }
+}
+
 export async function getSquad(teamId: number): Promise<Squad | null> {
   const { env } = await import("cloudflare:workers");
   const runtime = env as unknown as Record<string, string | undefined>;

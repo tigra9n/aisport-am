@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
 import { SiteHeader } from "../../../components/site-header";
-import { getSquad, positionLabel, POSITION_ORDER } from "../../../lib/squad-server";
+import { getCoach, getSquad, positionLabel, POSITION_ORDER } from "../../../lib/squad-server";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +9,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const teamId = Number.parseInt(id, 10);
   if (!Number.isFinite(teamId)) notFound();
-  const squad = await getSquad(teamId);
+  const [squad, coach] = await Promise.all([getSquad(teamId), getCoach(teamId)]);
   if (!squad) notFound();
 
   const groups = POSITION_ORDER.map((position) => ({
@@ -25,6 +25,16 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
       {squad.teamName}
     </h1>
     <p className="page-intro">Ակումբի ամբողջական խաղացողների կազմը՝ ըստ դիրքի, համարով և տարիքով։</p>
+    {coach && (
+      <div className="coach-card">
+        {coach.photo ? <img src={coach.photo} alt="" className="squad-photo" loading="lazy" /> : <div className="squad-photo squad-photo-placeholder">{coach.name.slice(0, 1)}</div>}
+        <div>
+          <span>Գլխավոր մարզիչ</span>
+          <strong>{coach.name}</strong>
+          <small>{coach.nationality ?? ""}{coach.age ? ` · ${coach.age} տարեկան` : ""}</small>
+        </div>
+      </div>
+    )}
     <div className="squad-groups">
       {groups.map((group) => (
         <section className="squad-group" key={group.position}>
