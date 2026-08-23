@@ -18,7 +18,9 @@ jobs:
         run: |
           echo 'import json' > /tmp/s.py
           echo 'd=json.load(open("/tmp/p.json"))' >> /tmp/s.py
-          echo 'print(json.dumps(d, ensure_ascii=False)[:800])' >> /tmp/s.py
+          echo 'print("lineups count:", len(d.get("lineups",[])))' >> /tmp/s.py
+          echo 'print("statistics count:", len(d.get("statistics",[])))' >> /tmp/s.py
+          echo 'print("events count:", len(d.get("events",[])))' >> /tmp/s.py
           echo "=== Our popup for af-1570344 ===" > check-atletico.txt
           curl -s "https://aisport.am/api/live/match/af-1570344?_c=$(date +%s)" > /tmp/p.json
           python3 /tmp/s.py >> check-atletico.txt
