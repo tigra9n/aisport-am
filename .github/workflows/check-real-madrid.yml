@@ -21,6 +21,13 @@ jobs:
           echo "" >> rm-check.txt
           echo "=== Real Madrid last fixture (team 541, La Liga 140) ===" >> rm-check.txt
           curl -s "https://v3.football.api-sports.io/fixtures?team=541&last=1" -H "x-apisports-key: ${AFKEY}" | head -c 1200 >> rm-check.txt
+          echo "" >> rm-check.txt
+          echo "=== Search our site for Real Madrid matches ===" >> rm-check.txt
+          for D in 2026-08-21 2026-08-22 2026-08-23; do
+            echo "--- date=$D ---" >> rm-check.txt
+            curl -s "https://aisport.am/live?date=$D&_c=$(date +%s)" | grep -B2 -A2 "Ռեալ Մադրիդ" | grep -oE "af-[0-9]+" >> rm-check.txt
+            sleep 1
+          done
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
