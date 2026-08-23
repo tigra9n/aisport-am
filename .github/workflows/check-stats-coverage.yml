@@ -1,0 +1,35 @@
+name: Check Stats Coverage
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/check-stats-coverage.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check stats coverage across today's matches
+        env:
+          AFKEY: ${{ secrets.API_FOOTBALL_KEY }}
+        run: |
+          echo "=== Getting today's PL/PD/SA/BL1/FL1 finished fixtures ===" > stats-coverage.txt
+          HTML=$(curl -s "https://aisport.am/live?date=2026-08-22&_c=$(date +%s)")
+          IDS=$(echo "$HTML" | grep -oE 'af-[0-9]+' | sort -u | sed 's/af-//' | head -10)
+          for ID in $IDS; do
+            RESULT=$(curl -s "https://v3.football.api-sports.io/fixtures/statistics?fixture=$ID" -H "x-apisports-key: ${AFKEY}")
+            COUNT=$(echo "$RESULT" | grep -oE '"results":[0-9]+' | head -1)
+            echo "fixture $ID -> $COUNT" >> stats-coverage.txt
+            sleep 1
+          done
+      - run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f stats-coverage.txt
+          git commit -m "check [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
