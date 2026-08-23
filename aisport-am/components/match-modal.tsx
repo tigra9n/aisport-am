@@ -398,7 +398,7 @@ export function MatchModal() {
                             <strong>{row.team}</strong>
                           </Link>
                         ) : (
-                          <>{row.teamLogo ? <img src={row.teamLogo} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}<strong>{row.team}</strong></>
+                          <span className="team-with-logo">{row.teamLogo ? <img src={row.teamLogo} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}<strong>{row.team}</strong></span>
                         )}</td>
                         <td>{row.played}</td>
                         <td>{row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}</td>
