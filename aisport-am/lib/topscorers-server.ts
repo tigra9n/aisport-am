@@ -1,6 +1,6 @@
 import { armenianTeamName } from "./team-names-hy";
 
-export type TopScorer = { rank: number; name: string; team: string; teamId: number | null; teamLogo: string | null; photo: string | null; goals: number; assists: number; appearances: number };
+export type TopScorer = { rank: number; id: number; name: string; team: string; teamId: number | null; teamLogo: string | null; photo: string | null; goals: number; assists: number; appearances: number };
 
 const LEAGUE_ID_BY_CODE: Record<string, number> = {
   PL: 39,
@@ -11,7 +11,7 @@ const LEAGUE_ID_BY_CODE: Record<string, number> = {
 };
 
 type ApiFootballTopScorer = {
-  player: { name: string; photo?: string | null };
+  player: { id: number; name: string; photo?: string | null };
   statistics: [{
     team: { id: number; name: string; logo?: string | null };
     goals: { total: number | null; assists: number | null };
@@ -40,7 +40,7 @@ export async function getTopScorers(code: string): Promise<{ rows: TopScorer[]; 
 
   const db = (env as unknown as { DB?: D1Database }).DB;
   const season = currentSeasonYear();
-  const cacheKey = `apifootball:v2:topscorers:${leagueId}:${season}`;
+  const cacheKey = `apifootball:v3:topscorers:${leagueId}:${season}`;
 
   if (db) {
     await ensureCacheTable(db);
@@ -61,6 +61,7 @@ export async function getTopScorers(code: string): Promise<{ rows: TopScorer[]; 
     const data = await response.json() as { response?: ApiFootballTopScorer[] };
     const rows: TopScorer[] = (data.response ?? []).slice(0, 20).map((entry, index) => ({
       rank: index + 1,
+      id: entry.player.id,
       name: entry.player.name,
       photo: entry.player.photo ?? null,
       team: armenianTeamName(entry.statistics[0].team.name),

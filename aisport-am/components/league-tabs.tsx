@@ -80,10 +80,10 @@ export function LeagueTabs({ tables, topScorerTables, compact = false }: { table
                   <tr key={row.name}>
                     <td><span className="position-marker">{row.rank}</span></td>
                     <td>
-                      <span className="player-with-photo">
+                      <Link href={`/player/${row.id}`} className="player-with-photo team-cell-link">
                         {row.photo && <img src={row.photo} alt="" className="player-photo" loading="lazy" />}
                         <strong>{row.name}</strong>
-                      </span>
+                      </Link>
                     </td>
                     {!compact ? <td><span className="team-with-logo">{row.teamLogo && <img src={row.teamLogo} alt="" className="team-logo" loading="lazy" />}{row.team}</span></td> : null}
                     {!compact ? <td>{row.appearances}</td> : null}

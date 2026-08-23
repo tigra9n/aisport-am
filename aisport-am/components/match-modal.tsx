@@ -413,7 +413,7 @@ export function MatchModal() {
                     {details.topScorers.slice(0, 10).map((row) => (
                       <tr key={row.name}>
                         <td><span className="position-marker">{row.rank}</span></td>
-                        <td><span className="player-with-photo">{row.photo && <img src={row.photo} alt="" className="player-photo" loading="lazy" />}<strong>{row.name}</strong></span></td>
+                        <td><span className="player-with-photo"><Link href={`/player/${row.id}`} className="team-cell-link" onClick={close}>{row.photo && <img src={row.photo} alt="" className="player-photo" loading="lazy" />}<strong>{row.name}</strong></Link></span></td>
                         <td>{row.teamId ? (
                           <Link href={`/team/${row.teamId}`} className="team-with-logo team-cell-link" onClick={close}>{row.teamLogo && <img src={row.teamLogo} alt="" className="team-logo" loading="lazy" />}{row.team}</Link>
                         ) : (
