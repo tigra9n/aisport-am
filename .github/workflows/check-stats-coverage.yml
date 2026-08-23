@@ -25,6 +25,14 @@ jobs:
             echo "fixture $ID -> $COUNT" >> stats-coverage.txt
             sleep 1
           done
+          echo "" >> stats-coverage.txt
+          echo "=== Our own worker API for same fixtures ===" >> stats-coverage.txt
+          for ID in $IDS; do
+            OURS=$(curl -s "https://aisport.am/api/live/match/af-$ID?_c=$(date +%s)")
+            STATLEN=$(echo "$OURS" | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d.get('statistics',[])))" 2>/dev/null || echo "parse-error")
+            echo "af-$ID -> statistics count: $STATLEN" >> stats-coverage.txt
+            sleep 1
+          done
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
