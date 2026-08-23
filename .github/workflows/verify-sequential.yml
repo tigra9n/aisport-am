@@ -13,16 +13,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Check
+        env:
+          AFKEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
           echo 'import json' > /tmp/s.py
           echo 'd=json.load(open("/tmp/p.json"))' >> /tmp/s.py
           echo 'print("lineups:", len(d.get("lineups",[])), "stats:", len(d.get("statistics",[])), "events:", len(d.get("events",[])))' >> /tmp/s.py
-          echo "=== Popup for af-1557375, run 1 ===" > verify-seq.txt
-          curl -s "https://aisport.am/api/live/match/af-1557375?_c=$(date +%s)a" > /tmp/p.json
+          echo "=== Raw stats for 1557374 ===" > verify-seq.txt
+          curl -s "https://v3.football.api-sports.io/fixtures/statistics?fixture=1557374" -H "x-apisports-key: ${AFKEY}" | head -c 300 >> verify-seq.txt
+          echo "" >> verify-seq.txt
+          echo "=== Retry our popup for 1557374 ===" >> verify-seq.txt
+          curl -s "https://aisport.am/api/live/match/af-1557374?_c=$(date +%s)c" > /tmp/p.json
           python3 /tmp/s.py >> verify-seq.txt
-          sleep 3
-          echo "=== Popup for af-1557375, run 2 (different fixture too) ===" >> verify-seq.txt
-          curl -s "https://aisport.am/api/live/match/af-1557374?_c=$(date +%s)b" > /tmp/p.json
+          sleep 5
+          echo "=== Retry again ===" >> verify-seq.txt
+          curl -s "https://aisport.am/api/live/match/af-1557374?_c=$(date +%s)d" > /tmp/p.json
           python3 /tmp/s.py >> verify-seq.txt
       - run: |
           git config user.email "actions@github.com"
