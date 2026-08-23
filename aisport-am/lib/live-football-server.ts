@@ -45,14 +45,22 @@ async function cachedFetch<T>(cacheKey:string,url:string,headers:Record<string,s
 }
 
 const TRACKED_LEAGUES:Record<number,{priority:number;label:string}>={
-  2:{priority:0,label:"Չեմպիոնների լիգա"},
-  3:{priority:1,label:"Եվրոպա լիգա"},
-  4:{priority:2,label:"Կոնֆերենցիա լիգա"},
-  39:{priority:3,label:"Անգլիայի Պրեմիեր լիգա"},
-  140:{priority:4,label:"Իսպանիայի Լա Լիգա"},
-  135:{priority:5,label:"Իտալիայի Սերիա Ա"},
-  78:{priority:6,label:"Գերմանիայի Բունդեսլիգա"},
-  61:{priority:7,label:"Ֆրանսիայի Լիգա 1"},
+  342:{priority:0,label:"Հայաստանի Պրեմիեր լիգա"},
+  709:{priority:0,label:"Հայաստանի գավաթ"},
+  2:{priority:1,label:"Չեմպիոնների լիգա"},
+  3:{priority:2,label:"Եվրոպա լիգա"},
+  4:{priority:3,label:"Կոնֆերենցիա լիգա"},
+  39:{priority:4,label:"Անգլիայի Պրեմիեր լիգա"},
+  45:{priority:5,label:"Անգլիայի գավաթ (FA Cup)"},
+  48:{priority:6,label:"Անգլիայի լիգայի գավաթ"},
+  140:{priority:7,label:"Իսպանիայի Լա Լիգա"},
+  143:{priority:8,label:"Իսպանիայի գավաթ (Copa del Rey)"},
+  135:{priority:9,label:"Իտալիայի Սերիա Ա"},
+  137:{priority:10,label:"Իտալիայի գավաթ (Coppa Italia)"},
+  78:{priority:11,label:"Գերմանիայի Բունդեսլիգա"},
+  81:{priority:12,label:"Գերմանիայի գավաթ (DFB Pokal)"},
+  61:{priority:13,label:"Ֆրանսիայի Լիգա 1"},
+  66:{priority:14,label:"Ֆրանսիայի գավաթ (Coupe de France)"},
 };
 
 function statusLabel(status:{short:string;elapsed?:number|null}){

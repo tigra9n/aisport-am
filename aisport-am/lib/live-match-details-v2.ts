@@ -9,14 +9,22 @@ type ApiFootballStatItem={type:string;value:string|number|null};
 type ApiFootballStatistics={team:{name:string};statistics:ApiFootballStatItem[]};
 
 const TRACKED_LEAGUES:Record<number,string>={
+  342:"Հայաստանի Պրեմիեր լիգա",
+  709:"Հայաստանի գավաթ",
   2:"Չեմպիոնների լիգա",
   3:"Եվրոպա լիգա",
   4:"Կոնֆերենցիա լիգա",
   39:"Անգլիայի Պրեմիեր լիգա",
+  45:"Անգլիայի գավաթ (FA Cup)",
+  48:"Անգլիայի լիգայի գավաթ",
   140:"Իսպանիայի Լա Լիգա",
+  143:"Իսպանիայի գավաթ (Copa del Rey)",
   135:"Իտալիայի Սերիա Ա",
+  137:"Իտալիայի գավաթ (Coppa Italia)",
   78:"Գերմանիայի Բունդեսլիգա",
+  81:"Գերմանիայի գավաթ (DFB Pokal)",
   61:"Ֆրանսիայի Լիգա 1",
+  66:"Ֆրանսիայի գավաթ (Coupe de France)",
 };
 
 let cacheTableReady:Promise<unknown>|null=null;
