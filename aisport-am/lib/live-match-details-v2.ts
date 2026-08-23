@@ -25,15 +25,20 @@ async function fetchJson<T>(url:string,key:string):Promise<T|null>{
   for(let attempt=0;attempt<2;attempt++){
     try{
       const response=await fetch(url,{headers:{"x-apisports-key":key,Accept:"application/json"},cache:"no-store"});
+      if(response.status===429){
+        if(attempt===0){await new Promise(r=>setTimeout(r,2500));continue}
+        return null;
+      }
       if(!response.ok){
         if(attempt===0){await new Promise(r=>setTimeout(r,400));continue}
         return null;
       }
       const payload=await response.json() as T & {errors?:unknown};
       const errs=(payload as {errors?:unknown})?.errors;
+      const isRateLimit=Boolean(errs&&typeof errs==="object"&&!Array.isArray(errs)&&"rateLimit" in (errs as object));
       const hasErrors=Array.isArray(errs)?errs.length>0:Boolean(errs&&Object.keys(errs as object).length>0);
       if(hasErrors){
-        if(attempt===0){await new Promise(r=>setTimeout(r,400));continue}
+        if(attempt===0){await new Promise(r=>setTimeout(r,isRateLimit?2500:400));continue}
         return null;
       }
       return payload;
