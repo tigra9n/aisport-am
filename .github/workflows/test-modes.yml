@@ -1,9 +1,21 @@
-name: Test All Modes
+name: Test Content Cron
+
+# Manual diagnostic: hits /api/cron/content?mode=<recap|preview|rss> directly
+# and pushes the raw response to the check-logs branch. Useful for testing
+# content generation without waiting for the next scheduled cron tick.
+#
+# To run: go to Actions -> Test Content Cron -> Run workflow, pick a mode,
+# then check the check-logs branch for test.txt.
 
 on:
-  push:
-    branches: [main]
-    paths: ['.github/workflows/test-modes.yml']
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Content mode to test'
+        required: true
+        default: 'rss'
+        type: choice
+        options: [recap, preview, rss]
 
 jobs:
   check:
@@ -14,9 +26,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Test
         run: |
-          sleep 90
-          echo "=== mode=rss (fresh) ===" > test.txt
-          curl -s -w "\ncurl_exit=%{exitcode}, http=%{http_code}, time=%{time_total}s\n" --max-time 65 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=rss&_c=$(date +%s)" >> test.txt 2>&1 || true
+          MODE="${{ github.event.inputs.mode || 'rss' }}"
+          echo "=== mode=$MODE ===" > test.txt
+          curl -s -w "\ncurl_exit=%{exitcode}, http=%{http_code}, time=%{time_total}s\n" --max-time 65 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=$MODE&_c=$(date +%s)" >> test.txt 2>&1 || true
         continue-on-error: true
       - run: |
           git config user.email "actions@github.com"
@@ -26,4 +38,3 @@ jobs:
           git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-# t15

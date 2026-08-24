@@ -158,62 +158,6 @@ export async function GET(request: Request) {
     return Response.json({ ok: false, reason: "no ANTHROPIC_API_KEY configured yet" });
   }
 
-  // Diagnostic: isolate whether the Worker can reach api.anthropic.com at
-  // all (lightweight GET, no request body) vs. only the actual generation
-  // call (POST /v1/messages) hanging.
-  if (url.searchParams.get("mode") === "ping") {
-    const started = Date.now();
-    try {
-      const controller = new AbortController();
-      const t = setTimeout(() => controller.abort(), 10_000);
-      const res = await fetch("https://api.anthropic.com/v1/models", {
-        signal: controller.signal,
-        headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-      });
-      clearTimeout(t);
-      const bodyText = await res.text().catch(() => "");
-      return Response.json({ ok: true, mode: "ping", status: res.status, ms: Date.now() - started, body: bodyText.slice(0, 200) });
-    } catch (err) {
-      return Response.json({ ok: false, mode: "ping", ms: Date.now() - started, error: String(err) });
-    }
-  }
-
-  // Diagnostic: minimal POST /v1/messages call (tiny prompt, no system
-  // prompt) to isolate whether it's the endpoint/model itself hanging, or
-  // something about our larger request body.
-  if (url.searchParams.get("mode") === "ping2") {
-    const started = Date.now();
-    try {
-      const controller = new AbortController();
-      const t = setTimeout(() => controller.abort(), 15_000);
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        signal: controller.signal,
-        headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 10, messages: [{ role: "user", content: "hi" }] }),
-      });
-      clearTimeout(t);
-      const bodyText = await res.text().catch(() => "");
-      return Response.json({ ok: true, mode: "ping2", status: res.status, ms: Date.now() - started, body: bodyText.slice(0, 300) });
-    } catch (err) {
-      return Response.json({ ok: false, mode: "ping2", ms: Date.now() - started, error: String(err) });
-    }
-  }
-
-  // Diagnostic: exactly one real generateFromSourceSnippet-style call
-  // (real system prompt + max_tokens:900 + thinking disabled), isolated
-  // from the RSS loop, with a generous timeout, to get a clean timing
-  // reading instead of guessing from loop-level behavior.
-  if (url.searchParams.get("mode") === "gen1") {
-    const started = Date.now();
-    const article = await generateFromSourceSnippet(apiKey, {
-      title: "Real Madrid-ը հաղթեց Բարսելոնային Էլ Կլասիկոյում",
-      snippet: "Real Madrid defeated Barcelona 3-1 in a thrilling El Clasico at the Santiago Bernabeu, with goals from Vinicius, Bellingham, and Mbappe.",
-      sourceName: "Test",
-    });
-    return Response.json({ ok: true, mode: "gen1", ms: Date.now() - started, debug: lastGenerationDebug, gotArticle: !!article });
-  }
-
   const forcedMode = url.searchParams.get("mode");
 
   // Publishing window: 10:00–02:00 Yerevan time (UTC+4, no DST). Manual
