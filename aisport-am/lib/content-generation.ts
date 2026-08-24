@@ -4,7 +4,7 @@ export let lastGenerationDebug = "";
 async function callClaude(systemPrompt: string, userPrompt: string, apiKey: string): Promise<{ text: string | null; debug: string }> {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12_000);
+    const timeoutId = setTimeout(() => controller.abort(), 25_000);
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       signal: controller.signal,
@@ -16,6 +16,12 @@ async function callClaude(systemPrompt: string, userPrompt: string, apiKey: stri
       body: JSON.stringify({
         model: "claude-sonnet-5",
         max_tokens: 900,
+        // Adaptive thinking is on by default on Sonnet 5 (effort: high),
+        // which added enough latency to blow past our request timeout for
+        // every single call. This is a straightforward rewrite/formatting
+        // task, not something needing multi-step reasoning, so disable
+        // thinking entirely for speed.
+        thinking: { type: "disabled" },
         system: systemPrompt,
         messages: [{ role: "user", content: userPrompt }],
       }),
