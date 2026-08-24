@@ -70,19 +70,24 @@ function guessCategory(text: string, fallback: string): string {
   return fallback;
 }
 
-function parseArticleJson(raw: string, fallbackCategory: string): GeneratedArticle | null {
+function parseArticleJson(raw: string, fallbackCategory: string): { article: GeneratedArticle | null; reason: string } {
   try {
     const cleaned = raw.replace(/```json\s*|```\s*$/g, "").trim();
     const parsed = JSON.parse(cleaned) as Partial<GeneratedArticle>;
-    if (!parsed.title || !parsed.excerpt || !parsed.content) return null;
+    if (!parsed.title || !parsed.excerpt || !parsed.content) {
+      return { article: null, reason: `missing fields: title=${!!parsed.title}, excerpt=${!!parsed.excerpt}, content=${!!parsed.content}` };
+    }
     return {
-      title: parsed.title.trim(),
-      excerpt: parsed.excerpt.trim(),
-      content: parsed.content.trim(),
-      category: parsed.category?.trim() || fallbackCategory,
+      article: {
+        title: parsed.title.trim(),
+        excerpt: parsed.excerpt.trim(),
+        content: parsed.content.trim(),
+        category: parsed.category?.trim() || fallbackCategory,
+      },
+      reason: "ok",
     };
-  } catch {
-    return null;
+  } catch (err) {
+    return { article: null, reason: `JSON.parse threw: ${String(err)}` };
   }
 }
 
@@ -114,8 +119,8 @@ ${statsText ? `\nՎիճակագրություն.\n${statsText}` : ""}
   lastGenerationDebug = debug;
   if (!text) return null;
   const parsed = parseArticleJson(text, "Ֆուտբոլ");
-  if (!parsed) lastGenerationDebug = `parse failed, raw text: ${text.slice(0, 300)}`;
-  return parsed;
+  if (!parsed.article) lastGenerationDebug = `parse failed (${parsed.reason}), len=${text.length}, tail=${text.slice(-150)}`;
+  return parsed.article;
 }
 
 export async function generateMatchPreview(
@@ -141,8 +146,8 @@ ${contextLines || "Լրացուցիչ վիճակագրություն չկա։"}
   lastGenerationDebug = debug;
   if (!text) return null;
   const parsed = parseArticleJson(text, "Ֆուտբոլ");
-  if (!parsed) lastGenerationDebug = `parse failed, raw text: ${text.slice(0, 300)}`;
-  return parsed;
+  if (!parsed.article) lastGenerationDebug = `parse failed (${parsed.reason}), len=${text.length}, tail=${text.slice(-150)}`;
+  return parsed.article;
 }
 
 export async function generateFromSourceSnippet(
@@ -162,6 +167,6 @@ export async function generateFromSourceSnippet(
   if (!text) return null;
   const smartFallback = guessCategory(`${source.title} ${source.snippet}`, "Ֆուտբոլ");
   const parsed = parseArticleJson(text, smartFallback);
-  if (!parsed) lastGenerationDebug = `parse failed, raw text: ${text.slice(0, 300)}`;
-  return parsed;
+  if (!parsed.article) lastGenerationDebug = `parse failed (${parsed.reason}), len=${text.length}, tail=${text.slice(-150)}`;
+  return parsed.article;
 }
