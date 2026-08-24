@@ -15,8 +15,8 @@ jobs:
       - name: Test
         run: |
           sleep 90
-          echo "=== mode=gen1 ===" > test.txt
-          curl -s -w "\ncurl_exit=%{exitcode}, http=%{http_code}, time=%{time_total}s\n" --max-time 65 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=gen1&_c=$(date +%s)" >> test.txt 2>&1 || true
+          echo "=== mode=rss (fresh) ===" > test.txt
+          curl -s -w "\ncurl_exit=%{exitcode}, http=%{http_code}, time=%{time_total}s\n" --max-time 65 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=rss&_c=$(date +%s)" >> test.txt 2>&1 || true
         continue-on-error: true
       - run: |
           git config user.email "actions@github.com"
@@ -26,4 +26,4 @@ jobs:
           git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-# t13
+# t14
