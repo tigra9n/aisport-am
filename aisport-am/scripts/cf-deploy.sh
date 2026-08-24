@@ -67,11 +67,11 @@ fi
 echo "== Deploy complete =="
 
 echo "== Purging Cloudflare edge cache =="
-if [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
+if [ -n "${CLOUDFLARE_PURGE_TOKEN:-}" ]; then
   curl -s -X POST "https://api.cloudflare.com/client/v4/zones/0cfdb0280564b0d8a244a21835bfc724/purge_cache" \
-    -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+    -H "Authorization: Bearer ${CLOUDFLARE_PURGE_TOKEN}" \
     -H "Content-Type: application/json" \
     --data '{"purge_everything":true}' | grep -o '"success":[^,}]*'
 else
-  echo "CLOUDFLARE_API_TOKEN not set, skipping cache purge"
+  echo "CLOUDFLARE_PURGE_TOKEN not set, skipping cache purge"
 fi
