@@ -58,6 +58,8 @@ export async function GET(request: Request) {
   const categoryId = url.searchParams.get("category_id") ?? "medtop:15000000";
 
   let articles: ApiTubeArticle[] = [];
+  let rawCount = 0;
+  let fetchError = "";
   try {
     // Fetch more than we need (30 raw) since the keyword filter below
     // discards a portion as off-topic/spam.
@@ -65,10 +67,18 @@ export async function GET(request: Request) {
     const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
     if (res.ok) {
       const data = await res.json() as { results?: ApiTubeArticle[] };
-      articles = (data.results ?? []).filter(looksLikeSportsArticle).slice(0, Number(perPage) || 20);
+      const raw = data.results ?? [];
+      rawCount = raw.length;
+      articles = raw.filter(looksLikeSportsArticle).slice(0, Number(perPage) || 20);
+    } else {
+      fetchError = `http ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`;
     }
-  } catch {
-    // fall through to empty feed below
+  } catch (err) {
+    fetchError = String(err);
+  }
+
+  if (url.searchParams.get("debug") === "1") {
+    return Response.json({ rawCount, filteredCount: articles.length, fetchError, sample: articles.slice(0, 3).map((a) => a.title) });
   }
 
   const items = articles.map((a) => {
