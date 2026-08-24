@@ -32,6 +32,7 @@ async function runRecaps(apiKey: string, log: string[], deadline: number): Promi
     const { matches } = await getLiveMatches(0, true);
     const finished = matches.filter((m) => !m.isLive && m.homeScore !== null && m.status === "Ավարտված");
     log.push(`recap debug: total=${matches.length}, finished=${finished.length} (${finished.map((m) => `${m.home}-${m.away}/${m.competition}`).join(", ")})`);
+    log.push(`recap debug: all matches: ${matches.map((m) => `${m.home}-${m.away}[${m.status}]`).join(" | ")}`);
     for (const match of finished) {
       if (generated >= MAX_PER_TYPE || attempted >= MAX_ATTEMPTS) break;
       if (Date.now() > deadline) { log.push("recap: time budget exceeded, stopping early"); break; }
