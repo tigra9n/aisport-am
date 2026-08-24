@@ -15,14 +15,9 @@ jobs:
       - name: Test
         run: |
           sleep 90
-          echo "=== mode=ping ===" > test.txt
-          curl -s --max-time 15 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=ping&_c=$(date +%s)" >> test.txt
-          echo "" >> test.txt
-          echo "=== mode=ping2 ===" >> test.txt
-          curl -s --max-time 20 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=ping2&_c=$(date +%s)" >> test.txt
-          echo "" >> test.txt
-          echo "=== mode=rss (fresh) ===" >> test.txt
-          curl -s --max-time 30 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=rss&_c=$(date +%s)" >> test.txt
+          echo "=== mode=rss (fresh) ===" > test.txt
+          curl -s -w "\ncurl_exit=%{exitcode}, http=%{http_code}, time=%{time_total}s\n" --max-time 45 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=rss&_c=$(date +%s)" >> test.txt 2>&1 || true
+        continue-on-error: true
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
@@ -31,4 +26,4 @@ jobs:
           git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-# t9
+# t10
