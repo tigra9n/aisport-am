@@ -72,7 +72,21 @@ function guessCategory(text: string, fallback: string): string {
 
 function parseArticleJson(raw: string, fallbackCategory: string): { article: GeneratedArticle | null; reason: string } {
   try {
-    const cleaned = raw.replace(/```json\s*|```\s*$/g, "").trim();
+    let cleaned = raw.replace(/```json\s*|```\s*$/g, "").trim();
+    // Claude occasionally emits a raw (unescaped) newline/tab/control
+    // character inside a string value - e.g. a literal line break in the
+    // middle of the content field - which is invalid per the JSON spec
+    // and makes JSON.parse throw "Bad control character in string
+    // literal" even though the JSON is otherwise complete and well-formed.
+    // Our expected output is compact single-line JSON, so any raw control
+    // character here is virtually certain to be inside a string value
+    // that needs escaping, not intentional structural whitespace.
+    cleaned = cleaned.replace(/[\u0000-\u001F]/g, (ch) => {
+      if (ch === "\n") return "\\n";
+      if (ch === "\r") return "\\r";
+      if (ch === "\t") return "\\t";
+      return "";
+    });
     const parsed = JSON.parse(cleaned) as Partial<GeneratedArticle>;
     if (!parsed.title || !parsed.excerpt || !parsed.content) {
       return { article: null, reason: `missing fields: title=${!!parsed.title}, excerpt=${!!parsed.excerpt}, content=${!!parsed.content}` };
