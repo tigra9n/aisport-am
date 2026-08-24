@@ -14,11 +14,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Test
         run: |
-          echo "=== mode=rss ===" > test.txt
-          curl -s "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=rss" >> test.txt
-          echo "" >> test.txt
-          echo "=== mode=preview ===" >> test.txt
-          curl -s "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=preview" >> test.txt
+          sleep 5
+          echo "=== mode=rss (fresh) ===" > test.txt
+          curl -s "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=rss&_c=$(date +%s)" >> test.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
