@@ -146,8 +146,8 @@ export async function GET(request: Request) {
     }
   }
 
-  // Each tick is 30 minutes apart; rotate content type per tick.
-  const tickSlot = Math.floor(Date.now() / (30 * 60 * 1000)) % 3;
+  // Each tick is 5 minutes apart; rotate content type per tick.
+  const tickSlot = Math.floor(Date.now() / (5 * 60 * 1000)) % 3;
   const mode = forcedMode ?? (tickSlot === 0 ? "recap" : tickSlot === 1 ? "preview" : "rss");
 
   const log: string[] = [];

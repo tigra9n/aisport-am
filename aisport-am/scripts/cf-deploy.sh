@@ -36,7 +36,7 @@ const cfg = JSON.parse(fs.readFileSync(path, "utf8"));
 cfg.name = process.env.WORKER_NAME;
 cfg.d1_databases = [{ binding: "DB", database_name: "aisport-db", database_id: process.env.DB_ID }];
 cfg.routes = [{ pattern: `${process.env.DOMAIN}/*`, zone_name: process.env.DOMAIN }];
-cfg.triggers = { crons: ["*/30 * * * *"] };
+cfg.triggers = { crons: ["*/5 * * * *"] };
 fs.writeFileSync(path, JSON.stringify(cfg, null, 2));
 console.log("Patched wrangler.json:", JSON.stringify(cfg, null, 2));
 '
