@@ -1,10 +1,5 @@
 name: Add RSS Source
 
-# One-off manual utility to add a row to the `sources` table via D1,
-# without needing a local wrangler setup. Edit SOURCE_NAME/SOURCE_URL
-# below and push to run. Insert is idempotent (INSERT OR IGNORE on the
-# unique feed_url), so re-running with the same URL is a no-op.
-
 on:
   push:
     branches: [main]
@@ -15,29 +10,18 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    env:
-      SOURCE_NAME: "APITube Sport"
-      SOURCE_LANG: "en"
-      SOURCE_URL: "https://aisport.am/api/feeds/apitube?api_key=api_live_mJtfBal8Rto7RasWjxIQFWCMSV6AoCULOoCYVvvLTaCmEuWNY9cNg3&category_id=medtop:15000000&per_page=20"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Insert source into D1
+      - name: Query articles
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
-          ESCAPED_NAME=$(printf '%s' "$SOURCE_NAME" | sed "s/'/''/g")
-          ESCAPED_URL=$(printf '%s' "$SOURCE_URL" | sed "s/'/''/g")
-          ESCAPED_LANG=$(printf '%s' "$SOURCE_LANG" | sed "s/'/''/g")
           {
-            echo "=== delete old ==="
-            npx wrangler d1 execute aisport-db --remote --command "DELETE FROM sources WHERE name = '$ESCAPED_NAME';" 2>&1
-            echo "=== insert ==="
-            npx wrangler d1 execute aisport-db --remote --command "INSERT OR IGNORE INTO sources (name, feed_url, language, enabled) VALUES ('$ESCAPED_NAME', '$ESCAPED_URL', '$ESCAPED_LANG', 1);" 2>&1
-            echo "=== current sources ==="
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id, name, feed_url, enabled FROM sources;" 2>&1
+            echo "=== football-category articles mentioning basketball keywords ==="
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, category FROM articles WHERE category = 'Ֆուտբոլ' AND (title LIKE '%Թոմփ%' OR title LIKE '%ԴեՌոզան%' OR title LIKE '%NBA%' OR title LIKE '%բասկետբոլ%' OR title LIKE '%Բասկետբոլ%');" 2>&1
           } > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
