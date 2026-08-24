@@ -33,8 +33,15 @@ jobs:
           echo "=== mode=$MODE ===" > test.txt
           curl -s -w "\ncurl_exit=%{exitcode}, http=%{http_code}, time=%{time_total}s\n" --max-time 65 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=$MODE&_c=$(date +%s)" >> test.txt 2>&1 || true
           echo "" >> test.txt
-          echo "=== apitube bridge check ===" >> test.txt
-          curl -s -w "\nhttp=%{http_code}\n" --max-time 20 "https://aisport.am/api/feeds/apitube?api_key=api_live_mJtfBal8Rto7RasWjxIQFWCMSV6AoCULOoCYVvvLTaCmEuWNY9cNg3&category_id=medtop:15000000&per_page=5" 2>&1 | head -c 2000 >> test.txt
+          echo "=== apitube category.id test ===" >> test.txt
+          curl -s -w "\nhttp=%{http_code}\n" --max-time 20 "https://api.apitube.io/v1/news/everything?api_key=api_live_mJtfBal8Rto7RasWjxIQFWCMSV6AoCULOoCYVvvLTaCmEuWNY9cNg3&category.id=medtop:15000000&per_page=3&language.code=en" -H "Content-Type: application/json" 2>&1 | head -c 1500 >> test.txt
+          echo "" >> test.txt
+          echo "=== apitube title keyword test ===" >> test.txt
+          curl -s -w "\nhttp=%{http_code}\n" --max-time 20 -G "https://api.apitube.io/v1/news/everything" \
+            --data-urlencode "api_key=api_live_mJtfBal8Rto7RasWjxIQFWCMSV6AoCULOoCYVvvLTaCmEuWNY9cNg3" \
+            --data-urlencode "title=football,basketball,soccer,NBA,tennis,UEFA" \
+            --data-urlencode "language.code=en" \
+            --data-urlencode "per_page=5" 2>&1 | head -c 1500 >> test.txt
         continue-on-error: true
       - run: |
           git config user.email "actions@github.com"
