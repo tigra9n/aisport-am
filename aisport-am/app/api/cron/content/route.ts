@@ -187,6 +187,20 @@ export async function GET(request: Request) {
     }
   }
 
+  // Diagnostic: exactly one real generateFromSourceSnippet-style call
+  // (real system prompt + max_tokens:900 + thinking disabled), isolated
+  // from the RSS loop, with a generous timeout, to get a clean timing
+  // reading instead of guessing from loop-level behavior.
+  if (url.searchParams.get("mode") === "gen1") {
+    const started = Date.now();
+    const article = await generateFromSourceSnippet(apiKey, {
+      title: "Real Madrid-ը հաղթեց Բարսելոնային Էլ Կլասիկոյում",
+      snippet: "Real Madrid defeated Barcelona 3-1 in a thrilling El Clasico at the Santiago Bernabeu, with goals from Vinicius, Bellingham, and Mbappe.",
+      sourceName: "Test",
+    });
+    return Response.json({ ok: true, mode: "gen1", ms: Date.now() - started, debug: lastGenerationDebug, gotArticle: !!article });
+  }
+
   const forcedMode = url.searchParams.get("mode");
 
   // Publishing window: 10:00–02:00 Yerevan time (UTC+4, no DST). Manual
