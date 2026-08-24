@@ -41,7 +41,7 @@ async function callClaude(systemPrompt: string, userPrompt: string, apiKey: stri
     const data = await response.json() as { content?: { type: string; text?: string }[]; stop_reason?: string };
     const textBlock = data.content?.find((block) => block.type === "text");
     if (!textBlock?.text) return { text: null, debug: `[${ms}ms] no text block, stop_reason=${data.stop_reason}, raw=${JSON.stringify(data).slice(0, 300)}` };
-    return { text: textBlock.text, debug: `[${ms}ms] ok` };
+    return { text: textBlock.text, debug: `[${ms}ms] ok, stop_reason=${data.stop_reason}, len=${textBlock.text.length}` };
   } catch (err) {
     return { text: null, debug: `[${Date.now() - started}ms] threw: ${String(err)}` };
   }

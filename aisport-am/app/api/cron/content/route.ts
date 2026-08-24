@@ -111,7 +111,7 @@ async function runPreviews(apiKey: string, log: string[], deadline: number): Pro
   return generated;
 }
 
-async function runRss(apiKey: string, log: string[], deadline: number): Promise<number> {
+async function runRss(apiKey: string, log: string[], deadline: number, sourceFilter?: string | null): Promise<number> {
   let generated = 0;
   let attempted = 0;
   // Cap total generation attempts, not just successes. Each attempt can
@@ -130,7 +130,10 @@ async function runRss(apiKey: string, log: string[], deadline: number): Promise<
     // while football-only sources never get a turn.
     const tickIndex = Math.floor(Date.now() / (5 * 60 * 1000));
     const offset = allSources.length > 0 ? tickIndex % allSources.length : 0;
-    const enabledSources = [...allSources.slice(offset), ...allSources.slice(0, offset)];
+    const rotated = [...allSources.slice(offset), ...allSources.slice(0, offset)];
+    const enabledSources = sourceFilter
+      ? rotated.filter((s) => s.name.toLowerCase().includes(sourceFilter.toLowerCase()))
+      : rotated;
     for (const source of enabledSources) {
       if (generated >= MAX_PER_TYPE || attempted >= MAX_ATTEMPTS) break;
       if (Date.now() > deadline) { log.push("rss: time budget exceeded, stopping early"); break; }
@@ -191,7 +194,7 @@ export async function GET(request: Request) {
   let generated = 0;
   if (mode === "recap") generated = await runRecaps(apiKey, log, deadline);
   else if (mode === "preview") generated = await runPreviews(apiKey, log, deadline);
-  else generated = await runRss(apiKey, log, deadline);
+  else generated = await runRss(apiKey, log, deadline, url.searchParams.get("source"));
 
   return Response.json({ ok: true, mode, generated, log });
 }
