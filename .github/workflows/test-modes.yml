@@ -31,7 +31,7 @@ jobs:
         run: |
           MODE="${{ github.event.inputs.mode || 'rss' }}"
           echo "=== mode=$MODE source=apitube ===" > test.txt
-          curl -s -w "\ncurl_exit=%{exitcode}, http=%{http_code}, time=%{time_total}s\n" --max-time 65 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=$MODE&source=apitube&_c=$(date +%s)8" >> test.txt 2>&1 || true
+          curl -s -w "\ncurl_exit=%{exitcode}, http=%{http_code}, time=%{time_total}s\n" --max-time 65 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=$MODE&source=apitube&_c=$(date +%s)7" >> test.txt 2>&1 || true
           echo "" >> test.txt
           echo "=== apitube bridge raw titles ===" >> test.txt
           curl -s --max-time 20 "https://aisport.am/api/feeds/apitube?api_key=api_live_mJtfBal8Rto7RasWjxIQFWCMSV6AoCULOoCYVvvLTaCmEuWNY9cNg3&category_id=medtop:15000000&per_page=10&debug=1" >> test.txt
