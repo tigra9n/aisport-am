@@ -18,6 +18,9 @@ jobs:
           echo "=== mode=ping ===" > test.txt
           curl -s --max-time 15 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=ping&_c=$(date +%s)" >> test.txt
           echo "" >> test.txt
+          echo "=== mode=ping2 ===" >> test.txt
+          curl -s --max-time 20 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=ping2&_c=$(date +%s)" >> test.txt
+          echo "" >> test.txt
           echo "=== mode=rss (fresh) ===" >> test.txt
           curl -s --max-time 30 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=rss&_c=$(date +%s)" >> test.txt
       - run: |
@@ -28,4 +31,4 @@ jobs:
           git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-# t6
+# t7

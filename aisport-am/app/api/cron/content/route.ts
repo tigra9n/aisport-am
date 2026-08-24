@@ -165,6 +165,28 @@ export async function GET(request: Request) {
     }
   }
 
+  // Diagnostic: minimal POST /v1/messages call (tiny prompt, no system
+  // prompt) to isolate whether it's the endpoint/model itself hanging, or
+  // something about our larger request body.
+  if (url.searchParams.get("mode") === "ping2") {
+    const started = Date.now();
+    try {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 15_000);
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        signal: controller.signal,
+        headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 10, messages: [{ role: "user", content: "hi" }] }),
+      });
+      clearTimeout(t);
+      const bodyText = await res.text().catch(() => "");
+      return Response.json({ ok: true, mode: "ping2", status: res.status, ms: Date.now() - started, body: bodyText.slice(0, 300) });
+    } catch (err) {
+      return Response.json({ ok: false, mode: "ping2", ms: Date.now() - started, error: String(err) });
+    }
+  }
+
   const forcedMode = url.searchParams.get("mode");
 
   // Publishing window: 10:00–02:00 Yerevan time (UTC+4, no DST). Manual
