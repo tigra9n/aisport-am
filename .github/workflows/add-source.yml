@@ -15,27 +15,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Fetch real images and update D1
+      - name: Set distinct images directly
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
-
-          IMG9=$(curl -s --max-time 15 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" "https://www.espn.com/nba/story/_/id/49706703/klay-thompson-lands-heat-clearing-waivers" -o /tmp/page9.html -w "%{http_code}")
-          IMG8=$(curl -s --max-time 15 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" "https://www.espn.com/nba/story/_/id/49641350/nba-predictions-2026-27-forecast-knicks-76ers-heat-thunder-spurs-lakers-east-west-standings" -o /tmp/page8.html -w "%{http_code}")
-          echo "http9=$IMG9 http8=$IMG8"
-          echo "--- page9 og tags ---"
-          grep -oE '<meta[^>]*og:[^>]*>' /tmp/page9.html | head -5
-          echo "--- page9 size ---"
-          wc -c /tmp/page9.html
-
           {
-            echo "=== fetched images ==="
-            echo "http9: $IMG9"
-            echo "http8: $IMG8"
             echo "=== updates ==="
-            if [ -n "" ]; then
-              echo skip
-            fi
+            npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET image_url = 'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1200&q=85' WHERE id = 9;" 2>&1
+            npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET image_url = 'https://images.unsplash.com/photo-1548311344-5324fa0dbad6?auto=format&fit=crop&w=1200&q=85' WHERE id = 8;" 2>&1
             echo "=== verify ==="
             npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, image_url FROM articles WHERE id IN (8,9);" 2>&1
           } > ../add-source-result.txt || true
