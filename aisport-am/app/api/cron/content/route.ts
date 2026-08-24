@@ -9,7 +9,12 @@ import { getLiveMatchDetailsV2 } from "../../../../lib/live-match-details-v2";
 
 export const dynamic = "force-dynamic";
 
-const MAX_ARTICLES_PER_RUN = 3;
+// Each category gets its own slot per run so match recaps/previews can never
+// crowd out real RSS news (previously all three shared one pool of 3, and
+// recaps+previews alone regularly used it all up, so RSS news never ran).
+const MAX_RECAPS_PER_RUN = 1;
+const MAX_PREVIEWS_PER_RUN = 1;
+const MAX_RSS_PER_RUN = 1;
 
 export async function GET(request: Request) {
   const { env } = await import("cloudflare:workers");
@@ -24,6 +29,9 @@ export async function GET(request: Request) {
   }
 
   let generated = 0;
+  let recapsGenerated = 0;
+  let previewsGenerated = 0;
+  let rssGenerated = 0;
   const log: string[] = [];
 
   // 1) Recaps for recently-finished matches.
@@ -31,7 +39,7 @@ export async function GET(request: Request) {
     const { matches } = await getLiveMatches(0, true);
     const finished = matches.filter((m) => !m.isLive && m.homeScore !== null && m.status === "Ավարտված");
     for (const match of finished) {
-      if (generated >= MAX_ARTICLES_PER_RUN) break;
+      if (recapsGenerated >= MAX_RECAPS_PER_RUN) break;
       const sourceUrl = `https://aisport.am/live/match/${match.id}`;
       if (await articleExistsForSource(sourceUrl)) continue;
       const details = await getLiveMatchDetailsV2(match.id);
@@ -48,19 +56,19 @@ export async function GET(request: Request) {
         sourceUrl,
         uniquePart: match.id,
       });
-      if (saved) { generated++; log.push(`recap: ${match.home} vs ${match.away}`); }
+      if (saved) { generated++; recapsGenerated++; log.push(`recap: ${match.home} vs ${match.away}`); }
     }
   } catch (err) {
     log.push(`recap error: ${String(err)}`);
   }
 
   // 2) Previews for today's not-yet-started matches.
-  if (generated < MAX_ARTICLES_PER_RUN) {
+  {
     try {
       const { matches } = await getLiveMatches(0, true);
       const upcoming = matches.filter((m) => !m.isLive && m.homeScore === null);
       for (const match of upcoming) {
-        if (generated >= MAX_ARTICLES_PER_RUN) break;
+        if (previewsGenerated >= MAX_PREVIEWS_PER_RUN) break;
         const sourceUrl = `https://aisport.am/live/match/${match.id}#preview`;
         if (await articleExistsForSource(sourceUrl)) continue;
         const details = await getLiveMatchDetailsV2(match.id);
@@ -102,7 +110,7 @@ export async function GET(request: Request) {
           sourceUrl,
           uniquePart: `${match.id}-preview`,
         });
-        if (saved) { generated++; log.push(`preview: ${match.home} vs ${match.away}`); }
+        if (saved) { generated++; previewsGenerated++; log.push(`preview: ${match.home} vs ${match.away}`); }
       }
     } catch (err) {
       log.push(`preview error: ${String(err)}`);
@@ -110,7 +118,7 @@ export async function GET(request: Request) {
   }
 
   // 3) Rewrites from enabled RSS sources.
-  if (generated < MAX_ARTICLES_PER_RUN) {
+  {
     try {
       const db = await getDb();
       const enabledSources = await db.select().from(sources).where(eq(sources.enabled, true)).orderBy(desc(sources.id));
@@ -125,11 +133,11 @@ export async function GET(request: Request) {
         }
       }
       for (const source of enabledSources) {
-        if (generated >= MAX_ARTICLES_PER_RUN) break;
+        if (rssGenerated >= MAX_RSS_PER_RUN) break;
         const items = await fetchFeed(source.feedUrl, 8);
         log.push(`[debug] ${source.name}: fetched ${items.length} items`);
         for (const item of items) {
-          if (generated >= MAX_ARTICLES_PER_RUN) break;
+          if (rssGenerated >= MAX_RSS_PER_RUN) break;
           const exists = await articleExistsForSource(item.link);
           if (exists) { log.push(`[debug] skip (exists): ${item.title.slice(0, 40)}`); continue; }
           const article = await generateFromSourceSnippet(apiKey, { title: item.title, snippet: item.snippet, sourceName: source.name });
@@ -141,7 +149,7 @@ export async function GET(request: Request) {
             sourceUrl: item.link,
             uniquePart: String(Date.now()).slice(-8),
           });
-          if (saved) { generated++; log.push(`rewrite: ${item.title.slice(0, 40)}`); }
+          if (saved) { generated++; rssGenerated++; log.push(`rewrite: ${item.title.slice(0, 40)}`); }
           else { log.push(`[debug] save failed (duplicate?) for: ${item.title.slice(0, 40)}`); }
         }
       }
