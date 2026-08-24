@@ -19,11 +19,23 @@ function extractTag(block: string, tag: string): string | null {
 }
 
 function extractImage(block: string): string | null {
-  const enclosure = block.match(/<enclosure[^>]*url="([^"]+)"[^>]*type="image[^"]*"/i) || block.match(/<media:content[^>]*url="([^"]+)"/i);
-  if (enclosure) return enclosure[1];
-  const thumbnail = block.match(/<media:thumbnail[^>]*url="([^"]+)"/i);
+  // Attribute order varies between feeds (url before type, or vice versa),
+  // so match each attribute independently rather than requiring a fixed
+  // order - this was silently failing to extract images from some feeds
+  // (e.g. ESPN), causing articles to fall back to a generic per-category
+  // stock photo instead of a real per-article image.
+  const enclosureMatch = block.match(/<enclosure\b([^>]*)\/?>/i);
+  if (enclosureMatch) {
+    const attrs = enclosureMatch[1];
+    const typeMatch = attrs.match(/type=["']([^"']+)["']/i);
+    const urlMatch = attrs.match(/url=["']([^"']+)["']/i);
+    if (urlMatch && (!typeMatch || /^image/i.test(typeMatch[1]))) return urlMatch[1];
+  }
+  const mediaContent = block.match(/<media:content\b[^>]*url=["']([^"']+)["']/i);
+  if (mediaContent) return mediaContent[1];
+  const thumbnail = block.match(/<media:thumbnail\b[^>]*url=["']([^"']+)["']/i);
   if (thumbnail) return thumbnail[1];
-  const imgTag = block.match(/<img[^>]*src="([^"]+)"/i);
+  const imgTag = block.match(/<img\b[^>]*src=["']([^"']+)["']/i);
   return imgTag ? imgTag[1] : null;
 }
 

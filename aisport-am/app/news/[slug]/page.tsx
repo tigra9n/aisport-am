@@ -6,13 +6,47 @@ import { CommentForm } from "../../../components/comment-form";
 import { demoArticles } from "../../../lib/content";
 import { getArticleBySlug } from "../../../lib/articles";
 
-const categoryDefaultImage: Record<string, string> = {
-  "Ֆուտբոլ": "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?auto=format&fit=crop&w=1200&q=85",
-  "Բասկետբոլ": "https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1200&q=85",
-  "Թենիս": "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?auto=format&fit=crop&w=1200&q=85",
-  "Մարմնամարզություն": "https://images.unsplash.com/photo-1742249715229-0ce01dd19358?auto=format&fit=crop&w=1400&q=85",
+const categoryDefaultImages: Record<string, string[]> = {
+  "Ֆուտբոլ": [
+    "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?auto=format&fit=crop&w=1200&q=85",
+    "https://images.unsplash.com/photo-1762013315117-1c8005ad2b41?auto=format&fit=crop&w=1200&q=85",
+  ],
+  "Բասկետբոլ": [
+    "https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1200&q=85",
+    "https://images.unsplash.com/photo-1548311344-5324fa0dbad6?auto=format&fit=crop&w=1200&q=85",
+  ],
+  "Թենիս": [
+    "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?auto=format&fit=crop&w=1200&q=85",
+  ],
+  "Մարմնամարզություն": [
+    "https://images.unsplash.com/photo-1742249715229-0ce01dd19358?auto=format&fit=crop&w=1400&q=85",
+  ],
 };
-const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=1600&q=85";
+// Categories without a dedicated pool (Կրիկետ, Հոկեյ, Ամերիկյան ֆուտբոլ,
+// Ֆորմուլա 1, Գոլֆ, Բռնցքամարտ / ՄՄԱ, etc.) fall through to a shared
+// general-sport pool below rather than one single fixed image, so they
+// aren't all visually identical either.
+const GENERAL_SPORT_IMAGES = [
+  "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=1600&q=85",
+  "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?auto=format&fit=crop&w=1200&q=85",
+  "https://images.unsplash.com/photo-1548311344-5324fa0dbad6?auto=format&fit=crop&w=1200&q=85",
+];
+
+
+// Deterministic pick per article so the same article always renders the
+// same image (stable across requests/refreshes), while different
+// articles in the same category get visual variety instead of one
+// identical stock photo repeated for every single article.
+function pickImage(pool: string[], seed: string): string {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  return pool[hash % pool.length];
+}
+
+function resolveImage(category: string, seed: string): string {
+  const pool = categoryDefaultImages[category] ?? GENERAL_SPORT_IMAGES;
+  return pickImage(pool, seed);
+}
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -23,7 +57,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const title = stored?.title ?? demo!.title;
   const excerpt = stored?.excerpt ?? demo!.excerpt;
   const category = stored?.category ?? demo!.category;
-  const image = stored?.imageUrl ?? demo?.image ?? categoryDefaultImage[category] ?? DEFAULT_IMAGE;
+  const image = stored?.imageUrl ?? demo?.image ?? resolveImage(category, slug);
   const url = `https://aisport.am/news/${slug}`;
 
   return {
@@ -58,7 +92,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
   const excerpt = stored?.excerpt ?? demo!.excerpt;
   const category = stored?.category ?? demo!.category;
   const author = demo?.author ?? "AISport խմբագրություն";
-  const image = stored?.imageUrl ?? demo?.image ?? categoryDefaultImage[category] ?? DEFAULT_IMAGE;
+  const image = stored?.imageUrl ?? demo?.image ?? resolveImage(category, slug);
   const published = stored ? new Date(stored.publishedAt + "Z").toLocaleString("hy-AM", { timeZone: "Asia/Yerevan", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) : demo!.time;
   const paragraphs = stored?.content.split(/\n+/).filter(Boolean) ?? [
     `${excerpt} Այս պատմության շուրջ զարգացումները կարևոր են թե՛ մարզական, թե՛ մրցակցային տեսանկյունից։ AISport-ը հավաքել է այս պահին հասանելի հիմնական փաստերը։`,
