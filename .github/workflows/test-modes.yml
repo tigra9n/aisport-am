@@ -29,10 +29,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Test
         run: |
-          echo "=== article page og:image (with cache-buster) ===" > test.txt
-          curl -s -w "\nhttp=%{http_code}\n" --max-time 20 "https://aisport.am/news/ley-ompsony-ayamium-anisi-koghqin-87787400?_cb=$(date +%s)" 2>&1 | grep -oE 'og:image[^/]*content="[^"]*"' >> test.txt
-          echo "" >> test.txt
-          echo "=== category in D1 for id=9 ===" >> test.txt
+          MODE="${{ github.event.inputs.mode || 'rss' }}"
+          echo "=== mode=$MODE ===" > test.txt
+          curl -s -w "\ncurl_exit=%{exitcode}, http=%{http_code}, time=%{time_total}s\n" --max-time 65 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=$MODE&_c=$(date +%s)" >> test.txt 2>&1 || true
         continue-on-error: true
       - run: |
           git config user.email "actions@github.com"
