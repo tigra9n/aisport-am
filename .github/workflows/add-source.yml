@@ -15,15 +15,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Remove non-APITube sources
+      - name: Query
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
           {
-            echo "=== delete ==="
-            npx wrangler d1 execute aisport-db --remote --command "DELETE FROM sources WHERE name != 'APITube Sport';" 2>&1
-            echo "=== remaining sources ==="
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id, name, enabled FROM sources;" 2>&1
+            echo "=== basketball articles ==="
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, category, image_url, source_url FROM articles WHERE category = 'Բասկետբոլ' ORDER BY id DESC LIMIT 5;" 2>&1
           } > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
