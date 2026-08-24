@@ -16,10 +16,12 @@ async function callClaude(systemPrompt: string, userPrompt: string, apiKey: stri
       },
       body: JSON.stringify({
         model: "claude-sonnet-5",
-        // 900 wasn't enough: Sonnet 5's new tokenizer produces ~30% more
-        // tokens for the same text, so a 200-300 word Armenian article as
-        // JSON was getting cut off mid-response and failing to parse.
-        max_tokens: 2048,
+        // Bumped from 900 -> 2048 -> 4096: even 2048 wasn't consistently
+        // enough headroom for a full JSON response (title+excerpt+content)
+        // with Sonnet 5's new tokenizer; some generations still got cut
+        // off mid-sentence. Going generous here since there's no real
+        // cost/latency concern for this use case.
+        max_tokens: 4096,
         // Adaptive thinking is on by default on Sonnet 5 (effort: high),
         // which added enough latency to blow past our request timeout for
         // every single call. This is a straightforward rewrite/formatting
