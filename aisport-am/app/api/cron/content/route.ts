@@ -147,7 +147,10 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
     for (const source of enabledSources) {
       if (generated >= MAX_PER_TYPE || attempted >= MAX_ATTEMPTS) break;
       if (Date.now() > deadline) { log.push("rss: time budget exceeded, stopping early"); break; }
-      const items = await fetchFeed(source.feedUrl, 6);
+      // Consider more candidates per tick now that per_page is 50 (up
+      // from 10), so a tick where the newest few items are already
+      // published still has plenty of untried items to fall through to.
+      const items = await fetchFeed(source.feedUrl, 30);
       log.push(`rss debug: source=${source.name}, items=${items.length}`);
       for (const item of items) {
         if (generated >= MAX_PER_TYPE || attempted >= MAX_ATTEMPTS) break;

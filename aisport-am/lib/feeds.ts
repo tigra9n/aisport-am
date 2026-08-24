@@ -106,8 +106,10 @@ async function fetchApiTubeDirect(bridgeUrl: string, limit: number): Promise<Fee
     const apiKey = params.get("api_key");
     const categoryId = params.get("category_id") ?? "medtop:15000000";
     if (!apiKey) return [];
-    // Free tier caps per_page at 10 (ER0171 for anything higher).
-    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&category.id=${encodeURIComponent(categoryId)}&per_page=10&language.code=en&sort.by=published_at&sort.order=desc`;
+    // Starter plan allows up to 50 results per page (was capped at 10 on
+    // free tier). More candidates per tick means fewer "everything in the
+    // window is already published, nothing new to pick" empty ticks.
+    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&category.id=${encodeURIComponent(categoryId)}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
     const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
     if (!res.ok) return [];
     const data = await res.json() as { results?: ApiTubeArticle[] };
