@@ -43,10 +43,24 @@ export async function articleExistsForSource(sourceUrl: string): Promise<boolean
   }
 }
 
+const HY_TO_LATIN: Record<string, string> = {
+  "ա":"a","բ":"b","գ":"g","դ":"d","ե":"e","զ":"z","է":"e","ը":"y","թ":"t","ժ":"zh",
+  "ի":"i","լ":"l","խ":"kh","ծ":"ts","կ":"k","հ":"h","ձ":"dz","ղ":"gh","չ":"ch",
+  "մ":"m","յ":"y","ն":"n","շ":"sh","ո":"o","չ":"ch","պ":"p","ջ":"j","ռ":"r",
+  "ս":"s","վ":"v","տ":"t","ր":"r","ց":"ts","ու":"u","փ":"p","ք":"q","օ":"o","ֆ":"f",
+  "և":"ev",
+};
+
+function transliterateHy(text: string): string {
+  return text
+    .replace(/ու/g, "u")
+    .replace(/[ա-և]/g, (ch) => HY_TO_LATIN[ch] ?? ch);
+}
+
 function slugify(title: string, uniquePart: string) {
-  const transliterated = title
+  const transliterated = transliterateHy(title)
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .replace(/[^a-z0-9\s-]/g, "")
     .trim()
     .split(/\s+/)
     .slice(0, 6)
