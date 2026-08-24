@@ -61,9 +61,11 @@ export async function GET(request: Request) {
   let rawCount = 0;
   let fetchError = "";
   try {
-    // Fetch more than we need (30 raw) since the keyword filter below
-    // discards a portion as off-topic/spam.
-    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&category.id=${encodeURIComponent(categoryId)}&per_page=30&language.code=en&sort.by=published_at&sort.order=desc`;
+    // Free tier caps per_page at 10 (ER0171 for anything higher). The
+    // keyword filter below discards some of these as off-topic/spam, so
+    // yield per tick is modest, but that's fine - we only need 1 usable
+    // item per cron tick anyway.
+    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&category.id=${encodeURIComponent(categoryId)}&per_page=10&language.code=en&sort.by=published_at&sort.order=desc`;
     const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
     if (res.ok) {
       const data = await res.json() as { results?: ApiTubeArticle[] };
