@@ -114,14 +114,17 @@ export async function GET(request: Request) {
     try {
       const db = await getDb();
       const enabledSources = await db.select().from(sources).where(eq(sources.enabled, true)).orderBy(desc(sources.id));
+      log.push(`[debug] enabledSources count: ${enabledSources.length}`);
       for (const source of enabledSources) {
         if (generated >= MAX_ARTICLES_PER_RUN) break;
         const items = await fetchFeed(source.feedUrl, 8);
+        log.push(`[debug] ${source.name}: fetched ${items.length} items`);
         for (const item of items) {
           if (generated >= MAX_ARTICLES_PER_RUN) break;
-          if (await articleExistsForSource(item.link)) continue;
+          const exists = await articleExistsForSource(item.link);
+          if (exists) { log.push(`[debug] skip (exists): ${item.title.slice(0, 40)}`); continue; }
           const article = await generateFromSourceSnippet(apiKey, { title: item.title, snippet: item.snippet, sourceName: source.name });
-          if (!article) continue;
+          if (!article) { log.push(`[debug] generation failed for: ${item.title.slice(0, 40)}`); continue; }
           const saved = await saveGeneratedArticle({
             ...article,
             imageUrl: item.imageUrl,
@@ -130,6 +133,7 @@ export async function GET(request: Request) {
             uniquePart: String(Date.now()).slice(-8),
           });
           if (saved) { generated++; log.push(`rewrite: ${item.title.slice(0, 40)}`); }
+          else { log.push(`[debug] save failed (duplicate?) for: ${item.title.slice(0, 40)}`); }
         }
       }
     } catch (err) {
