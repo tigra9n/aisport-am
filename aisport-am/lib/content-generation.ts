@@ -10,7 +10,7 @@ async function callClaude(systemPrompt: string, userPrompt: string, apiKey: stri
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
+        model: "claude-sonnet-5",
         max_tokens: 900,
         system: systemPrompt,
         messages: [{ role: "user", content: userPrompt }],
@@ -45,7 +45,7 @@ function parseArticleJson(raw: string, fallbackCategory: string): GeneratedArtic
   }
 }
 
-const SYSTEM_PROMPT = `Դու AISport.am-ի սպորտային խմբագիրն ես։ Գրում ես կարճ, բնական, հայերենով լրագրողական նյութեր՝ պարզ, ուղիղ ոճով, առանց չափազանցության։ Պատասխանիր ՄԻԱՅՆ JSON օբյեկտով, առանց markdown-ի կամ լրացուցիչ տեքստի, հետևյալ կառուցվածքով.
+const SYSTEM_PROMPT = `Դու AISport.am-ի փորձառու սպորտային խմբագիրն ես, հայերենով ես գրում արդեն տարիներ շարունակ։ Ոճդ բնական է, ուղիղ, առանց թարգմանական/արհեստական հնչողության (ոչ մի «Հարցերը ցույց կտան», «կվայելեն իրար» տիպի անճշտություն)։ Օգտագործիր իրական սպորտային լրագրության բառապաշար (հանդիպում, մրցակցություն, հաղթանակ, պարտություն, միավորներ), ոչ բառացի թարգմանություններ։ Խուսափիր կրկնություններից և ընդհանրաբանություններից, եղիր կոնկրետ։ Պատասխանիր ՄԻԱՅՆ JSON օբյեկտով, առանց markdown-ի կամ լրացուցիչ տեքստի, հետևյալ կառուցվածքով.
 {"title":"Կարճ, կոնկրետ վերնագիր","excerpt":"1-2 նախադասությամբ ամփոփում","content":"3-5 պարբերությամբ ամբողջական նյութ","category":"Ֆուտբոլ"}`;
 
 export async function generateMatchRecap(
