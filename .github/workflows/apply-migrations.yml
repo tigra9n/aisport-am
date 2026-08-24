@@ -1,0 +1,46 @@
+name: Apply D1 Migrations
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/apply-migrations.yml']
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: aisport-am
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Apply migrations (idempotent - IF NOT EXISTS)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          echo "== Applying migration 0000 (articles, automation_runs, publication_logs, sources) ==" > ../migrate-log.txt
+          sed 's/^CREATE TABLE `/CREATE TABLE IF NOT EXISTS `/; s/^CREATE UNIQUE INDEX `/CREATE UNIQUE INDEX IF NOT EXISTS `/' drizzle/0000_marvelous_wilson_fisk.sql > /tmp/m0.sql
+          npx wrangler d1 execute aisport-db --remote --file=/tmp/m0.sql >> ../migrate-log.txt 2>&1 || echo "m0 had errors (see above)" >> ../migrate-log.txt
+          echo "== Applying migration 0001 (api_cache) ==" >> ../migrate-log.txt
+          sed 's/^CREATE TABLE `/CREATE TABLE IF NOT EXISTS `/' drizzle/0001_whole_riptide.sql > /tmp/m1.sql
+          npx wrangler d1 execute aisport-db --remote --file=/tmp/m1.sql >> ../migrate-log.txt 2>&1 || echo "m1 had errors (see above)" >> ../migrate-log.txt
+          echo "== Applying migration 0002 (comments) ==" >> ../migrate-log.txt
+          sed 's/^CREATE TABLE `/CREATE TABLE IF NOT EXISTS `/' drizzle/0002_lethal_mach_iv.sql > /tmp/m2.sql
+          npx wrangler d1 execute aisport-db --remote --file=/tmp/m2.sql >> ../migrate-log.txt 2>&1 || echo "m2 had errors (see above)" >> ../migrate-log.txt
+          echo "== Verify tables exist ==" >> ../migrate-log.txt
+          npx wrangler d1 execute aisport-db --remote --command="SELECT name FROM sqlite_master WHERE type='table'" >> ../migrate-log.txt 2>&1
+      - run: |
+          cd ..
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f migrate-log.txt
+          git commit -m "check [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
