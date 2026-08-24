@@ -62,7 +62,7 @@ export default async function Home() {
   ]);
   const tables = Object.fromEntries(standings);
   const scorerTables = Object.fromEntries(scorers);
-  const headlineStream = articles.slice(1, 10);
+  const headlineStream = articles.slice(0, 9);
   const heroArticles = articles.slice(0, 6);
   const sportSections = homepageSports.map((sport) => {
     const seen = new Set<string>();
