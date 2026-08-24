@@ -18,7 +18,7 @@ jobs:
     env:
       SOURCE_NAME: "APITube Sport"
       SOURCE_LANG: "en"
-      SOURCE_URL: "https://api.apitube.io/v1/news/everything?api_key=api_live_mJtfBal8Rto7RasWjxIQFWCMSV6AoCULOoCYVvvLTaCmEuWNY9cNg3&category.id=medtop:15000000&per_page=20&sort.by=published_at&sort.order=desc&export=rss"
+      SOURCE_URL: "https://aisport.am/api/feeds/apitube?api_key=api_live_mJtfBal8Rto7RasWjxIQFWCMSV6AoCULOoCYVvvLTaCmEuWNY9cNg3&category_id=medtop:15000000&per_page=20"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -32,6 +32,8 @@ jobs:
           ESCAPED_URL=$(printf '%s' "$SOURCE_URL" | sed "s/'/''/g")
           ESCAPED_LANG=$(printf '%s' "$SOURCE_LANG" | sed "s/'/''/g")
           {
+            echo "=== delete old ==="
+            npx wrangler d1 execute aisport-db --remote --command "DELETE FROM sources WHERE name = '$ESCAPED_NAME';" 2>&1
             echo "=== insert ==="
             npx wrangler d1 execute aisport-db --remote --command "INSERT OR IGNORE INTO sources (name, feed_url, language, enabled) VALUES ('$ESCAPED_NAME', '$ESCAPED_URL', '$ESCAPED_LANG', 1);" 2>&1
             echo "=== current sources ==="
