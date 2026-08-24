@@ -5,7 +5,7 @@ name: Test Content Cron
 # content generation without waiting for the next scheduled cron tick.
 #
 # To run: go to Actions -> Test Content Cron -> Run workflow, pick a mode,
-# then check the check-logs branch for test.txt.
+# uhen check the check-logs branch for test.txt.
 
 on:
   workflow_dispatch:
