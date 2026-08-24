@@ -54,7 +54,7 @@ async function runRecaps(apiKey: string, log: string[], deadline: number): Promi
       }, details.events, details.statistics);
       if (!article) continue;
       const saved = await saveGeneratedArticle({
-        ...article, imageUrl: match.homeLogo, sourceName: "AISport", sourceUrl, uniquePart: match.id,
+        ...article, imageUrl: null, sourceName: "AISport", sourceUrl, uniquePart: match.id,
       });
       if (saved) { generated++; log.push(`recap: ${match.home} vs ${match.away}`); }
     }
@@ -110,7 +110,7 @@ async function runPreviews(apiKey: string, log: string[], deadline: number): Pro
       attempted++;
       if (!article) continue;
       const saved = await saveGeneratedArticle({
-        ...article, imageUrl: match.homeLogo, sourceName: "AISport", sourceUrl, uniquePart: `${match.id}-preview`,
+        ...article, imageUrl: null, sourceName: "AISport", sourceUrl, uniquePart: `${match.id}-preview`,
       });
       if (saved) { generated++; log.push(`preview: ${match.home} vs ${match.away}`); }
     }
