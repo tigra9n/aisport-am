@@ -1,0 +1,41 @@
+name: Add RSS Source
+
+# One-off manual utility to add a new row to the `sources` table without
+# needing a local wrangler setup. Trigger from Actions -> Add RSS Source ->
+# Run workflow, filling in the name/feed URL/language inputs.
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: 'Source display name'
+        required: true
+      feed_url:
+        description: 'RSS feed URL'
+        required: true
+      language:
+        description: 'Language code'
+        required: false
+        default: 'en'
+
+jobs:
+  add:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Insert source into D1
+        working-directory: aisport-am
+        run: |
+          npm install --no-audit --no-fund
+          ESCAPED_NAME=$(printf '%s' "${{ github.event.inputs.name }}" | sed "s/'/''/g")
+          ESCAPED_URL=$(printf '%s' "${{ github.event.inputs.feed_url }}" | sed "s/'/''/g")
+          ESCAPED_LANG=$(printf '%s' "${{ github.event.inputs.language }}" | sed "s/'/''/g")
+          npx wrangler d1 execute aisport-db --remote --command "INSERT OR IGNORE INTO sources (name, feed_url, language, enabled) VALUES ('$ESCAPED_NAME', '$ESCAPED_URL', '$ESCAPED_LANG', 1);"
+          echo "=== Current sources ===" 
+          npx wrangler d1 execute aisport-db --remote --command "SELECT id, name, feed_url, enabled FROM sources;"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
