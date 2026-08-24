@@ -22,8 +22,14 @@ jobs:
       - uses: actions/checkout@v4
       - name: Test
         run: |
-          echo "=== homepage response headers ===" > test.txt
-          curl -sI --max-time 20 "https://aisport.am/" 2>&1 >> test.txt
+          echo "=== recap ===" > test.txt
+          curl -s --max-time 120 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=recap&_c=$(date +%s)a" >> test.txt 2>&1
+          echo "" >> test.txt
+          echo "=== preview ===" >> test.txt
+          curl -s --max-time 120 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=preview&_c=$(date +%s)b" >> test.txt 2>&1
+          echo "" >> test.txt
+          echo "=== rss ===" >> test.txt
+          curl -s --max-time 120 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=rss&_c=$(date +%s)c" >> test.txt 2>&1
         continue-on-error: true
       - run: |
           git config user.email "actions@github.com"
