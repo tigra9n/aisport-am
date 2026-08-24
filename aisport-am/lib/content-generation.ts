@@ -1,6 +1,6 @@
 export type GeneratedArticle = { title: string; excerpt: string; content: string; category: string };
 
-async function callClaude(systemPrompt: string, userPrompt: string, apiKey: string): Promise<string | null> {
+async function callClaude(systemPrompt: string, userPrompt: string, apiKey: string, errorSink?: string[]): Promise<string | null> {
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -17,30 +17,38 @@ async function callClaude(systemPrompt: string, userPrompt: string, apiKey: stri
       }),
     });
     if (!response.ok) {
-      console.error(`[content-gen] Claude API error ${response.status}: ${await response.text().catch(() => "")}`);
+      const bodyText = await response.text().catch(() => "");
+      console.error(`[content-gen] Claude API error ${response.status}: ${bodyText}`);
+      errorSink?.push(`Claude API error ${response.status}: ${bodyText.slice(0, 300)}`);
       return null;
     }
     const data = await response.json() as { content?: { type: string; text?: string }[] };
     const textBlock = data.content?.find((block) => block.type === "text");
+    if (!textBlock?.text) errorSink?.push(`Claude API returned no text block: ${JSON.stringify(data).slice(0, 300)}`);
     return textBlock?.text ?? null;
   } catch (err) {
     console.error(`[content-gen] Claude API call threw: ${String(err)}`);
+    errorSink?.push(`Claude API call threw: ${String(err)}`);
     return null;
   }
 }
 
-function parseArticleJson(raw: string, fallbackCategory: string): GeneratedArticle | null {
+function parseArticleJson(raw: string, fallbackCategory: string, errorSink?: string[]): GeneratedArticle | null {
   try {
     const cleaned = raw.replace(/```json\s*|```\s*$/g, "").trim();
     const parsed = JSON.parse(cleaned) as Partial<GeneratedArticle>;
-    if (!parsed.title || !parsed.excerpt || !parsed.content) return null;
+    if (!parsed.title || !parsed.excerpt || !parsed.content) {
+      errorSink?.push(`parseArticleJson: missing field(s), raw=${raw.slice(0, 300)}`);
+      return null;
+    }
     return {
       title: parsed.title.trim(),
       excerpt: parsed.excerpt.trim(),
       content: parsed.content.trim(),
       category: parsed.category?.trim() || fallbackCategory,
     };
-  } catch {
+  } catch (err) {
+    errorSink?.push(`parseArticleJson threw: ${String(err)}, raw=${raw.slice(0, 300)}`);
     return null;
   }
 }
@@ -99,12 +107,13 @@ ${contextLines || "Լրացուցիչ վիճակագրություն չկա։"}
 export async function generateFromSourceSnippet(
   apiKey: string,
   source: { title: string; snippet: string; sourceName: string },
+  errorSink?: string[],
 ): Promise<GeneratedArticle | null> {
   const userPrompt = `Ստորև տրված է սպորտային նորության վերնագիր և կարճ նկարագրություն (ոչ ամբողջ նյութ)՝ ${source.sourceName}-ից.
 Վերնագիր՝ ${source.title}
 Նկարագրություն՝ ${source.snippet}
 
 Այս փաստերի հիման վրա գրիր ԱՄԲՈՂՋՈՎԻՆ ինքնուրույն, հայերեն նյութ (120-200 բառ)՝ քո սեփական բառերով, ո՛չ թարգմանություն, ո՛չ մոտ-պարաֆրազ։ Մի մեջբերիր ուղիղ արտահայտություններ բնագրից։ Եթե նկարագրությունը բավարար փաստ չի տալիս ամբողջական հոդված գրելու համար, գրիր ավելի կարճ, բայց ճշգրիտ ամփոփում։ category դաշտում գրիր ամենահարմար մարզաձևի անունը (Ֆուտբոլ, Բասկետբոլ, Թենիս, և այլն)։`;
-  const raw = await callClaude(SYSTEM_PROMPT, userPrompt, apiKey);
-  return raw ? parseArticleJson(raw, "Ֆուտբոլ") : null;
+  const raw = await callClaude(SYSTEM_PROMPT, userPrompt, apiKey, errorSink);
+  return raw ? parseArticleJson(raw, "Ֆուտբոլ", errorSink) : null;
 }

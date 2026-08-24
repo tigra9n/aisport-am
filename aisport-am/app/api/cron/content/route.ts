@@ -53,8 +53,9 @@ export async function GET(request: Request) {
           if (rssGenerated >= MAX_RSS_PER_RUN) break;
           const exists = await articleExistsForSource(item.link);
           if (exists) { log.push(`[debug] skip (exists): ${item.title.slice(0, 40)}`); continue; }
-          const article = await generateFromSourceSnippet(apiKey, { title: item.title, snippet: item.snippet, sourceName: source.name });
-          if (!article) { log.push(`[debug] generation failed for: ${item.title.slice(0, 40)}`); continue; }
+          const genErrors: string[] = [];
+          const article = await generateFromSourceSnippet(apiKey, { title: item.title, snippet: item.snippet, sourceName: source.name }, genErrors);
+          if (!article) { log.push(`[debug] generation failed for: ${item.title.slice(0, 40)} | ${genErrors.join(" / ")}`); continue; }
           const saved = await saveGeneratedArticle({
             ...article,
             imageUrl: item.imageUrl,
