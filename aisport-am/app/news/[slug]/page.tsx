@@ -1,9 +1,52 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
 import { SiteHeader } from "../../../components/site-header";
 import { CommentForm } from "../../../components/comment-form";
 import { demoArticles } from "../../../lib/content";
 import { getArticleBySlug } from "../../../lib/articles";
+
+const categoryDefaultImage: Record<string, string> = {
+  "Ֆուտբոլ": "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?auto=format&fit=crop&w=1200&q=85",
+  "Բասկետբոլ": "https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1200&q=85",
+  "Թենիս": "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?auto=format&fit=crop&w=1200&q=85",
+  "Մարմնամարզություն": "https://images.unsplash.com/photo-1742249715229-0ce01dd19358?auto=format&fit=crop&w=1400&q=85",
+};
+const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=1600&q=85";
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const stored = await getArticleBySlug(slug);
+  const demo = demoArticles.find((article) => article.slug === slug);
+  if (!stored && !demo) return {};
+
+  const title = stored?.title ?? demo!.title;
+  const excerpt = stored?.excerpt ?? demo!.excerpt;
+  const category = stored?.category ?? demo!.category;
+  const image = stored?.imageUrl ?? demo?.image ?? categoryDefaultImage[category] ?? DEFAULT_IMAGE;
+  const url = `https://aisport.am/news/${slug}`;
+
+  return {
+    title,
+    description: excerpt,
+    alternates: { canonical: url },
+    openGraph: {
+      type: "article",
+      siteName: "AISport",
+      title,
+      description: excerpt,
+      url,
+      locale: "hy_AM",
+      images: [{ url: image, width: 1200, height: 630, alt: title }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description: excerpt,
+      images: [image],
+    },
+  };
+}
 
 export default async function ArticlePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
@@ -15,13 +58,6 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
   const excerpt = stored?.excerpt ?? demo!.excerpt;
   const category = stored?.category ?? demo!.category;
   const author = demo?.author ?? "AISport խմբագրություն";
-  const categoryDefaultImage: Record<string, string> = {
-    "Ֆուտբոլ": "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?auto=format&fit=crop&w=1200&q=85",
-    "Բասկետբոլ": "https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1200&q=85",
-    "Թենիս": "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?auto=format&fit=crop&w=1200&q=85",
-    "Մարմնամարզություն": "https://images.unsplash.com/photo-1742249715229-0ce01dd19358?auto=format&fit=crop&w=1400&q=85",
-  };
-  const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=1600&q=85";
   const image = stored?.imageUrl ?? demo?.image ?? categoryDefaultImage[category] ?? DEFAULT_IMAGE;
   const published = stored ? new Date(stored.publishedAt + "Z").toLocaleString("hy-AM", { timeZone: "Asia/Yerevan", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false }) : demo!.time;
   const paragraphs = stored?.content.split(/\n+/).filter(Boolean) ?? [
