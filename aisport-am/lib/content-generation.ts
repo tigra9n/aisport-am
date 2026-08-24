@@ -47,6 +47,29 @@ async function callClaude(systemPrompt: string, userPrompt: string, apiKey: stri
   }
 }
 
+// Sports keyword detection for fallback categorization, used when the
+// model's JSON response omits category (or for RSS content pulled from
+// non-football sources, where hardcoding "Ֆուտբոլ" as fallback was
+// mislabeling basketball/tennis/etc. articles as football).
+const CATEGORY_KEYWORDS: [string, string[]][] = [
+  ["Բասկետբոլ", ["basketball", "nba", "wnba", "hoops", "point guard", "rebound", "dunk"]],
+  ["Թենիս", ["tennis", "wimbledon", "us open", "roland garros", "atp", "wta", "grand slam"]],
+  ["Կրիկետ", ["cricket", "test match", "odi", "t20", "wicket", "batsman", "bowler"]],
+  ["Բռնցքամարտ / ՄՄԱ", ["boxing", "ufc", "mma", "heavyweight", "knockout"]],
+  ["Ամերիկյան ֆուտբոլ", ["nfl", "super bowl", "quarterback", "touchdown"]],
+  ["Հոկեյ", ["nhl", "hockey", "ice hockey"]],
+  ["Ֆորմուլա 1", ["formula 1", "f1 ", "grand prix", "pole position"]],
+  ["Գոլֆ", ["golf", "pga tour", "masters tournament"]],
+];
+
+function guessCategory(text: string, fallback: string): string {
+  const lower = text.toLowerCase();
+  for (const [category, keywords] of CATEGORY_KEYWORDS) {
+    if (keywords.some((k) => lower.includes(k))) return category;
+  }
+  return fallback;
+}
+
 function parseArticleJson(raw: string, fallbackCategory: string): GeneratedArticle | null {
   try {
     const cleaned = raw.replace(/```json\s*|```\s*$/g, "").trim();
@@ -134,7 +157,8 @@ export async function generateFromSourceSnippet(
   const { text, debug } = await callClaude(SYSTEM_PROMPT, userPrompt, apiKey);
   lastGenerationDebug = debug;
   if (!text) return null;
-  const parsed = parseArticleJson(text, "Ֆուտբոլ");
+  const smartFallback = guessCategory(`${source.title} ${source.snippet}`, "Ֆուտբոլ");
+  const parsed = parseArticleJson(text, smartFallback);
   if (!parsed) lastGenerationDebug = `parse failed, raw text: ${text.slice(0, 300)}`;
   return parsed;
 }
