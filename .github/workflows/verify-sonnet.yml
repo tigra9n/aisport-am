@@ -1,0 +1,35 @@
+name: Verify Sonnet Quality
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/verify-sonnet.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trigger and check
+        run: |
+          echo 'import json,sys' > /tmp/show.py
+          echo 'd=json.load(sys.stdin)' >> /tmp/show.py
+          echo 'for a in d.get("articles",[])[:3]:' >> /tmp/show.py
+          echo '    print("---")' >> /tmp/show.py
+          echo '    print(a["title"])' >> /tmp/show.py
+          echo '    print(a["content"][:500])' >> /tmp/show.py
+          echo "=== Triggering content generation ===" > verify-sonnet.txt
+          curl -s "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}" >> verify-sonnet.txt
+          echo "" >> verify-sonnet.txt
+          echo "=== Latest articles ===" >> verify-sonnet.txt
+          curl -s "https://aisport.am/api/articles?_c=$(date +%s)" | python3 /tmp/show.py >> verify-sonnet.txt
+      - run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f verify-sonnet.txt
+          git commit -m "check [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
