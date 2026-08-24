@@ -1,0 +1,36 @@
+name: Debug Stalled Content
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/debug-stalled.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check
+        run: |
+          echo "=== Trigger content generation now ===" > debug.txt
+          curl -s "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}" >> debug.txt
+          echo "" >> debug.txt
+          echo "=== All articles, newest first ===" >> debug.txt
+          curl -s "https://aisport.am/api/articles?_c=$(date +%s)" > /tmp/a.json
+          echo 'import json' > /tmp/show.py
+          echo 'd=json.load(open("/tmp/a.json"))' >> /tmp/show.py
+          echo 'arts=d.get("articles",[])' >> /tmp/show.py
+          echo 'print("total:", len(arts))' >> /tmp/show.py
+          echo 'for a in arts[:8]:' >> /tmp/show.py
+          echo '    print(a["publishedAt"], "-", a["title"][:50], "-", a["sourceUrl"][:60])' >> /tmp/show.py
+          python3 /tmp/show.py >> debug.txt
+      - run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f debug.txt
+          git commit -m "check [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
