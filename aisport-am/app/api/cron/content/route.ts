@@ -145,6 +145,26 @@ export async function GET(request: Request) {
     return Response.json({ ok: false, reason: "no ANTHROPIC_API_KEY configured yet" });
   }
 
+  // Diagnostic: isolate whether the Worker can reach api.anthropic.com at
+  // all (lightweight GET, no request body) vs. only the actual generation
+  // call (POST /v1/messages) hanging.
+  if (url.searchParams.get("mode") === "ping") {
+    const started = Date.now();
+    try {
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), 10_000);
+      const res = await fetch("https://api.anthropic.com/v1/models", {
+        signal: controller.signal,
+        headers: { "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      });
+      clearTimeout(t);
+      const bodyText = await res.text().catch(() => "");
+      return Response.json({ ok: true, mode: "ping", status: res.status, ms: Date.now() - started, body: bodyText.slice(0, 200) });
+    } catch (err) {
+      return Response.json({ ok: false, mode: "ping", ms: Date.now() - started, error: String(err) });
+    }
+  }
+
   const forcedMode = url.searchParams.get("mode");
 
   // Publishing window: 10:00–02:00 Yerevan time (UTC+4, no DST). Manual

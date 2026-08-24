@@ -15,8 +15,11 @@ jobs:
       - name: Test
         run: |
           sleep 5
-          echo "=== mode=rss (fresh) ===" > test.txt
-          curl -s "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=rss&_c=$(date +%s)" >> test.txt
+          echo "=== mode=ping ===" > test.txt
+          curl -s --max-time 15 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=ping&_c=$(date +%s)" >> test.txt
+          echo "" >> test.txt
+          echo "=== mode=rss (fresh) ===" >> test.txt
+          curl -s --max-time 30 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=rss&_c=$(date +%s)" >> test.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
