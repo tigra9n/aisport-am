@@ -20,22 +20,21 @@ jobs:
         run: |
           npm install --no-audit --no-fund
 
-          IMG9=$(curl -s --max-time 15 "https://www.espn.com/nba/story/_/id/49706703/klay-thompson-lands-heat-clearing-waivers" | grep -oE '<meta[^>]+property="og:image"[^>]+content="[^"]*"' | head -1 | grep -oE 'content="[^"]*"' | sed 's/content="//;s/"$//')
-          IMG8=$(curl -s --max-time 15 "https://www.espn.com/nba/story/_/id/49641350/nba-predictions-2026-27-forecast-knicks-76ers-heat-thunder-spurs-lakers-east-west-standings" | grep -oE '<meta[^>]+property="og:image"[^>]+content="[^"]*"' | head -1 | grep -oE 'content="[^"]*"' | sed 's/content="//;s/"$//')
-
-          echo "IMG9=$IMG9"
-          echo "IMG8=$IMG8"
+          IMG9=$(curl -s --max-time 15 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" "https://www.espn.com/nba/story/_/id/49706703/klay-thompson-lands-heat-clearing-waivers" -o /tmp/page9.html -w "%{http_code}")
+          IMG8=$(curl -s --max-time 15 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" "https://www.espn.com/nba/story/_/id/49641350/nba-predictions-2026-27-forecast-knicks-76ers-heat-thunder-spurs-lakers-east-west-standings" -o /tmp/page8.html -w "%{http_code}")
+          echo "http9=$IMG9 http8=$IMG8"
+          echo "--- page9 og tags ---"
+          grep -oE '<meta[^>]*og:[^>]*>' /tmp/page9.html | head -5
+          echo "--- page9 size ---"
+          wc -c /tmp/page9.html
 
           {
             echo "=== fetched images ==="
-            echo "id9: $IMG9"
-            echo "id8: $IMG8"
+            echo "http9: $IMG9"
+            echo "http8: $IMG8"
             echo "=== updates ==="
-            if [ -n "$IMG9" ]; then
-              npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET image_url = '$IMG9' WHERE id = 9;" 2>&1
-            fi
-            if [ -n "$IMG8" ]; then
-              npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET image_url = '$IMG8' WHERE id = 8;" 2>&1
+            if [ -n "" ]; then
+              echo skip
             fi
             echo "=== verify ==="
             npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, image_url FROM articles WHERE id IN (8,9);" 2>&1
