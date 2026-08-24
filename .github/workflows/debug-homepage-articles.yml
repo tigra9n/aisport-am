@@ -1,0 +1,34 @@
+name: Debug Homepage Articles
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/debug-homepage-articles.yml']
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check
+        run: |
+          echo "=== Homepage WITHOUT cache-buster (like a real visitor) ===" > debug.txt
+          curl -s -w "\nHTTP %{http_code}\n" "https://aisport.am/" -o /tmp/home.html
+          grep -oE "Ռոման|Բոլոնիան|Մալագան|Ֆորմուլա 1-ի|Հայ ընթացքներ" /tmp/home.html | sort -u >> debug.txt
+          echo "" >> debug.txt
+          echo "=== Cache headers on homepage ===" >> debug.txt
+          curl -sI "https://aisport.am/" >> debug.txt
+          echo "" >> debug.txt
+          echo "=== Homepage WITH cache-buster ===" >> debug.txt
+          curl -s "https://aisport.am/?_c=$(date +%s)" -o /tmp/home2.html
+          grep -oE "Ռոման|Բոլոնիան|Մալագան|Ֆորմուլա 1-ի|Հայ ընթացքներ" /tmp/home2.html | sort -u >> debug.txt
+      - run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f debug.txt
+          git commit -m "check [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
