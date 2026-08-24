@@ -3,7 +3,7 @@ import { getDb } from "../../../../db";
 import { sources } from "../../../../db/schema";
 import { articleExistsForSource, saveGeneratedArticle } from "../../../../lib/articles";
 import { generateFromSourceSnippet, generateMatchPreview, generateMatchRecap, lastGenerationDebug } from "../../../../lib/content-generation";
-import { fetchArticleOgImage, fetchFeed } from "../../../../lib/feeds";
+import { fetchArticlePage, fetchFeed } from "../../../../lib/feeds";
 import { getLiveMatches } from "../../../../lib/live-football-server";
 import { getLiveMatchDetailsV2 } from "../../../../lib/live-match-details-v2";
 
@@ -22,7 +22,7 @@ const MAX_PER_TYPE = 1;
 // generation for a full article (max_tokens ~2048) genuinely takes
 // 30-40+ seconds - this isn't a bug, just how long it takes. Budget must
 // comfortably fit one full attempt, not try to rush it.
-const TIME_BUDGET_MS = 55_000;
+const TIME_BUDGET_MS = 70_000;
 
 async function runRecaps(apiKey: string, log: string[], deadline: number): Promise<number> {
   let generated = 0;
@@ -145,12 +145,15 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
         if (Date.now() > deadline) { log.push("rss: time budget exceeded, stopping early"); break; }
         if (await articleExistsForSource(item.link)) continue;
         attempted++;
-        const article = await generateFromSourceSnippet(apiKey, { title: item.title, snippet: item.snippet, sourceName: source.name });
+        // Fetch the actual source article page before generating: the RSS
+        // snippet alone (title + ~1-2 sentences) left the model with
+        // almost no real facts (names, scores) to work from, producing
+        // vague generic-sounding articles. Full body text + og:image in
+        // one request.
+        const page = await fetchArticlePage(item.link);
+        const article = await generateFromSourceSnippet(apiKey, { title: item.title, snippet: item.snippet, sourceName: source.name, fullText: page.bodyText });
         if (!article) { log.push(`rss generation failed: ${item.title.slice(0, 40)} | ${lastGenerationDebug}`); continue; }
-        // RSS feeds often omit an image entirely; try the source article's
-        // own og:image before falling back to a generic category stock
-        // photo, so the picture actually matches this specific story.
-        const resolvedImage = item.imageUrl ?? await fetchArticleOgImage(item.link);
+        const resolvedImage = item.imageUrl ?? page.image;
         const saved = await saveGeneratedArticle({
           ...article, imageUrl: resolvedImage, sourceName: source.name, sourceUrl: item.link, uniquePart: String(Date.now()).slice(-8),
         });

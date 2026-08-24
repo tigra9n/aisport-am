@@ -127,13 +127,21 @@ async function fetchApiTubeDirect(bridgeUrl: string, limit: number): Promise<Fee
   }
 }
 
-// When the RSS item itself has no image, fetch the actual source article
-// page and pull its og:image/twitter:image meta tag - a real photo tied
-// to that specific story, instead of falling back to a generic
-// per-category stock photo. Only called for the one item we're about to
+// Fetches the actual source article page once and pulls out (a) the
+// og:image/twitter:image for a real per-story photo, and (b) a chunk of
+// plain body text for much richer factual grounding than the short RSS
+// snippet alone provides. Only called for the one item we're about to
 // generate content for (not every item in a feed), so it's at most one
 // extra request per cron tick.
-export async function fetchArticleOgImage(articleUrl: string): Promise<string | null> {
+//
+// The short RSS snippet (title + ~1-2 sentence description) was leaving
+// the model with almost nothing concrete to work with, so generated
+// articles came out vague and name-less - it had no player/team names,
+// scores, or quotes to draw from in the first place. Full body text
+// gives it real material; the prompt still asks for original Armenian
+// phrasing (not verbatim translation) but explicitly keeps real names,
+// clubs, and numbers intact.
+export async function fetchArticlePage(articleUrl: string): Promise<{ image: string | null; bodyText: string | null }> {
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 8_000);
@@ -142,29 +150,35 @@ export async function fetchArticleOgImage(articleUrl: string): Promise<string | 
       headers: { "User-Agent": "AISportBot/1.0 (+https://aisport.am)" },
     });
     clearTimeout(timeoutId);
-    if (!response.ok) return null;
-    // Only read enough of the page to cover the <head> section - avoids
-    // downloading a full article page just for one meta tag.
-    const reader = response.body?.getReader();
-    let html = "";
-    if (reader) {
-      const decoder = new TextDecoder();
-      while (html.length < 60_000) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        html += decoder.decode(value, { stream: true });
-        if (/<\/head>/i.test(html)) break;
-      }
-      reader.cancel().catch(() => {});
-    } else {
-      html = await response.text();
-    }
+    if (!response.ok) return { image: null, bodyText: null };
+    const html = await response.text();
+
     const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
       ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
       ?? html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
       ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
-    return ogMatch ? ogMatch[1] : null;
+    const image = ogMatch ? ogMatch[1] : null;
+
+    // Crude but effective plain-text extraction: strip script/style/nav/
+    // header/footer/noscript blocks and all remaining tags, collapse
+    // whitespace. Not a real readability parser, but good enough to hand
+    // the model actual sentences with names/numbers instead of nothing.
+    const stripped = html
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<nav[\s\S]*?<\/nav>/gi, " ")
+      .replace(/<header[\s\S]*?<\/header>/gi, " ")
+      .replace(/<footer[\s\S]*?<\/footer>/gi, " ")
+      .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&nbsp;/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const bodyText = stripped ? stripped.slice(0, 6_000) : null;
+
+    return { image, bodyText };
   } catch {
-    return null;
+    return { image: null, bodyText: null };
   }
 }
