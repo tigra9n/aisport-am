@@ -15,13 +15,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Query recent articles
+      - name: Clear tiny logo image_urls
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
           {
-            echo "=== recent articles ==="
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id, slug, title, category, image_url FROM articles ORDER BY id DESC LIMIT 5;" 2>&1
+            echo "=== clear small team-logo images ==="
+            npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET image_url = NULL WHERE image_url LIKE '%api-sports.io%';" 2>&1
+            echo "=== verify ==="
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, image_url FROM articles ORDER BY id DESC LIMIT 6;" 2>&1
           } > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
