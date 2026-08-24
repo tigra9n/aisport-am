@@ -52,18 +52,23 @@ export async function generateMatchRecap(
   apiKey: string,
   match: { home: string; away: string; homeScore: number | null; awayScore: number | null; competition: string; venue: string },
   events: { minute: string; team: string; player: string; label: string }[],
+  statistics?: { team: string; possession: string; shotsOnGoal: string; totalShots: string; xg: string }[],
 ): Promise<GeneratedArticle | null> {
   const eventsText = events.length
     ? events.map((e) => `${e.minute} ${e.team}՝ ${e.label}${e.player !== "—" ? ` (${e.player})` : ""}`).join("\n")
     : "Իրադարձությունների մանրամասն տվյալ չկա։";
-  const userPrompt = `Գրիր կարճ (150-250 բառ) recap հոդված այս խաղի արդյունքից.
+  const statsText = statistics && statistics.length === 2
+    ? statistics.map((s) => `${s.team}՝ տիրապետում ${s.possession}, հարվածներ դարպասին ${s.shotsOnGoal} (ընդամենը ${s.totalShots})`).join("\n")
+    : null;
+  const userPrompt = `Գրիր տեղեկատվական (200-300 բառ) recap հոդված այս խաղի արդյունքից.
 Մրցաշար՝ ${match.competition}
 ${match.home} ${match.homeScore} : ${match.awayScore} ${match.away}
 Մարզադաշտ՝ ${match.venue}
 Իրադարձություններ.
 ${eventsText}
+${statsText ? `\nՎիճակագրություն.\n${statsText}` : ""}
 
-Հենվիր միայն այս փաստերի վրա, ոչինչ մի հորինիր (խաղացողների անուններ, գումարներ և այլն, որ չկան տվյալների մեջ)։ category դաշտում գրիր "Ֆուտբոլ"։`;
+Հենվիր միայն այս փաստերի վրա, ոչինչ մի հորինիր (խաղացողների անուններ, գումարներ և այլն, որ չկան տվյալների մեջ)։ Եթե վիճակագրություն կա, հիշատակիր կոնկրետ թվերով (տիրապետում, հարվածներ)։ category դաշտում գրիր "Ֆուտբոլ"։`;
   const raw = await callClaude(SYSTEM_PROMPT, userPrompt, apiKey);
   return raw ? parseArticleJson(raw, "Ֆուտբոլ") : null;
 }
@@ -71,20 +76,22 @@ ${eventsText}
 export async function generateMatchPreview(
   apiKey: string,
   match: { home: string; away: string; competition: string; kickoff: string },
-  context: { h2h?: string; homeForm?: string; awayForm?: string },
+  context: { h2h?: string; homeForm?: string; awayForm?: string; standings?: string; prediction?: string },
 ): Promise<GeneratedArticle | null> {
   const contextLines = [
     context.h2h ? `Նախկին հանդիպումներ՝ ${context.h2h}` : null,
     context.homeForm ? `${match.home}-ի վերջին ձևը՝ ${context.homeForm}` : null,
     context.awayForm ? `${match.away}-ի վերջին ձևը՝ ${context.awayForm}` : null,
+    context.standings ? `Աղյուսակում դիրքերը՝ ${context.standings}` : null,
+    context.prediction ? context.prediction : null,
   ].filter(Boolean).join("\n");
-  const userPrompt = `Գրիր կարճ (120-200 բառ) preview հոդված այս առաջիկա խաղից.
+  const userPrompt = `Գրիր տեղեկատվական preview հոդված (180-280 բառ) այս առաջիկա խաղից՝ օգտագործելով ստորև տրված ԲՈԼՈՐ կոնկրետ տվյալները (թվեր, դիրքեր, հավանականություններ), ոչ միայն ընդհանուր նախադասություններ.
 Մրցաշար՝ ${match.competition}
 ${match.home} - ${match.away}
 Ժամանակ՝ ${match.kickoff}
 ${contextLines || "Լրացուցիչ վիճակագրություն չկա։"}
 
-Հենվիր միայն այս փաստերի վրա, ոչինչ մի հորինիր։ category դաշտում գրիր "Ֆուտբոլ"։`;
+Հենվիր միայն այս փաստերի վրա, ոչինչ մի հորինիր։ Եթե տվյալ կա (ձև, աղյուսակի դիրք, նախկին հանդիպումներ, հավանականություններ), պարտադիր հիշատակիր կոնկրետ թվերով, ոչ ընդհանրաբանված։ category դաշտում գրիր "Ֆուտբոլ"։`;
   const raw = await callClaude(SYSTEM_PROMPT, userPrompt, apiKey);
   return raw ? parseArticleJson(raw, "Ֆուտբոլ") : null;
 }

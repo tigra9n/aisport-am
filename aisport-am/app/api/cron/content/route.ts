@@ -39,7 +39,7 @@ export async function GET(request: Request) {
       const article = await generateMatchRecap(apiKey, {
         home: match.home, away: match.away, homeScore: match.homeScore, awayScore: match.awayScore,
         competition: match.competition, venue: details.venue,
-      }, details.events);
+      }, details.events, details.statistics);
       if (!article) continue;
       const saved = await saveGeneratedArticle({
         ...article,
@@ -63,9 +63,37 @@ export async function GET(request: Request) {
         if (generated >= MAX_ARTICLES_PER_RUN) break;
         const sourceUrl = `https://aisport.am/live/match/${match.id}#preview`;
         if (await articleExistsForSource(sourceUrl)) continue;
+        const details = await getLiveMatchDetailsV2(match.id);
+        const context: { h2h?: string; homeForm?: string; awayForm?: string; standings?: string; prediction?: string } = {};
+        if (details) {
+          if (details.h2h.length > 0) {
+            const homeWins = details.h2h.filter((g) => (g.home === match.home && (g.homeScore ?? 0) > (g.awayScore ?? 0)) || (g.away === match.home && (g.awayScore ?? 0) > (g.homeScore ?? 0))).length;
+            const awayWins = details.h2h.filter((g) => (g.home === match.away && (g.homeScore ?? 0) > (g.awayScore ?? 0)) || (g.away === match.away && (g.awayScore ?? 0) > (g.homeScore ?? 0))).length;
+            const draws = details.h2h.length - homeWins - awayWins;
+            const lastMeeting = details.h2h[0];
+            context.h2h = `Վերջին ${details.h2h.length} հանդիպումներից՝ ${match.home} ${homeWins} հաղթանակ, ${match.away} ${awayWins} հաղթանակ, ${draws} ոչ-ոքի։ Վերջին խաղը (${lastMeeting.date})՝ ${lastMeeting.home} ${lastMeeting.homeScore} - ${lastMeeting.awayScore} ${lastMeeting.away}։`;
+          }
+          const homeFormRow = details.formGuide.find((f) => f.team === match.home);
+          const awayFormRow = details.formGuide.find((f) => f.team === match.away);
+          if (homeFormRow) context.homeForm = `${homeFormRow.won}Հ-${homeFormRow.draw}Ո-${homeFormRow.lost}Պ, միջին ${homeFormRow.goalsForAvg} գոլ խաղում (վերջին ձևը՝ ${homeFormRow.form || "անհայտ"})`;
+          if (awayFormRow) context.awayForm = `${awayFormRow.won}Հ-${awayFormRow.draw}Ո-${awayFormRow.lost}Պ, միջին ${awayFormRow.goalsForAvg} գոլ խաղում (վերջին ձևը՝ ${awayFormRow.form || "անհայտ"})`;
+          if (details.standings) {
+            const homeRow = details.standings.find((r) => r.team === match.home);
+            const awayRow = details.standings.find((r) => r.team === match.away);
+            if (homeRow || awayRow) {
+              context.standings = [
+                homeRow ? `${match.home}՝ ${homeRow.position}-րդ տեղ, ${homeRow.points} միավոր` : null,
+                awayRow ? `${match.away}՝ ${awayRow.position}-րդ տեղ, ${awayRow.points} միավոր` : null,
+              ].filter(Boolean).join("; ");
+            }
+          }
+          if (details.prediction) {
+            context.prediction = `Հաղթանակի հավանականություններ՝ ${match.home} ${details.prediction.homePct}, ոչ-ոքի ${details.prediction.drawPct}, ${match.away} ${details.prediction.awayPct}։${details.prediction.advice ? ` Վերլուծություն՝ ${details.prediction.advice}` : ""}`;
+          }
+        }
         const article = await generateMatchPreview(apiKey, {
           home: match.home, away: match.away, competition: match.competition, kickoff: match.status,
-        }, {});
+        }, context);
         if (!article) continue;
         const saved = await saveGeneratedArticle({
           ...article,
