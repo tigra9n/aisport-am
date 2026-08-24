@@ -50,7 +50,7 @@ async function homepageArticles(): Promise<ArticlePreview[]> {
     title: article.title,
     excerpt: article.excerpt,
     author: "AISport խմբագրություն",
-    time: new Date(article.publishedAt + "Z").toLocaleString("hy-AM", { timeZone: "Asia/Yerevan", hour: "2-digit", minute: "2-digit" }),
+    time: new Date(article.publishedAt + "Z").toLocaleString("hy-AM", { timeZone: "Asia/Yerevan", hour: "2-digit", minute: "2-digit", hour12: false }),
     readTime: "3 րոպե",
     image: article.imageUrl || categoryDefaultImage[article.category] || DEFAULT_IMAGE,
     local: article.category.includes("Հայաստան"),

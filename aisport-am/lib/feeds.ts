@@ -21,6 +21,8 @@ function extractTag(block: string, tag: string): string | null {
 function extractImage(block: string): string | null {
   const enclosure = block.match(/<enclosure[^>]*url="([^"]+)"[^>]*type="image[^"]*"/i) || block.match(/<media:content[^>]*url="([^"]+)"/i);
   if (enclosure) return enclosure[1];
+  const thumbnail = block.match(/<media:thumbnail[^>]*url="([^"]+)"/i);
+  if (thumbnail) return thumbnail[1];
   const imgTag = block.match(/<img[^>]*src="([^"]+)"/i);
   return imgTag ? imgTag[1] : null;
 }
