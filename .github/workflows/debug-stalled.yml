@@ -24,7 +24,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          echo "=== Trigger content generation now ===" > ../debug.txt
+          echo "=== Trigger content generation now (post-debug-deploy) ===" > ../debug.txt
           curl -s "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}" >> ../debug.txt
           echo "" >> ../debug.txt
           echo "=== All articles, newest first ===" >> ../debug.txt
