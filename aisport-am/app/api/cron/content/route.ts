@@ -122,7 +122,15 @@ async function runRss(apiKey: string, log: string[], deadline: number): Promise<
   const MAX_ATTEMPTS = 1;
   try {
     const db = await getDb();
-    const enabledSources = await db.select().from(sources).where(eq(sources.enabled, true)).orderBy(desc(sources.id));
+    const allSources = await db.select().from(sources).where(eq(sources.enabled, true)).orderBy(desc(sources.id));
+    // Rotate which source goes first each tick instead of always trying
+    // the same (highest-id) source first. Without this, whichever source
+    // has fresh un-generated items keeps winning every single tick, so
+    // e.g. one basketball-heavy source can dominate for a long stretch
+    // while football-only sources never get a turn.
+    const tickIndex = Math.floor(Date.now() / (5 * 60 * 1000));
+    const offset = allSources.length > 0 ? tickIndex % allSources.length : 0;
+    const enabledSources = [...allSources.slice(offset), ...allSources.slice(0, offset)];
     for (const source of enabledSources) {
       if (generated >= MAX_PER_TYPE || attempted >= MAX_ATTEMPTS) break;
       if (Date.now() > deadline) { log.push("rss: time budget exceeded, stopping early"); break; }
