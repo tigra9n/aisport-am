@@ -24,6 +24,28 @@ type ApiTubeArticle = {
   image?: string;
 };
 
+// category.id=medtop:15000000 (IPTC "Sport") returns mostly-sports results
+// on APITube's free tier, but not exclusively - real-world sample included
+// a car review, "Letters to the Editor", and outright spam ("...Hacked By
+// Tiger" gambling junk). Keyword-filter as a second pass since there's no
+// reliable stricter category/topic filter available on the free plan.
+const SPORT_KEYWORDS = [
+  "football", "soccer", "basketball", "nba", "nfl", "mlb", "nhl", "tennis",
+  "cricket", "rugby", "hockey", "boxing", "mma", "ufc", "golf", "olympic",
+  "athletics", "marathon", "cycling", "f1", "formula 1", "match", "league",
+  "championship", "tournament", " cup", "coach", "goal", "score", "player",
+  "team", "club", "stadium", "playoff", "finals", "medal", "champion",
+  "transfer", "manager", "referee", "juventus", "madrid", "barcelona",
+  "liverpool", "chelsea", "arsenal", "united", "bayern", "psg",
+];
+const SPAM_PATTERNS = ["hacked by", "deposit", "casino", "gambling site", "bonus code", "free spins"];
+
+function looksLikeSportsArticle(a: ApiTubeArticle): boolean {
+  const text = `${a.title ?? ""} ${a.description ?? ""}`.toLowerCase();
+  if (SPAM_PATTERNS.some((p) => text.includes(p))) return false;
+  return SPORT_KEYWORDS.some((k) => text.includes(k));
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const apiKey = url.searchParams.get("api_key");
@@ -37,11 +59,13 @@ export async function GET(request: Request) {
 
   let articles: ApiTubeArticle[] = [];
   try {
-    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&category.id=${encodeURIComponent(categoryId)}&per_page=${encodeURIComponent(perPage)}&sort.by=published_at&sort.order=desc`;
+    // Fetch more than we need (30 raw) since the keyword filter below
+    // discards a portion as off-topic/spam.
+    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&category.id=${encodeURIComponent(categoryId)}&per_page=30&language.code=en&sort.by=published_at&sort.order=desc`;
     const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
     if (res.ok) {
       const data = await res.json() as { results?: ApiTubeArticle[] };
-      articles = data.results ?? [];
+      articles = (data.results ?? []).filter(looksLikeSportsArticle).slice(0, Number(perPage) || 20);
     }
   } catch {
     // fall through to empty feed below
