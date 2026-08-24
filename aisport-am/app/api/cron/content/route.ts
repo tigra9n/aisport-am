@@ -115,6 +115,15 @@ export async function GET(request: Request) {
       const db = await getDb();
       const enabledSources = await db.select().from(sources).where(eq(sources.enabled, true)).orderBy(desc(sources.id));
       log.push(`[debug] enabledSources count: ${enabledSources.length}`);
+      if (enabledSources[0]) {
+        try {
+          const testResp = await fetch(enabledSources[0].feedUrl, { headers: { "User-Agent": "AISportBot/1.0 (+https://aisport.am)" } });
+          const testText = await testResp.text();
+          log.push(`[debug] raw fetch status=${testResp.status} bodyLen=${testText.length} hasItemTag=${testText.includes("<item")}`);
+        } catch (err) {
+          log.push(`[debug] raw fetch threw: ${String(err)}`);
+        }
+      }
       for (const source of enabledSources) {
         if (generated >= MAX_ARTICLES_PER_RUN) break;
         const items = await fetchFeed(source.feedUrl, 8);
