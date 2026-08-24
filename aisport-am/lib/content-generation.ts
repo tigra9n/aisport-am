@@ -5,7 +5,7 @@ async function callClaude(systemPrompt: string, userPrompt: string, apiKey: stri
   const started = Date.now();
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 55_000);
+    const timeoutId = setTimeout(() => controller.abort(), 100_000);
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       signal: controller.signal,

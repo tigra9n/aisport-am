@@ -22,7 +22,7 @@ const MAX_PER_TYPE = 1;
 // generation for a full article (max_tokens ~2048) genuinely takes
 // 30-40+ seconds - this isn't a bug, just how long it takes. Budget must
 // comfortably fit one full attempt, not try to rush it.
-const TIME_BUDGET_MS = 70_000;
+const TIME_BUDGET_MS = 115_000;
 
 async function runRecaps(apiKey: string, log: string[], deadline: number): Promise<number> {
   let generated = 0;
