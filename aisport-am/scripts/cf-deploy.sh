@@ -59,4 +59,9 @@ if [ -n "${CRON_TOKEN:-}" ]; then
   echo "$CRON_TOKEN" | npx wrangler secret put CRON_TOKEN --name "$WORKER_NAME"
 fi
 
+if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
+  echo "== Setting ANTHROPIC_API_KEY secret on the worker =="
+  echo "$ANTHROPIC_API_KEY" | npx wrangler secret put ANTHROPIC_API_KEY --name "$WORKER_NAME"
+fi
+
 echo "== Deploy complete =="

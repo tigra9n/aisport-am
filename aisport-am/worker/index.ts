@@ -49,9 +49,9 @@ const worker = {
   // past their nominal interval, especially on lower-traffic repos).
   async scheduled(_event: unknown, env: Env, ctx: ExecutionContext): Promise<void> {
     if (!env.CRON_TOKEN) return;
-    ctx.waitUntil(
-      fetch(`https://aisport.am/api/cron/warm?token=${encodeURIComponent(env.CRON_TOKEN)}`).catch(() => {}),
-    );
+    const token = encodeURIComponent(env.CRON_TOKEN);
+    ctx.waitUntil(fetch(`https://aisport.am/api/cron/warm?token=${token}`).catch(() => {}));
+    ctx.waitUntil(fetch(`https://aisport.am/api/cron/content?token=${token}`).catch(() => {}));
   },
 };
 

@@ -29,3 +29,63 @@ export async function getArticleBySlug(slug: string): Promise<NewsArticle | null
     return null;
   }
 }
+
+export async function articleExistsForSource(sourceUrl: string): Promise<boolean> {
+  try {
+    const [row] = await (await getDb())
+      .select({ id: articles.id })
+      .from(articles)
+      .where(eq(articles.sourceUrl, sourceUrl))
+      .limit(1);
+    return Boolean(row);
+  } catch {
+    return false;
+  }
+}
+
+function slugify(title: string, uniquePart: string) {
+  const transliterated = title
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 6)
+    .join("-");
+  return `${transliterated || "news"}-${uniquePart}`.slice(0, 120);
+}
+
+// Returns true if a new row was inserted, false if it already existed
+// (sourceUrl is unique, so re-processing the same match/feed item is safe).
+export async function saveGeneratedArticle(input: {
+  title: string;
+  excerpt: string;
+  content: string;
+  category: string;
+  imageUrl?: string | null;
+  sourceName: string;
+  sourceUrl: string;
+  uniquePart: string;
+}): Promise<boolean> {
+  try {
+    const db = await getDb();
+    const result = await db
+      .insert(articles)
+      .values({
+        slug: slugify(input.title, input.uniquePart),
+        title: input.title,
+        excerpt: input.excerpt,
+        content: input.content,
+        category: input.category,
+        imageUrl: input.imageUrl ?? null,
+        sourceName: input.sourceName,
+        sourceUrl: input.sourceUrl,
+        status: "published",
+      })
+      .onConflictDoNothing({ target: articles.sourceUrl })
+      .returning({ id: articles.id });
+    return result.length > 0;
+  } catch (err) {
+    console.error(`[articles] save failed: ${String(err)}`);
+    return false;
+  }
+}
