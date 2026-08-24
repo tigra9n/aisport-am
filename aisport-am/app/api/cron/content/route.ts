@@ -3,7 +3,7 @@ import { getDb } from "../../../../db";
 import { sources } from "../../../../db/schema";
 import { articleExistsForSource, saveGeneratedArticle } from "../../../../lib/articles";
 import { generateFromSourceSnippet, generateMatchPreview, generateMatchRecap, lastGenerationDebug } from "../../../../lib/content-generation";
-import { fetchFeed } from "../../../../lib/feeds";
+import { fetchArticleOgImage, fetchFeed } from "../../../../lib/feeds";
 import { getLiveMatches } from "../../../../lib/live-football-server";
 import { getLiveMatchDetailsV2 } from "../../../../lib/live-match-details-v2";
 
@@ -142,8 +142,12 @@ async function runRss(apiKey: string, log: string[], deadline: number): Promise<
         attempted++;
         const article = await generateFromSourceSnippet(apiKey, { title: item.title, snippet: item.snippet, sourceName: source.name });
         if (!article) { log.push(`rss generation failed: ${item.title.slice(0, 40)} | ${lastGenerationDebug}`); continue; }
+        // RSS feeds often omit an image entirely; try the source article's
+        // own og:image before falling back to a generic category stock
+        // photo, so the picture actually matches this specific story.
+        const resolvedImage = item.imageUrl ?? await fetchArticleOgImage(item.link);
         const saved = await saveGeneratedArticle({
-          ...article, imageUrl: item.imageUrl, sourceName: source.name, sourceUrl: item.link, uniquePart: String(Date.now()).slice(-8),
+          ...article, imageUrl: resolvedImage, sourceName: source.name, sourceUrl: item.link, uniquePart: String(Date.now()).slice(-8),
         });
         if (saved) { generated++; log.push(`rewrite: ${item.title.slice(0, 40)}`); }
       }

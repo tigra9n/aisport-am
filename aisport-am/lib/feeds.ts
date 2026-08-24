@@ -57,3 +57,45 @@ export async function fetchFeed(feedUrl: string, limit = 10): Promise<FeedItem[]
     return [];
   }
 }
+
+// When the RSS item itself has no image, fetch the actual source article
+// page and pull its og:image/twitter:image meta tag - a real photo tied
+// to that specific story, instead of falling back to a generic
+// per-category stock photo. Only called for the one item we're about to
+// generate content for (not every item in a feed), so it's at most one
+// extra request per cron tick.
+export async function fetchArticleOgImage(articleUrl: string): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8_000);
+    const response = await fetch(articleUrl, {
+      signal: controller.signal,
+      headers: { "User-Agent": "AISportBot/1.0 (+https://aisport.am)" },
+    });
+    clearTimeout(timeoutId);
+    if (!response.ok) return null;
+    // Only read enough of the page to cover the <head> section - avoids
+    // downloading a full article page just for one meta tag.
+    const reader = response.body?.getReader();
+    let html = "";
+    if (reader) {
+      const decoder = new TextDecoder();
+      while (html.length < 60_000) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        html += decoder.decode(value, { stream: true });
+        if (/<\/head>/i.test(html)) break;
+      }
+      reader.cancel().catch(() => {});
+    } else {
+      html = await response.text();
+    }
+    const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
+      ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
+      ?? html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
+      ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
+    return ogMatch ? ogMatch[1] : null;
+  } catch {
+    return null;
+  }
+}
