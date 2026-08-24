@@ -22,9 +22,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Test
         run: |
-          MODE="${{ github.event.inputs.mode || 'rss' }}"
-          echo "=== mode=$MODE ===" > test.txt
-          curl -s -w "\ncurl_exit=%{exitcode}, http=%{http_code}, time=%{time_total}s\n" --max-time 120 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=$MODE&_c=$(date +%s)7" >> test.txt 2>&1 || true
+          echo "=== homepage fetch (fresh, cache-busted) ===" > test.txt
+          curl -s --max-time 20 "https://aisport.am/?_cb=$(date +%s)" -H "Cache-Control: no-cache" 2>&1 | grep -oE '<h[123][^>]*>[^<]*</h[123]>|sport-news-title[^>]*>[^<]*' | head -20 >> test.txt
         continue-on-error: true
       - run: |
           git config user.email "actions@github.com"
