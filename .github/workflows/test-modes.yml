@@ -24,7 +24,7 @@ jobs:
         run: |
           MODE="${{ github.event.inputs.mode || 'recap' }}"
           echo "=== mode=$MODE ===" > test.txt
-          curl -s -w "\ncurl_exit=%{exitcode}, http=%{http_code}, time=%{time_total}s\n" --max-time 120 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=$MODE&_c=$(date +%s)2" >> test.txt 2>&1 || true
+          curl -s -w "\ncurl_exit=%{exitcode}, http=%{http_code}, time=%{time_total}s\n" --max-time 120 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=$MODE&_c=$(date +%s)3" >> test.txt 2>&1 || true
         continue-on-error: true
       - run: |
           git config user.email "actions@github.com"
