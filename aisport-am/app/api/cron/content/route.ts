@@ -34,7 +34,44 @@ export async function GET(request: Request) {
   let rssGenerated = 0;
   const log: string[] = [];
 
-  // 1) Recaps for recently-finished matches.
+  // 1) Rewrites from enabled RSS sources — runs FIRST. Cloudflare Workers
+  // caps subrequests per invocation; recap/preview generation below makes
+  // many API-Football subrequests (events, lineups, stats, h2h, prediction,
+  // injuries, standings, top scorers per match) and was regularly exhausting
+  // that budget before the RSS fetch ever ran, so real news silently never
+  // got fetched. Running RSS first guarantees it always gets its subrequests.
+  {
+    try {
+      const db = await getDb();
+      const enabledSources = await db.select().from(sources).where(eq(sources.enabled, true)).orderBy(desc(sources.id));
+      log.push(`[debug] enabledSources count: ${enabledSources.length}`);
+      for (const source of enabledSources) {
+        if (rssGenerated >= MAX_RSS_PER_RUN) break;
+        const items = await fetchFeed(source.feedUrl, 8);
+        log.push(`[debug] ${source.name}: fetched ${items.length} items`);
+        for (const item of items) {
+          if (rssGenerated >= MAX_RSS_PER_RUN) break;
+          const exists = await articleExistsForSource(item.link);
+          if (exists) { log.push(`[debug] skip (exists): ${item.title.slice(0, 40)}`); continue; }
+          const article = await generateFromSourceSnippet(apiKey, { title: item.title, snippet: item.snippet, sourceName: source.name });
+          if (!article) { log.push(`[debug] generation failed for: ${item.title.slice(0, 40)}`); continue; }
+          const saved = await saveGeneratedArticle({
+            ...article,
+            imageUrl: item.imageUrl,
+            sourceName: source.name,
+            sourceUrl: item.link,
+            uniquePart: String(Date.now()).slice(-8),
+          });
+          if (saved) { generated++; rssGenerated++; log.push(`rewrite: ${item.title.slice(0, 40)}`); }
+          else { log.push(`[debug] save failed (duplicate?) for: ${item.title.slice(0, 40)}`); }
+        }
+      }
+    } catch (err) {
+      log.push(`rss error: ${String(err)}`);
+    }
+  }
+
+  // 2) Recaps for recently-finished matches.
   try {
     const { matches } = await getLiveMatches(0, true);
     const finished = matches.filter((m) => !m.isLive && m.homeScore !== null && m.status === "Ավարտված");
@@ -62,7 +99,7 @@ export async function GET(request: Request) {
     log.push(`recap error: ${String(err)}`);
   }
 
-  // 2) Previews for today's not-yet-started matches.
+  // 3) Previews for today's not-yet-started matches.
   {
     try {
       const { matches } = await getLiveMatches(0, true);
@@ -114,47 +151,6 @@ export async function GET(request: Request) {
       }
     } catch (err) {
       log.push(`preview error: ${String(err)}`);
-    }
-  }
-
-  // 3) Rewrites from enabled RSS sources.
-  {
-    try {
-      const db = await getDb();
-      const enabledSources = await db.select().from(sources).where(eq(sources.enabled, true)).orderBy(desc(sources.id));
-      log.push(`[debug] enabledSources count: ${enabledSources.length}`);
-      if (enabledSources[0]) {
-        try {
-          const testResp = await fetch(enabledSources[0].feedUrl, { headers: { "User-Agent": "AISportBot/1.0 (+https://aisport.am)" } });
-          const testText = await testResp.text();
-          log.push(`[debug] raw fetch status=${testResp.status} bodyLen=${testText.length} hasItemTag=${testText.includes("<item")}`);
-        } catch (err) {
-          log.push(`[debug] raw fetch threw: ${String(err)}`);
-        }
-      }
-      for (const source of enabledSources) {
-        if (rssGenerated >= MAX_RSS_PER_RUN) break;
-        const items = await fetchFeed(source.feedUrl, 8);
-        log.push(`[debug] ${source.name}: fetched ${items.length} items`);
-        for (const item of items) {
-          if (rssGenerated >= MAX_RSS_PER_RUN) break;
-          const exists = await articleExistsForSource(item.link);
-          if (exists) { log.push(`[debug] skip (exists): ${item.title.slice(0, 40)}`); continue; }
-          const article = await generateFromSourceSnippet(apiKey, { title: item.title, snippet: item.snippet, sourceName: source.name });
-          if (!article) { log.push(`[debug] generation failed for: ${item.title.slice(0, 40)}`); continue; }
-          const saved = await saveGeneratedArticle({
-            ...article,
-            imageUrl: item.imageUrl,
-            sourceName: source.name,
-            sourceUrl: item.link,
-            uniquePart: String(Date.now()).slice(-8),
-          });
-          if (saved) { generated++; rssGenerated++; log.push(`rewrite: ${item.title.slice(0, 40)}`); }
-          else { log.push(`[debug] save failed (duplicate?) for: ${item.title.slice(0, 40)}`); }
-        }
-      }
-    } catch (err) {
-      log.push(`rss error: ${String(err)}`);
     }
   }
 
