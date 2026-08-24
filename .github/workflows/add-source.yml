@@ -15,13 +15,30 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Query
+      - name: Fetch real images and update D1
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
+
+          IMG9=$(curl -s --max-time 15 "https://www.espn.com/nba/story/_/id/49706703/klay-thompson-lands-heat-clearing-waivers" | grep -oE '<meta[^>]+property="og:image"[^>]+content="[^"]*"' | head -1 | grep -oE 'content="[^"]*"' | sed 's/content="//;s/"$//')
+          IMG8=$(curl -s --max-time 15 "https://www.espn.com/nba/story/_/id/49641350/nba-predictions-2026-27-forecast-knicks-76ers-heat-thunder-spurs-lakers-east-west-standings" | grep -oE '<meta[^>]+property="og:image"[^>]+content="[^"]*"' | head -1 | grep -oE 'content="[^"]*"' | sed 's/content="//;s/"$//')
+
+          echo "IMG9=$IMG9"
+          echo "IMG8=$IMG8"
+
           {
-            echo "=== basketball articles ==="
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, category, image_url, source_url FROM articles WHERE category = 'Բասկետբոլ' ORDER BY id DESC LIMIT 5;" 2>&1
+            echo "=== fetched images ==="
+            echo "id9: $IMG9"
+            echo "id8: $IMG8"
+            echo "=== updates ==="
+            if [ -n "$IMG9" ]; then
+              npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET image_url = '$IMG9' WHERE id = 9;" 2>&1
+            fi
+            if [ -n "$IMG8" ]; then
+              npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET image_url = '$IMG8' WHERE id = 8;" 2>&1
+            fi
+            echo "=== verify ==="
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, image_url FROM articles WHERE id IN (8,9);" 2>&1
           } > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
