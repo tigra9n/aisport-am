@@ -15,13 +15,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Query articles
+      - name: Fix category
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
           {
-            echo "=== football-category articles mentioning basketball keywords ==="
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, category FROM articles WHERE category = 'Ֆուտբոլ' AND (title LIKE '%Թոմփ%' OR title LIKE '%ԴեՌոզան%' OR title LIKE '%NBA%' OR title LIKE '%բասկետբոլ%' OR title LIKE '%Բասկետբոլ%');" 2>&1
+            echo "=== update ==="
+            npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET category = 'Բասկետբոլ' WHERE id = 9;" 2>&1
+            echo "=== verify ==="
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, category FROM articles WHERE id = 9;" 2>&1
           } > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
