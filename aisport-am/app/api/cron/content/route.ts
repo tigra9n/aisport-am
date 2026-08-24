@@ -23,7 +23,7 @@ const MAX_PER_TYPE = 2;
 // its own timeout) can run for many minutes with nothing ever generated or
 // logged, which is indistinguishable from the cron simply not firing.
 // Cutting the loop off here guarantees the endpoint always returns quickly.
-const TIME_BUDGET_MS = 40_000;
+const TIME_BUDGET_MS = 18_000;
 
 async function runRecaps(apiKey: string, log: string[], deadline: number): Promise<number> {
   let generated = 0;

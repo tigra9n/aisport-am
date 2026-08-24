@@ -2,9 +2,10 @@ export type GeneratedArticle = { title: string; excerpt: string; content: string
 export let lastGenerationDebug = "";
 
 async function callClaude(systemPrompt: string, userPrompt: string, apiKey: string): Promise<{ text: string | null; debug: string }> {
+  const started = Date.now();
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25_000);
+    const timeoutId = setTimeout(() => controller.abort(), 15_000);
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       signal: controller.signal,
@@ -27,16 +28,17 @@ async function callClaude(systemPrompt: string, userPrompt: string, apiKey: stri
       }),
     });
     clearTimeout(timeoutId);
+    const ms = Date.now() - started;
     if (!response.ok) {
       const bodyText = await response.text().catch(() => "");
-      return { text: null, debug: `http ${response.status}: ${bodyText.slice(0, 300)}` };
+      return { text: null, debug: `[${ms}ms] http ${response.status}: ${bodyText.slice(0, 300)}` };
     }
     const data = await response.json() as { content?: { type: string; text?: string }[]; stop_reason?: string };
     const textBlock = data.content?.find((block) => block.type === "text");
-    if (!textBlock?.text) return { text: null, debug: `no text block, stop_reason=${data.stop_reason}, raw=${JSON.stringify(data).slice(0, 300)}` };
-    return { text: textBlock.text, debug: "ok" };
+    if (!textBlock?.text) return { text: null, debug: `[${ms}ms] no text block, stop_reason=${data.stop_reason}, raw=${JSON.stringify(data).slice(0, 300)}` };
+    return { text: textBlock.text, debug: `[${ms}ms] ok` };
   } catch (err) {
-    return { text: null, debug: `threw: ${String(err)}` };
+    return { text: null, debug: `[${Date.now() - started}ms] threw: ${String(err)}` };
   }
 }
 
