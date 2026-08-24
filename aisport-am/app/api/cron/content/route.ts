@@ -29,10 +29,17 @@ async function runRecaps(apiKey: string, log: string[], deadline: number): Promi
   let attempted = 0;
   const MAX_ATTEMPTS = 1;
   try {
-    const { matches } = await getLiveMatches(0, true);
+    // Right after midnight (Yerevan time), "today" (dayOffset=0) has
+    // already rolled over to the new calendar day, whose matches mostly
+    // haven't kicked off yet - a match that finished just before midnight
+    // now falls under "yesterday" and gets missed entirely. Check both.
+    const [todayResult, yesterdayResult] = await Promise.all([
+      getLiveMatches(0, true),
+      getLiveMatches(-1, true),
+    ]);
+    const matches = [...todayResult.matches, ...yesterdayResult.matches];
     const finished = matches.filter((m) => !m.isLive && m.homeScore !== null && m.status === "Ավարտված");
     log.push(`recap debug: total=${matches.length}, finished=${finished.length} (${finished.map((m) => `${m.home}-${m.away}/${m.competition}`).join(", ")})`);
-    log.push(`recap debug: all matches: ${matches.map((m) => `${m.home}-${m.away}[${m.status}]`).join(" | ")}`);
     for (const match of finished) {
       if (generated >= MAX_PER_TYPE || attempted >= MAX_ATTEMPTS) break;
       if (Date.now() > deadline) { log.push("recap: time budget exceeded, stopping early"); break; }
