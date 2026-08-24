@@ -2,7 +2,8 @@ name: Add RSS Source
 
 # One-off manual utility to add a row to the `sources` table via D1,
 # without needing a local wrangler setup. Edit SOURCE_NAME/SOURCE_URL
-# below and push to run.
+# below and push to run. Insert is idempotent (INSERT OR IGNORE on the
+# unique feed_url), so re-running with the same URL is a no-op.
 
 on:
   push:
