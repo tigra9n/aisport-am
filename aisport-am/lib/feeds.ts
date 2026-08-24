@@ -113,13 +113,22 @@ async function fetchApiTubeDirect(bridgeUrl: string, limit: number): Promise<Fee
     const data = await res.json() as { results?: ApiTubeArticle[] };
     const filtered = (data.results ?? []).filter(looksLikeSportsArticle);
     return filtered.slice(0, limit)
-      .map((a) => ({
-        title: a.title ?? "",
-        link: a.href ?? "",
-        snippet: (a.description ?? a.body ?? "").slice(0, 500),
-        imageUrl: a.image ?? null,
-        pubDate: a.published_at ?? null,
-      }))
+      .map((a) => {
+        const desc = a.description ?? "";
+        const body = a.body ?? "";
+        // Now on Starter plan, APITube may include fuller body text; use
+        // whichever is longer as the fallback snippet (fetchArticlePage's
+        // full page scrape is still the primary source in
+        // generateFromSourceSnippet - this only matters if that fails).
+        const best = body.length > desc.length ? body : desc;
+        return {
+          title: a.title ?? "",
+          link: a.href ?? "",
+          snippet: best.slice(0, 2000),
+          imageUrl: a.image ?? null,
+          pubDate: a.published_at ?? null,
+        };
+      })
       .filter((item) => item.title && item.link);
   } catch (err) {
     console.error(`[feeds] apitube direct fetch failed: ${String(err)}`);
