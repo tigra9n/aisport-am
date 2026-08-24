@@ -33,20 +33,28 @@ const homepageSports = [
   { name: "Մարմնամարզություն", slug: "gymnastics" },
 ];
 
+const categoryDefaultImage: Record<string, string> = {
+  "Ֆուտբոլ": "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?auto=format&fit=crop&w=1200&q=85",
+  "Բասկետբոլ": "https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1200&q=85",
+  "Թենիս": "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?auto=format&fit=crop&w=1200&q=85",
+  "Մարմնամարզություն": "https://images.unsplash.com/photo-1742249715229-0ce01dd19358?auto=format&fit=crop&w=1400&q=85",
+};
+const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=1600&q=85";
+
 async function homepageArticles(): Promise<ArticlePreview[]> {
   const stored = await getPublishedArticles(20);
   if (!stored.length) return demoArticles;
-  return stored.map((article, index) => ({
+  return stored.map((article) => ({
     slug: article.slug,
     category: article.category,
     title: article.title,
     excerpt: article.excerpt,
     author: "AISport խմբագրություն",
-    time: new Date(article.publishedAt).toLocaleString("hy-AM", { hour: "2-digit", minute: "2-digit" }),
+    time: new Date(article.publishedAt + "Z").toLocaleString("hy-AM", { timeZone: "Asia/Yerevan", hour: "2-digit", minute: "2-digit" }),
     readTime: "3 րոպե",
-    image: article.imageUrl || demoArticles[index % demoArticles.length].image,
+    image: article.imageUrl || categoryDefaultImage[article.category] || DEFAULT_IMAGE,
     local: article.category.includes("Հայաստան"),
-    featured: index === 0,
+    featured: false,
   }));
 }
 
