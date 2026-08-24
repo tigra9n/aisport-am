@@ -134,10 +134,12 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
     const enabledSources = sourceFilter
       ? rotated.filter((s) => s.name.toLowerCase().includes(sourceFilter.toLowerCase()))
       : rotated;
+    log.push(`rss debug: allSources=${allSources.length}, filter=${sourceFilter ?? "none"}, matched=${enabledSources.length} (${enabledSources.map((s) => s.name).join(", ")})`);
     for (const source of enabledSources) {
       if (generated >= MAX_PER_TYPE || attempted >= MAX_ATTEMPTS) break;
       if (Date.now() > deadline) { log.push("rss: time budget exceeded, stopping early"); break; }
       const items = await fetchFeed(source.feedUrl, 6);
+      log.push(`rss debug: source=${source.name}, items=${items.length}`);
       for (const item of items) {
         if (generated >= MAX_PER_TYPE || attempted >= MAX_ATTEMPTS) break;
         if (Date.now() > deadline) { log.push("rss: time budget exceeded, stopping early"); break; }
