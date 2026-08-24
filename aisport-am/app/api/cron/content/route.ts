@@ -26,16 +26,19 @@ const TIME_BUDGET_MS = 55_000;
 
 async function runRecaps(apiKey: string, log: string[], deadline: number): Promise<number> {
   let generated = 0;
+  let attempted = 0;
+  const MAX_ATTEMPTS = 1;
   try {
     const { matches } = await getLiveMatches(0, true);
     const finished = matches.filter((m) => !m.isLive && m.homeScore !== null && m.status === "Ավարտված");
     for (const match of finished) {
-      if (generated >= MAX_PER_TYPE) break;
+      if (generated >= MAX_PER_TYPE || attempted >= MAX_ATTEMPTS) break;
       if (Date.now() > deadline) { log.push("recap: time budget exceeded, stopping early"); break; }
       const sourceUrl = `https://aisport.am/live/match/${match.id}`;
       if (await articleExistsForSource(sourceUrl)) continue;
       const details = await getLiveMatchDetailsV2(match.id);
       if (!details) continue;
+      attempted++;
       const article = await generateMatchRecap(apiKey, {
         home: match.home, away: match.away, homeScore: match.homeScore, awayScore: match.awayScore,
         competition: match.competition, venue: details.venue,
@@ -54,11 +57,13 @@ async function runRecaps(apiKey: string, log: string[], deadline: number): Promi
 
 async function runPreviews(apiKey: string, log: string[], deadline: number): Promise<number> {
   let generated = 0;
+  let attempted = 0;
+  const MAX_ATTEMPTS = 1;
   try {
     const { matches } = await getLiveMatches(0, true);
     const upcoming = matches.filter((m) => !m.isLive && m.homeScore === null);
     for (const match of upcoming) {
-      if (generated >= MAX_PER_TYPE) break;
+      if (generated >= MAX_PER_TYPE || attempted >= MAX_ATTEMPTS) break;
       if (Date.now() > deadline) { log.push("preview: time budget exceeded, stopping early"); break; }
       const sourceUrl = `https://aisport.am/live/match/${match.id}#preview`;
       if (await articleExistsForSource(sourceUrl)) continue;
@@ -93,6 +98,7 @@ async function runPreviews(apiKey: string, log: string[], deadline: number): Pro
       const article = await generateMatchPreview(apiKey, {
         home: match.home, away: match.away, competition: match.competition, kickoff: match.status,
       }, context);
+      attempted++;
       if (!article) continue;
       const saved = await saveGeneratedArticle({
         ...article, imageUrl: match.homeLogo, sourceName: "AISport", sourceUrl, uniquePart: `${match.id}-preview`,
@@ -107,17 +113,25 @@ async function runPreviews(apiKey: string, log: string[], deadline: number): Pro
 
 async function runRss(apiKey: string, log: string[], deadline: number): Promise<number> {
   let generated = 0;
+  let attempted = 0;
+  // Cap total generation attempts, not just successes. Each attempt can
+  // take up to the per-call timeout regardless of whether it succeeds, so
+  // without this a string of parse failures could each eat 55s and blow
+  // way past the route's own time budget before the deadline check
+  // between items ever gets a chance to catch it.
+  const MAX_ATTEMPTS = 1;
   try {
     const db = await getDb();
     const enabledSources = await db.select().from(sources).where(eq(sources.enabled, true)).orderBy(desc(sources.id));
     for (const source of enabledSources) {
-      if (generated >= MAX_PER_TYPE) break;
+      if (generated >= MAX_PER_TYPE || attempted >= MAX_ATTEMPTS) break;
       if (Date.now() > deadline) { log.push("rss: time budget exceeded, stopping early"); break; }
       const items = await fetchFeed(source.feedUrl, 6);
       for (const item of items) {
-        if (generated >= MAX_PER_TYPE) break;
+        if (generated >= MAX_PER_TYPE || attempted >= MAX_ATTEMPTS) break;
         if (Date.now() > deadline) { log.push("rss: time budget exceeded, stopping early"); break; }
         if (await articleExistsForSource(item.link)) continue;
+        attempted++;
         const article = await generateFromSourceSnippet(apiKey, { title: item.title, snippet: item.snippet, sourceName: source.name });
         if (!article) { log.push(`rss generation failed: ${item.title.slice(0, 40)} | ${lastGenerationDebug}`); continue; }
         const saved = await saveGeneratedArticle({
