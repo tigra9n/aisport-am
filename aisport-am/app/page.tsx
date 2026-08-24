@@ -17,6 +17,8 @@ import { getPublishedArticles } from "../lib/articles";
 // The live-score request must run in the production Worker. Without this,
 // the page can be prerendered at deploy time and never reach the live API.
 export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
+export const revalidate = 0;
 
 const homepageSports = [
   { name: "Հայկական սպորտ", category: "Հայկական սպորտ", slug: "armenia", href: "/armenia" },
