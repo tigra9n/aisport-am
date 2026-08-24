@@ -2,7 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { sources } from "../../../../db/schema";
 import { articleExistsForSource, saveGeneratedArticle } from "../../../../lib/articles";
-import { generateFromSourceSnippet, generateMatchPreview, generateMatchRecap } from "../../../../lib/content-generation";
+import { generateFromSourceSnippet, generateMatchPreview, generateMatchRecap, lastGenerationDebug } from "../../../../lib/content-generation";
 import { fetchFeed } from "../../../../lib/feeds";
 import { getLiveMatches } from "../../../../lib/live-football-server";
 import { getLiveMatchDetailsV2 } from "../../../../lib/live-match-details-v2";
@@ -133,7 +133,7 @@ export async function GET(request: Request) {
           const exists = await articleExistsForSource(item.link);
           if (exists) { log.push(`[debug] skip (exists): ${item.title.slice(0, 40)}`); continue; }
           const article = await generateFromSourceSnippet(apiKey, { title: item.title, snippet: item.snippet, sourceName: source.name });
-          if (!article) { log.push(`[debug] generation failed for: ${item.title.slice(0, 40)}`); continue; }
+          if (!article) { log.push(`[debug] generation failed for: ${item.title.slice(0, 40)} | ${lastGenerationDebug}`); continue; }
           const saved = await saveGeneratedArticle({
             ...article,
             imageUrl: item.imageUrl,

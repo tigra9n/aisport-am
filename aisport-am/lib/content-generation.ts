@@ -1,6 +1,7 @@
 export type GeneratedArticle = { title: string; excerpt: string; content: string; category: string };
+export let lastGenerationDebug = "";
 
-async function callClaude(systemPrompt: string, userPrompt: string, apiKey: string): Promise<string | null> {
+async function callClaude(systemPrompt: string, userPrompt: string, apiKey: string): Promise<{ text: string | null; debug: string }> {
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -17,15 +18,15 @@ async function callClaude(systemPrompt: string, userPrompt: string, apiKey: stri
       }),
     });
     if (!response.ok) {
-      console.error(`[content-gen] Claude API error ${response.status}: ${await response.text().catch(() => "")}`);
-      return null;
+      const bodyText = await response.text().catch(() => "");
+      return { text: null, debug: `http ${response.status}: ${bodyText.slice(0, 300)}` };
     }
-    const data = await response.json() as { content?: { type: string; text?: string }[] };
+    const data = await response.json() as { content?: { type: string; text?: string }[]; stop_reason?: string };
     const textBlock = data.content?.find((block) => block.type === "text");
-    return textBlock?.text ?? null;
+    if (!textBlock?.text) return { text: null, debug: `no text block, stop_reason=${data.stop_reason}, raw=${JSON.stringify(data).slice(0, 300)}` };
+    return { text: textBlock.text, debug: "ok" };
   } catch (err) {
-    console.error(`[content-gen] Claude API call threw: ${String(err)}`);
-    return null;
+    return { text: null, debug: `threw: ${String(err)}` };
   }
 }
 
@@ -69,8 +70,12 @@ ${eventsText}
 ${statsText ? `\nՎիճակագրություն.\n${statsText}` : ""}
 
 Հենվիր միայն այս փաստերի վրա, ոչինչ մի հորինիր (խաղացողների անուններ, գումարներ և այլն, որ չկան տվյալների մեջ)։ Եթե վիճակագրություն կա, հիշատակիր կոնկրետ թվերով (տիրապետում, հարվածներ)։ category դաշտում գրիր "Ֆուտբոլ"։`;
-  const raw = await callClaude(SYSTEM_PROMPT, userPrompt, apiKey);
-  return raw ? parseArticleJson(raw, "Ֆուտբոլ") : null;
+  const { text, debug } = await callClaude(SYSTEM_PROMPT, userPrompt, apiKey);
+  lastGenerationDebug = debug;
+  if (!text) return null;
+  const parsed = parseArticleJson(text, "Ֆուտբոլ");
+  if (!parsed) lastGenerationDebug = `parse failed, raw text: ${text.slice(0, 300)}`;
+  return parsed;
 }
 
 export async function generateMatchPreview(
@@ -92,8 +97,12 @@ ${match.home} - ${match.away}
 ${contextLines || "Լրացուցիչ վիճակագրություն չկա։"}
 
 Հենվիր միայն այս փաստերի վրա, ոչինչ մի հորինիր։ Եթե տվյալ կա (ձև, աղյուսակի դիրք, նախկին հանդիպումներ, հավանականություններ), պարտադիր հիշատակիր կոնկրետ թվերով, ոչ ընդհանրաբանված։ category դաշտում գրիր "Ֆուտբոլ"։`;
-  const raw = await callClaude(SYSTEM_PROMPT, userPrompt, apiKey);
-  return raw ? parseArticleJson(raw, "Ֆուտբոլ") : null;
+  const { text, debug } = await callClaude(SYSTEM_PROMPT, userPrompt, apiKey);
+  lastGenerationDebug = debug;
+  if (!text) return null;
+  const parsed = parseArticleJson(text, "Ֆուտբոլ");
+  if (!parsed) lastGenerationDebug = `parse failed, raw text: ${text.slice(0, 300)}`;
+  return parsed;
 }
 
 export async function generateFromSourceSnippet(
@@ -105,6 +114,10 @@ export async function generateFromSourceSnippet(
 Նկարագրություն՝ ${source.snippet}
 
 Այս փաստերի հիման վրա գրիր ԱՄԲՈՂՋՈՎԻՆ ինքնուրույն, հայերեն նյութ (120-200 բառ)՝ քո սեփական բառերով, ո՛չ թարգմանություն, ո՛չ մոտ-պարաֆրազ։ Մի մեջբերիր ուղիղ արտահայտություններ բնագրից։ Եթե նկարագրությունը բավարար փաստ չի տալիս ամբողջական հոդված գրելու համար, գրիր ավելի կարճ, բայց ճշգրիտ ամփոփում։ category դաշտում գրիր ամենահարմար մարզաձևի անունը (Ֆուտբոլ, Բասկետբոլ, Թենիս, և այլն)։`;
-  const raw = await callClaude(SYSTEM_PROMPT, userPrompt, apiKey);
-  return raw ? parseArticleJson(raw, "Ֆուտբոլ") : null;
+  const { text, debug } = await callClaude(SYSTEM_PROMPT, userPrompt, apiKey);
+  lastGenerationDebug = debug;
+  if (!text) return null;
+  const parsed = parseArticleJson(text, "Ֆուտբոլ");
+  if (!parsed) lastGenerationDebug = `parse failed, raw text: ${text.slice(0, 300)}`;
+  return parsed;
 }
