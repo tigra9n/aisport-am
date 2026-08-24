@@ -16,14 +16,13 @@ export const dynamic = "force-dynamic";
 // invocation for multiple matches blew past that limit, which silently
 // starved the RSS step of any remaining budget. Fix: rotate through one
 // content type per cron tick instead of doing all three every time.
-const MAX_PER_TYPE = 2;
+const MAX_PER_TYPE = 1;
 
-// Hard wall-clock budget for a single invocation. Without this, a loop that
-// keeps hitting failing/slow Claude API calls (one per RSS item, each with
-// its own timeout) can run for many minutes with nothing ever generated or
-// logged, which is indistinguishable from the cron simply not firing.
-// Cutting the loop off here guarantees the endpoint always returns quickly.
-const TIME_BUDGET_MS = 18_000;
+// Hard wall-clock budget for a single invocation. Real Claude Sonnet 5
+// generation for a full article (max_tokens ~2048) genuinely takes
+// 30-40+ seconds - this isn't a bug, just how long it takes. Budget must
+// comfortably fit one full attempt, not try to rush it.
+const TIME_BUDGET_MS = 55_000;
 
 async function runRecaps(apiKey: string, log: string[], deadline: number): Promise<number> {
   let generated = 0;
