@@ -16,6 +16,9 @@ on:
         default: 'rss'
         type: choice
         options: [recap, preview, rss]
+  push:
+    branches: [main]
+    paths: ['.github/workflows/test-modes.yml']
 
 jobs:
   check:
