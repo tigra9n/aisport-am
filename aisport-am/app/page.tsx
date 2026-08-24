@@ -13,6 +13,7 @@ import { getStandings } from "../lib/football-server";
 import { getTopScorers } from "../lib/topscorers-server";
 import { getLiveMatches } from "../lib/live-football-server";
 import { getPublishedArticles } from "../lib/articles";
+import { resolveArticleImage } from "../lib/article-image";
 
 // The live-score request must run in the production Worker. Without this,
 // the page can be prerendered at deploy time and never reach the live API.
@@ -33,14 +34,6 @@ const homepageSports = [
   { name: "Մարմնամարզություն", slug: "gymnastics" },
 ];
 
-const categoryDefaultImage: Record<string, string> = {
-  "Ֆուտբոլ": "https://images.unsplash.com/photo-1579952363873-27f3bade9f55?auto=format&fit=crop&w=1200&q=85",
-  "Բասկետբոլ": "https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1200&q=85",
-  "Թենիս": "https://images.unsplash.com/photo-1595435934249-5df7ed86e1c0?auto=format&fit=crop&w=1200&q=85",
-  "Մարմնամարզություն": "https://images.unsplash.com/photo-1742249715229-0ce01dd19358?auto=format&fit=crop&w=1400&q=85",
-};
-const DEFAULT_IMAGE = "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=1600&q=85";
-
 async function homepageArticles(): Promise<ArticlePreview[]> {
   const stored = await getPublishedArticles(20);
   if (!stored.length) return demoArticles;
@@ -52,7 +45,7 @@ async function homepageArticles(): Promise<ArticlePreview[]> {
     author: "AISport խմբագրություն",
     time: new Date(article.publishedAt + "Z").toLocaleString("hy-AM", { timeZone: "Asia/Yerevan", hour: "2-digit", minute: "2-digit", hour12: false }),
     readTime: "3 րոպե",
-    image: article.imageUrl || categoryDefaultImage[article.category] || DEFAULT_IMAGE,
+    image: article.imageUrl || resolveArticleImage(article.category, article.slug),
     local: article.category.includes("Հայաստան"),
     featured: false,
   }));
