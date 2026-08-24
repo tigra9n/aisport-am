@@ -3,8 +3,11 @@ export let lastGenerationDebug = "";
 
 async function callClaude(systemPrompt: string, userPrompt: string, apiKey: string): Promise<{ text: string | null; debug: string }> {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30_000);
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
+      signal: controller.signal,
       headers: {
         "Content-Type": "application/json",
         "x-api-key": apiKey,
@@ -17,6 +20,7 @@ async function callClaude(systemPrompt: string, userPrompt: string, apiKey: stri
         messages: [{ role: "user", content: userPrompt }],
       }),
     });
+    clearTimeout(timeoutId);
     if (!response.ok) {
       const bodyText = await response.text().catch(() => "");
       return { text: null, debug: `http ${response.status}: ${bodyText.slice(0, 300)}` };
