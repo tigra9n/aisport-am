@@ -16,12 +16,12 @@ async function callClaude(systemPrompt: string, userPrompt: string, apiKey: stri
       },
       body: JSON.stringify({
         model: "claude-sonnet-5",
-        // Bumped from 900 -> 2048 -> 4096: even 2048 wasn't consistently
-        // enough headroom for a full JSON response (title+excerpt+content)
-        // with Sonnet 5's new tokenizer; some generations still got cut
-        // off mid-sentence. Going generous here since there's no real
-        // cost/latency concern for this use case.
-        max_tokens: 4096,
+        // Bumped 900 -> 2048 -> 4096 -> 8192: even 4096 still produced an
+        // occasional truncated/unparseable JSON response (Claude's own
+        // stop_reason=max_tokens before finishing the JSON structure).
+        // Generous headroom here since there's no real cost/latency
+        // concern for this use case.
+        max_tokens: 8192,
         // Adaptive thinking is on by default on Sonnet 5 (effort: high),
         // which added enough latency to blow past our request timeout for
         // every single call. This is a straightforward rewrite/formatting
