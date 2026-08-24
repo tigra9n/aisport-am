@@ -18,13 +18,21 @@ export const dynamic = "force-dynamic";
 // content type per cron tick instead of doing all three every time.
 const MAX_PER_TYPE = 2;
 
-async function runRecaps(apiKey: string, log: string[]): Promise<number> {
+// Hard wall-clock budget for a single invocation. Without this, a loop that
+// keeps hitting failing/slow Claude API calls (one per RSS item, each with
+// its own timeout) can run for many minutes with nothing ever generated or
+// logged, which is indistinguishable from the cron simply not firing.
+// Cutting the loop off here guarantees the endpoint always returns quickly.
+const TIME_BUDGET_MS = 20_000;
+
+async function runRecaps(apiKey: string, log: string[], deadline: number): Promise<number> {
   let generated = 0;
   try {
     const { matches } = await getLiveMatches(0, true);
     const finished = matches.filter((m) => !m.isLive && m.homeScore !== null && m.status === "Ավարտված");
     for (const match of finished) {
       if (generated >= MAX_PER_TYPE) break;
+      if (Date.now() > deadline) { log.push("recap: time budget exceeded, stopping early"); break; }
       const sourceUrl = `https://aisport.am/live/match/${match.id}`;
       if (await articleExistsForSource(sourceUrl)) continue;
       const details = await getLiveMatchDetailsV2(match.id);
@@ -45,13 +53,14 @@ async function runRecaps(apiKey: string, log: string[]): Promise<number> {
   return generated;
 }
 
-async function runPreviews(apiKey: string, log: string[]): Promise<number> {
+async function runPreviews(apiKey: string, log: string[], deadline: number): Promise<number> {
   let generated = 0;
   try {
     const { matches } = await getLiveMatches(0, true);
     const upcoming = matches.filter((m) => !m.isLive && m.homeScore === null);
     for (const match of upcoming) {
       if (generated >= MAX_PER_TYPE) break;
+      if (Date.now() > deadline) { log.push("preview: time budget exceeded, stopping early"); break; }
       const sourceUrl = `https://aisport.am/live/match/${match.id}#preview`;
       if (await articleExistsForSource(sourceUrl)) continue;
       const details = await getLiveMatchDetailsV2(match.id);
@@ -97,16 +106,18 @@ async function runPreviews(apiKey: string, log: string[]): Promise<number> {
   return generated;
 }
 
-async function runRss(apiKey: string, log: string[]): Promise<number> {
+async function runRss(apiKey: string, log: string[], deadline: number): Promise<number> {
   let generated = 0;
   try {
     const db = await getDb();
     const enabledSources = await db.select().from(sources).where(eq(sources.enabled, true)).orderBy(desc(sources.id));
     for (const source of enabledSources) {
       if (generated >= MAX_PER_TYPE) break;
+      if (Date.now() > deadline) { log.push("rss: time budget exceeded, stopping early"); break; }
       const items = await fetchFeed(source.feedUrl, 6);
       for (const item of items) {
         if (generated >= MAX_PER_TYPE) break;
+        if (Date.now() > deadline) { log.push("rss: time budget exceeded, stopping early"); break; }
         if (await articleExistsForSource(item.link)) continue;
         const article = await generateFromSourceSnippet(apiKey, { title: item.title, snippet: item.snippet, sourceName: source.name });
         if (!article) { log.push(`rss generation failed: ${item.title.slice(0, 40)} | ${lastGenerationDebug}`); continue; }
@@ -150,11 +161,12 @@ export async function GET(request: Request) {
   const tickSlot = Math.floor(Date.now() / (5 * 60 * 1000)) % 3;
   const mode = forcedMode ?? (tickSlot === 0 ? "recap" : tickSlot === 1 ? "preview" : "rss");
 
+  const deadline = Date.now() + TIME_BUDGET_MS;
   const log: string[] = [];
   let generated = 0;
-  if (mode === "recap") generated = await runRecaps(apiKey, log);
-  else if (mode === "preview") generated = await runPreviews(apiKey, log);
-  else generated = await runRss(apiKey, log);
+  if (mode === "recap") generated = await runRecaps(apiKey, log, deadline);
+  else if (mode === "preview") generated = await runPreviews(apiKey, log, deadline);
+  else generated = await runRss(apiKey, log, deadline);
 
   return Response.json({ ok: true, mode, generated, log });
 }
