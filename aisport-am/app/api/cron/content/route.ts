@@ -188,8 +188,9 @@ export async function GET(request: Request) {
   }
 
   // Each tick is 5 minutes apart; rotate content type per tick.
-  const tickSlot = Math.floor(Date.now() / (5 * 60 * 1000)) % 3;
-  const mode = forcedMode ?? (tickSlot === 0 ? "recap" : tickSlot === 1 ? "preview" : "rss");
+  // Just preview + rss for now (recap disabled per request).
+  const tickSlot = Math.floor(Date.now() / (5 * 60 * 1000)) % 2;
+  const mode = forcedMode ?? (tickSlot === 0 ? "preview" : "rss");
 
   const deadline = Date.now() + TIME_BUDGET_MS;
   const log: string[] = [];
