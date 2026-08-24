@@ -135,8 +135,20 @@ export async function GET(request: Request) {
   }
 
   const forcedMode = url.searchParams.get("mode");
-  const minuteSlot = Math.floor(Date.now() / (5 * 60 * 1000)) % 3;
-  const mode = forcedMode ?? (minuteSlot === 0 ? "recap" : minuteSlot === 1 ? "preview" : "rss");
+
+  // Publishing window: 10:00–02:00 Yerevan time (UTC+4, no DST). Manual
+  // ?mode= calls bypass the window so testing works any time of day.
+  if (!forcedMode) {
+    const yerevanHour = (new Date().getUTCHours() + 4) % 24;
+    const inWindow = yerevanHour >= 10 || yerevanHour < 2;
+    if (!inWindow) {
+      return Response.json({ ok: true, mode: "skipped", reason: "outside 10:00-02:00 Yerevan publishing window", generated: 0, log: [] });
+    }
+  }
+
+  // Each tick is 30 minutes apart; rotate content type per tick.
+  const tickSlot = Math.floor(Date.now() / (30 * 60 * 1000)) % 3;
+  const mode = forcedMode ?? (tickSlot === 0 ? "recap" : tickSlot === 1 ? "preview" : "rss");
 
   const log: string[] = [];
   let generated = 0;
