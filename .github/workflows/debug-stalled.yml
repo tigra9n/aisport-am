@@ -10,14 +10,24 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    defaults:
+      run:
+        working-directory: aisport-am
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
       - name: Check
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          echo "=== Trigger content generation now ===" > debug.txt
-          curl -s "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}" >> debug.txt
-          echo "" >> debug.txt
-          echo "=== All articles, newest first ===" >> debug.txt
+          echo "=== Trigger content generation now ===" > ../debug.txt
+          curl -s "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}" >> ../debug.txt
+          echo "" >> ../debug.txt
+          echo "=== All articles, newest first ===" >> ../debug.txt
           curl -s "https://aisport.am/api/articles?_c=$(date +%s)" > /tmp/a.json
           echo 'import json' > /tmp/show.py
           echo 'd=json.load(open("/tmp/a.json"))' >> /tmp/show.py
@@ -25,8 +35,15 @@ jobs:
           echo 'print("total:", len(arts))' >> /tmp/show.py
           echo 'for a in arts[:8]:' >> /tmp/show.py
           echo '    print(a["publishedAt"], "-", a["title"][:50], "-", a["sourceUrl"][:60])' >> /tmp/show.py
-          python3 /tmp/show.py >> debug.txt
+          python3 /tmp/show.py >> ../debug.txt
+          echo "" >> ../debug.txt
+          echo "=== Direct RSS feed test ===" >> ../debug.txt
+          curl -s -w "\nHTTP %{http_code}\n" -A "AISportBot/1.0 (+https://aisport.am)" "https://feeds.bbci.co.uk/sport/football/rss.xml" | head -c 1500 >> ../debug.txt
+          echo "" >> ../debug.txt
+          echo "=== Sources table content (direct D1) ===" >> ../debug.txt
+          npx wrangler d1 execute aisport-db --remote --command="SELECT id,name,feed_url,enabled FROM sources" >> ../debug.txt 2>&1
       - run: |
+          cd ..
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
           git add -f debug.txt
