@@ -40,6 +40,18 @@ function extractImage(block: string): string | null {
 }
 
 export async function fetchFeed(feedUrl: string, limit = 10): Promise<FeedItem[]> {
+  // Special-cased: URLs pointing at our own /api/feeds/apitube bridge are
+  // fetched directly against api.apitube.io instead of self-fetching our
+  // own domain. Worker-initiated self-fetch (this Worker calling its own
+  // production URL, which then makes ANOTHER outbound fetch) reliably
+  // returned zero items in production despite the exact same URL working
+  // fine via an external curl - looks like Cloudflare Workers' nested
+  // self-fetch handling silently drops the inner request in this chain
+  // (scheduled -> cron endpoint -> bridge -> apitube.io was one hop too
+  // many). Calling api.apitube.io directly removes that hop entirely.
+  if (feedUrl.includes("/api/feeds/apitube")) {
+    return fetchApiTubeDirect(feedUrl, limit);
+  }
   try {
     const response = await fetch(feedUrl, { headers: { "User-Agent": "AISportBot/1.0 (+https://aisport.am)" } });
     if (!response.ok) return [];
@@ -54,6 +66,63 @@ export async function fetchFeed(feedUrl: string, limit = 10): Promise<FeedItem[]
     })).filter((item) => item.title && item.link);
   } catch (err) {
     console.error(`[feeds] fetch failed for ${feedUrl}: ${String(err)}`);
+    return [];
+  }
+}
+
+type ApiTubeArticle = {
+  title?: string;
+  href?: string;
+  description?: string;
+  body?: string;
+  published_at?: string;
+  image?: string;
+};
+
+// Same keyword/spam filter as the (now-unused-internally) bridge route -
+// category.id=medtop:15000000 returns mostly-sports results on APITube's
+// free tier, but not exclusively (car reviews, "Letters to the Editor",
+// outright gambling spam have all shown up in real samples).
+const SPORT_KEYWORDS = [
+  "football", "soccer", "basketball", "nba", "nfl", "mlb", "nhl", "tennis",
+  "cricket", "rugby", "hockey", "boxing", "mma", "ufc", "golf", "olympic",
+  "athletics", "marathon", "cycling", "f1", "formula 1", "match", "league",
+  "championship", "tournament", " cup", "coach", "goal", "score", "player",
+  "team", "club", "stadium", "playoff", "finals", "medal", "champion",
+  "transfer", "manager", "referee", "juventus", "madrid", "barcelona",
+  "liverpool", "chelsea", "arsenal", "united", "bayern", "psg",
+];
+const SPAM_PATTERNS = ["hacked by", "deposit", "casino", "gambling site", "bonus code", "free spins"];
+
+function looksLikeSportsArticle(a: ApiTubeArticle): boolean {
+  const text = `${a.title ?? ""} ${a.description ?? ""}`.toLowerCase();
+  if (SPAM_PATTERNS.some((p) => text.includes(p))) return false;
+  return SPORT_KEYWORDS.some((k) => text.includes(k));
+}
+
+async function fetchApiTubeDirect(bridgeUrl: string, limit: number): Promise<FeedItem[]> {
+  try {
+    const params = new URL(bridgeUrl).searchParams;
+    const apiKey = params.get("api_key");
+    const categoryId = params.get("category_id") ?? "medtop:15000000";
+    if (!apiKey) return [];
+    // Free tier caps per_page at 10 (ER0171 for anything higher).
+    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&category.id=${encodeURIComponent(categoryId)}&per_page=10&language.code=en&sort.by=published_at&sort.order=desc`;
+    const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
+    if (!res.ok) return [];
+    const data = await res.json() as { results?: ApiTubeArticle[] };
+    const filtered = (data.results ?? []).filter(looksLikeSportsArticle);
+    return filtered.slice(0, limit)
+      .map((a) => ({
+        title: a.title ?? "",
+        link: a.href ?? "",
+        snippet: (a.description ?? a.body ?? "").slice(0, 500),
+        imageUrl: a.image ?? null,
+        pubDate: a.published_at ?? null,
+      }))
+      .filter((item) => item.title && item.link);
+  } catch (err) {
+    console.error(`[feeds] apitube direct fetch failed: ${String(err)}`);
     return [];
   }
 }
