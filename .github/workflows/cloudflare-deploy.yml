@@ -6,6 +6,9 @@ on:
     branches:
       - main
       - cloudflare-deploy
+    paths:
+      - 'aisport-am/**'
+      - '.github/workflows/cloudflare-deploy.yml'
 
 jobs:
   deploy:
