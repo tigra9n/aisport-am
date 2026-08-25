@@ -12,21 +12,16 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Check latest article after timeout
-        working-directory: aisport-am
+      - name: Check homepage reliability post-upgrade
         run: |
-          npm install --no-audit --no-fund
           {
-            echo "=== latest 3 with source ==="
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, source_url, published_at FROM articles ORDER BY id DESC LIMIT 3;" 2>&1
-          } > ../add-source-result.txt || true
-          cat ../add-source-result.txt
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+            for i in 1 2 3 4 5 6 7 8; do
+              echo "=== attempt $i ==="
+              curl -s -o /dev/null -w "http_code=%{http_code}, time=%{time_total}s\n" --max-time 20 "https://aisport.am/?_cb=$i-$(date +%s)"
+              sleep 1
+            done
+          } > add-source-result.txt || true
+          cat add-source-result.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
