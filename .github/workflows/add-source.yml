@@ -20,8 +20,8 @@ jobs:
         run: |
           npm install --no-audit --no-fund
           {
-            echo "=== latest 5 articles ==="
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, category, published_at FROM articles ORDER BY id DESC LIMIT 5;" 2>&1
+            echo "=== latest 3 articles ==="
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, published_at FROM articles ORDER BY id DESC LIMIT 3;" 2>&1
           } > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
