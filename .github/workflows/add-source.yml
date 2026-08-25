@@ -12,18 +12,21 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Check site multiple times
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check latest article
+        working-directory: aisport-am
         run: |
+          npm install --no-audit --no-fund
           {
-            for i in 1 2 3 4 5; do
-              echo "=== attempt $i ==="
-              curl -s -o /tmp/body$i.html -w "http_code=%{http_code}, time=%{time_total}s\n" --max-time 20 "https://aisport.am/?_cb=$i-$(date +%s)"
-              head -c 200 /tmp/body$i.html
-              echo ""
-              sleep 2
-            done
-          } > add-source-result.txt || true
-          cat add-source-result.txt
+            echo "=== latest 3 articles ==="
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, published_at FROM articles ORDER BY id DESC LIMIT 3;" 2>&1
+          } > ../add-source-result.txt || true
+          cat ../add-source-result.txt
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
