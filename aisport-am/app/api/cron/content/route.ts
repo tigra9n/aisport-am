@@ -204,8 +204,10 @@ export async function GET(request: Request) {
 
   // Each tick is 5 minutes apart; rotate content type per tick.
   // Rotate recap/preview/rss (recap re-enabled per request).
-  const tickSlot = Math.floor(Date.now() / (5 * 60 * 1000)) % 3;
-  const mode = forcedMode ?? (tickSlot === 0 ? "recap" : tickSlot === 1 ? "preview" : "rss");
+  // 6-tick cycle weighted toward rss (APITube): rss x4, preview x1, recap x1.
+  const CYCLE = ["rss", "rss", "rss", "rss", "preview", "recap"] as const;
+  const tickSlot = Math.floor(Date.now() / (5 * 60 * 1000)) % CYCLE.length;
+  const mode = forcedMode ?? CYCLE[tickSlot];
 
   const deadline = Date.now() + TIME_BUDGET_MS;
   const log: string[] = [];
