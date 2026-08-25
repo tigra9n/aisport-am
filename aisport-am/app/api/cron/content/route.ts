@@ -129,13 +129,10 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
   // blow way past the route's own time budget before the deadline check
   // between items ever gets a chance to catch it.
   //
-  // Bumped 1 -> 2: rss mode's yield was lower than the 4/6 rotation weight
-  // suggested (only ~40% of recent articles were actually from APITube),
-  // because a single failed/already-published item wasted the whole tick.
-  // A second attempt only costs extra when the first one fails, not on
-  // every tick, so this raises yield without a full frequency-level cost
-  // increase.
-  const MAX_ATTEMPTS = 2;
+  // Reverted 2 -> 1 for cost minimization: now only 1 rss attempt/hour
+  // total (not per 5-min tick), so a single try per hour keeps cost as
+  // low and predictable as possible per explicit request.
+  const MAX_ATTEMPTS = 1;
   try {
     const db = await getDb();
     const allSources = await db.select().from(sources).where(eq(sources.enabled, true)).orderBy(desc(sources.id));
@@ -209,12 +206,17 @@ export async function GET(request: Request) {
     }
   }
 
-  // Each tick is 5 minutes apart; rotate content type per tick.
-  // Rotate recap/preview/rss (recap re-enabled per request).
-  // 6-tick cycle weighted toward rss (APITube): rss x4, preview x1, recap x1.
-  const CYCLE = ["rss", "rss", "rss", "rss", "preview", "recap"] as const;
-  const tickSlot = Math.floor(Date.now() / (5 * 60 * 1000)) % CYCLE.length;
-  const mode = forcedMode ?? CYCLE[tickSlot];
+  // Cost-saving mode per request: only APITube (rss), once per hour, one
+  // attempt. Skips recap/preview entirely, and only actually runs during
+  // the first 5-min tick of each hour (minute 0-4) - other ticks in the
+  // hour return immediately without any Claude API cost.
+  if (!forcedMode) {
+    const minute = new Date().getUTCMinutes();
+    if (minute >= 5) {
+      return Response.json({ ok: true, mode: "skipped", reason: "only runs once per hour (minute 0-4)", generated: 0, log: [] });
+    }
+  }
+  const mode = forcedMode ?? "rss";
 
   const deadline = Date.now() + TIME_BUDGET_MS;
   const log: string[] = [];
