@@ -15,13 +15,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Find and check the article
+      - name: Delete off-topic article
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
           {
-            echo "=== article details ==="
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, excerpt, category, source_name, source_url FROM articles WHERE slug = 'atinamerikyan-hetazotutyun-inchpes-e-hivandutyan-verahskumy-78437582';" 2>&1
+            echo "=== delete ==="
+            npx wrangler d1 execute aisport-db --remote --command "DELETE FROM articles WHERE id = 45;" 2>&1
+            echo "=== verify ==="
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id FROM articles WHERE id = 45;" 2>&1
           } > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
