@@ -15,15 +15,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Delete off-topic article
+      - name: Check recent source mix
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
           {
-            echo "=== delete ==="
-            npx wrangler d1 execute aisport-db --remote --command "DELETE FROM articles WHERE id = 45;" 2>&1
-            echo "=== verify ==="
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id FROM articles WHERE id = 45;" 2>&1
+            echo "=== last 15 articles: source_name, published_at ==="
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id, source_name, published_at FROM articles ORDER BY id DESC LIMIT 15;" 2>&1
           } > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
