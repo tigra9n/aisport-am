@@ -125,10 +125,17 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
   let attempted = 0;
   // Cap total generation attempts, not just successes. Each attempt can
   // take up to the per-call timeout regardless of whether it succeeds, so
-  // without this a string of parse failures could each eat 55s and blow
-  // way past the route's own time budget before the deadline check
+  // without this a string of parse failures could each eat a long time and
+  // blow way past the route's own time budget before the deadline check
   // between items ever gets a chance to catch it.
-  const MAX_ATTEMPTS = 1;
+  //
+  // Bumped 1 -> 2: rss mode's yield was lower than the 4/6 rotation weight
+  // suggested (only ~40% of recent articles were actually from APITube),
+  // because a single failed/already-published item wasted the whole tick.
+  // A second attempt only costs extra when the first one fails, not on
+  // every tick, so this raises yield without a full frequency-level cost
+  // increase.
+  const MAX_ATTEMPTS = 2;
   try {
     const db = await getDb();
     const allSources = await db.select().from(sources).where(eq(sources.enabled, true)).orderBy(desc(sources.id));
