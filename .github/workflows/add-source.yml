@@ -12,15 +12,16 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Check site reachability
+      - name: Check site multiple times
         run: |
           {
-            echo "=== HTTPS check ==="
-            curl -s -v --max-time 20 "https://aisport.am/" -o /tmp/body.html 2>&1 | grep -E "HTTP|SSL|subject|issuer|expire" | head -30
-            echo "=== http code ==="
-            curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 20 "https://aisport.am/"
-            echo "=== body size ==="
-            wc -c /tmp/body.html
+            for i in 1 2 3 4 5; do
+              echo "=== attempt $i ==="
+              curl -s -o /tmp/body$i.html -w "http_code=%{http_code}, time=%{time_total}s\n" --max-time 20 "https://aisport.am/?_cb=$i-$(date +%s)"
+              head -c 200 /tmp/body$i.html
+              echo ""
+              sleep 2
+            done
           } > add-source-result.txt || true
           cat add-source-result.txt
       - run: |
