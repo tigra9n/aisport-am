@@ -1,0 +1,32 @@
+name: Backup Content Cron
+
+# Cloudflare's own Cron Trigger has been observed to silently stop
+# dispatching scheduled() entirely for extended periods (documented
+# Cloudflare Community reports of the same issue - a platform-level
+# scheduler bug, not fixable via redeploy or plan tier). This workflow
+# is a redundant, independent trigger: it calls the same endpoints
+# Cloudflare's own scheduled() handler calls, so if Cloudflare's cron
+# stalls, this keeps content generation and cache warming going.
+#
+# Calls are idempotent/safe to duplicate: warm just re-fetches cached
+# pages, and content generation dedupes against already-published
+# articles, so overlapping with a working Cloudflare cron just means
+# occasional redundant no-op calls, not double-publishing.
+#
+# GitHub Actions' own schedule can also lag on low-traffic repos, but
+# its failure modes are independent of Cloudflare's, so running both
+# gives much better combined reliability than either alone.
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: '*/5 * * * *'
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Warm cache
+        run: curl -s --max-time 20 "https://aisport.am/api/cron/warm?token=${{ secrets.CRON_TOKEN }}" || true
+      - name: Generate content
+        run: curl -s --max-time 65 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}" || true
