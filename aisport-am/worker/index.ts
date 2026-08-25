@@ -44,14 +44,19 @@ const worker = {
     return handler.fetch(request, env, ctx);
   },
 
-  // Native Cloudflare Cron Trigger: fires reliably on Cloudflare's own
-  // infrastructure (unlike GitHub Actions schedules, which can lag well
-  // past their nominal interval, especially on lower-traffic repos).
+  // Native Cloudflare Cron Trigger handles the fast cache-warm task
+  // reliably. Content generation (/api/cron/content) moved to a separate
+  // GitHub Actions schedule instead: Cloudflare's own Cron Trigger
+  // invocations have a tight execution-time ceiling (around 30s for
+  // schedules more frequent than hourly), and real article generation
+  // now regularly takes 40-85s - the scheduled invocation (and its
+  // self-fetch) was getting killed before generation could finish,
+  // silently losing ticks with no error logged anywhere. An externally
+  // initiated request isn't bound by that same ceiling.
   async scheduled(_event: unknown, env: Env, ctx: ExecutionContext): Promise<void> {
     if (!env.CRON_TOKEN) return;
     const token = encodeURIComponent(env.CRON_TOKEN);
     ctx.waitUntil(fetch(`https://aisport.am/api/cron/warm?token=${token}`).catch(() => {}));
-    ctx.waitUntil(fetch(`https://aisport.am/api/cron/content?token=${token}`).catch(() => {}));
   },
 };
 

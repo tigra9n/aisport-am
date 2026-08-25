@@ -1,0 +1,27 @@
+name: Cron Content Generation
+
+# Runs /api/cron/content on a schedule from GitHub Actions rather than
+# Cloudflare's native Cron Trigger. Cloudflare's own scheduled-invocation
+# execution ceiling (~30s for schedules more frequent than hourly) was
+# killing the invocation before real article generation (now regularly
+# 40-85s) could finish, silently losing ticks. A GitHub Actions job has
+# no such constraint - it just waits for the HTTP response.
+#
+# Known tradeoff: GitHub's schedule trigger isn't to-the-minute precise
+# and can lag under load, especially at 5-minute granularity on smaller
+# repos. Occasional jitter/skipped ticks are expected and acceptable
+# here; the time-window + mode-rotation logic in the route itself is
+# tick-timestamp-based, so a late-firing run still behaves correctly.
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call cron/content
+        run: |
+          curl -s --max-time 100 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&_c=$(date +%s)" -o /dev/null -w "http=%{http_code} time=%{time_total}s\n"
