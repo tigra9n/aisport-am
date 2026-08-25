@@ -82,21 +82,40 @@ type ApiTubeArticle = {
 // Same keyword/spam filter as the (now-unused-internally) bridge route -
 // category.id=medtop:15000000 returns mostly-sports results on APITube's
 // free tier, but not exclusively (car reviews, "Letters to the Editor",
-// outright gambling spam have all shown up in real samples).
+// outright gambling spam, and even unrelated academic papers have all
+// shown up in real samples - a pediatric lupus research article got
+// through because "score" and "team" are common in clinical/academic
+// writing too, e.g. disease activity scores, research teams).
 const SPORT_KEYWORDS = [
   "football", "soccer", "basketball", "nba", "nfl", "mlb", "nhl", "tennis",
   "cricket", "rugby", "hockey", "boxing", "mma", "ufc", "golf", "olympic",
-  "athletics", "marathon", "cycling", "f1", "formula 1", "match", "league",
-  "championship", "tournament", " cup", "coach", "goal", "score", "player",
-  "team", "club", "stadium", "playoff", "finals", "medal", "champion",
-  "transfer", "manager", "referee", "juventus", "madrid", "barcelona",
-  "liverpool", "chelsea", "arsenal", "united", "bayern", "psg",
+  "athletics", "marathon", "cycling", "f1", "formula 1", "league", " cup",
+  "championship", "tournament", "playoff", "stadium", "transfer window",
+  "head coach", "match", "juventus", "madrid", "barcelona", "liverpool",
+  "chelsea", "arsenal", "manchester", "bayern", " psg", "wimbledon",
+];
+// Generic words alone are too ambiguous ("team", "score", "coach", "goal",
+// "champion", "medal", "player", "club" are all common outside sports -
+// research team, credit score, life coach, career goal, champion a cause,
+// gold medal in academia, film player, book club) - dropped as standalone
+// triggers. Multi-word phrases above stay specific enough to keep.
+const EXCLUDE_KEYWORDS = [
+  "cohort", "clinical", "patient", "diagnosis", "diagnosed", "syndrome",
+  "disease", "lupus", "therapy", "remission", "journal of", "peer-review",
+  "gambling", "casino", "deposit bonus", "letters to the editor",
 ];
 const SPAM_PATTERNS = ["hacked by", "deposit", "casino", "gambling site", "bonus code", "free spins"];
+// Academic/research repositories never publish sports news - an extra
+// safety net independent of keyword matching, since keyword filters alone
+// missed the lupus research article (it happened to mention things like
+// "score" and "team" in a clinical context).
+const EXCLUDE_DOMAINS = ["unizar.es", "arxiv.org", "pubmed.ncbi.nlm.nih.gov", "sciencedirect.com", "springer.com", "researchgate.net", "jstor.org", "ncbi.nlm.nih.gov"];
 
 function looksLikeSportsArticle(a: ApiTubeArticle): boolean {
   const text = `${a.title ?? ""} ${a.description ?? ""}`.toLowerCase();
   if (SPAM_PATTERNS.some((p) => text.includes(p))) return false;
+  if (EXCLUDE_KEYWORDS.some((p) => text.includes(p))) return false;
+  if (a.href && EXCLUDE_DOMAINS.some((d) => a.href!.includes(d))) return false;
   return SPORT_KEYWORDS.some((k) => text.includes(k));
 }
 
