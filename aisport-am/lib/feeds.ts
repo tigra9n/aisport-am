@@ -171,17 +171,16 @@ async function fetchApiTubeDirect(bridgeUrl: string, limit: number): Promise<Fee
   }
 }
 
-// APITube error codes indicating a bad/unsupported filter value (typo'd
-// or unrecognized entity name) - quarantine just that name and move on
-// rather than failing the whole cycle for one unrecognized name.
+// APITube error codes indicating a bad/unsupported filter value - only
+// relevant for person.name (title search doesn't return "not found"
+// errors, it just returns fewer/no results).
 const BAD_VALUE_ERROR_CODES = ["ER0151", "ER0216", "ER0220", "ER0228"];
 
-// Football-focused named-entity query: filters by a single person.name
-// value instead of the broad category.id="Sport" feed. See
-// lib/football-entities.ts for the player/coach list and priority
-// rotation this is called with, and for why it's one name at a time
-// rather than a comma-separated OR list (a bad name anywhere in a list
-// fails the whole request).
+// Football-focused named-entity query for players/coaches. See
+// lib/football-entities.ts for the list and priority rotation this is
+// called with, and for why it's one name at a time rather than a
+// comma-separated OR list (a single unrecognized name fails the whole
+// request).
 export async function fetchApiTubePerson(apiKey: string, personName: string, limit: number): Promise<FeedItem[]> {
   try {
     const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&person.name=${encodeURIComponent(personName)}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
