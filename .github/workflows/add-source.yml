@@ -12,21 +12,30 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Clean up XSS test comments
-        working-directory: aisport-am
+      - name: Deep QA round 3 - control page exposure, 404 handling, headers
         run: |
-          npm install --no-audit --no-fund
           {
-            npx wrangler d1 execute aisport-db --remote --command "DELETE FROM comments WHERE author = 'XSS Test';" 2>&1
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id, author FROM comments;" 2>&1
-          } > ../add-source-result.txt || true
-          cat ../add-source-result.txt
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+            echo "=== 1. is /control publicly accessible? ==="
+            curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/control"
+            curl -s --max-time 15 "https://aisport.am/control" | head -c 500
+            echo ""
+
+            echo "=== 2. 404 handling for fake article ==="
+            curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/news/this-does-not-exist-12345"
+
+            echo "=== 3. response headers (caching, compression) on homepage ==="
+            curl -sI --max-time 15 "https://aisport.am/" | grep -iE "cache-control|content-encoding|x-frame|content-security"
+
+            echo "=== 4. homepage og:image present? ==="
+            curl -s --max-time 15 "https://aisport.am/" | grep -oE '<meta[^>]*og:image[^>]*>' | head -3
+
+            echo "=== 5. viewport meta tag (mobile) ==="
+            curl -s --max-time 15 "https://aisport.am/" | grep -oE '<meta[^>]*viewport[^>]*>'
+
+            echo "=== 6. automation status/run API exposure ==="
+            curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/api/automation/status"
+          } > add-source-result.txt || true
+          cat add-source-result.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
