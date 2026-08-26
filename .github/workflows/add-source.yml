@@ -12,15 +12,10 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Verify security fix
+      - name: Verify homepage og:image now present
         run: |
           {
-            echo "=== automation/status WITHOUT token (should be 401) ==="
-            curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/api/automation/status"
-            curl -s --max-time 15 "https://aisport.am/api/automation/status"
-            echo ""
-            echo "=== automation/status WITH correct token (should work) ==="
-            curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/api/automation/status?token=GZfaXwSyo95ooQNDr714eMSv-G_0X2Vf"
+            curl -s --max-time 15 "https://aisport.am/" | grep -oE '<meta[^>]*og:image[^>]*>'
           } > add-source-result.txt || true
           cat add-source-result.txt
       - run: |
