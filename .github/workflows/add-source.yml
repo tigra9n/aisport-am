@@ -12,11 +12,12 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Check if the image URL actually loads
+      - name: Check article page rendering
         run: |
           {
-            echo "=== image URL check ==="
-            curl -sI --max-time 15 "https://punchdrunkgamer.com/wp-content/uploads/2026/08/private-id-3us1p0pgypy-youtube-a.jpg" -A "Mozilla/5.0"
+            echo "=== homepage img tags ==="
+            curl -s --max-time 20 "https://aisport.am/" -o /tmp/home.html
+            grep -oE '<img[^>]*src="[^"]*"' /tmp/home.html | head -8
           } > add-source-result.txt || true
           cat add-source-result.txt
       - run: |
