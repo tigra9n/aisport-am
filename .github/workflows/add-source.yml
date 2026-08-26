@@ -12,21 +12,21 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Set MODERATION_TOKEN secret
-        working-directory: aisport-am
+      - name: Test empty-name submission
         run: |
-          npm install --no-audit --no-fund
           {
-            echo "=== setting secret ==="
-            echo "GZfaXwSyo95ooQNDr714eMSv-G_0X2Vf" | npx wrangler secret put MODERATION_TOKEN --name aisport-am 2>&1
-          } > ../add-source-result.txt || true
-          cat ../add-source-result.txt
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+            SLUG="ley-ompsony-ayamium-anisi-koghqin-87787400"
+            echo "=== 1. empty author ==="
+            curl -s -X POST "https://aisport.am/api/comments" -H "Content-Type: application/json" -d "{\"articleSlug\":\"$SLUG\",\"author\":\"\",\"body\":\"no name test\"}"
+            echo ""
+            echo "=== 2. missing author field entirely ==="
+            curl -s -X POST "https://aisport.am/api/comments" -H "Content-Type: application/json" -d "{\"articleSlug\":\"$SLUG\",\"body\":\"no author field test\"}"
+            echo ""
+            echo "=== 3. whitespace-only author ==="
+            curl -s -X POST "https://aisport.am/api/comments" -H "Content-Type: application/json" -d "{\"articleSlug\":\"$SLUG\",\"author\":\"   \",\"body\":\"whitespace name test\"}"
+            echo ""
+          } > add-source-result.txt || true
+          cat add-source-result.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
