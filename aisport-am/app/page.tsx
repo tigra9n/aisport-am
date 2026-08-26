@@ -101,7 +101,7 @@ export default async function Home() {
             </header>
             <div className="headline-feed-list">
               {headlineStream.map((article) => <Link className="headline-feed-item" href={`/news/${article.slug}`} key={article.slug}>
-                <img src={article.image} alt="" />
+                <img src={article.image} alt="" referrerPolicy="no-referrer" />
                 <div><span>{article.category}</span><h3>{article.title}</h3><time>{article.time}</time></div>
               </Link>)}
             </div>
@@ -117,7 +117,7 @@ export default async function Home() {
                 <div className="sport-news-head"><div><span /> <h3>{sport.name}</h3></div><Link href={sport.href}>Բոլոր լուրերը →</Link></div>
                 <div className="sport-news-grid">
                   {sport.items.map((article, index) => <article className={index === 0 ? "sport-news-card featured" : "sport-news-card"} key={article.slug}>
-                    <Link className="sport-news-image" href={`/news/${article.slug}`}><img src={article.image} alt="" /></Link>
+                    <Link className="sport-news-image" href={`/news/${article.slug}`}><img src={article.image} alt="" referrerPolicy="no-referrer" /></Link>
                     <div><span>{article.category}</span><h4><Link href={`/news/${article.slug}`}>{article.title}</Link></h4>{index === 0 ? <p>{article.excerpt}</p> : null}<time>{article.time} · {article.readTime}</time></div>
                   </article>)}
                 </div>

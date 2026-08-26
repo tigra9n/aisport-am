@@ -32,7 +32,7 @@ export function HeroCarousel({ articles }: { articles: ArticlePreview[] }) {
     </article>
     <nav className="headline-thumbnails" aria-label="Գլխավոր թեմաներ">
       {articles.map((article, index) => <button className={index === active ? "active" : ""} type="button" onClick={() => setActive(index)} key={article.slug} title={article.title}>
-        <img src={article.image} alt="" /><span>{article.category}</span>
+        <img src={article.image} alt="" referrerPolicy="no-referrer" /><span>{article.category}</span>
       </button>)}
     </nav>
   </div>;

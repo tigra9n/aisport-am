@@ -62,7 +62,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
   return <main><SiteHeader /><article className="article-shell">
     <header className="article-header"><span className="section-label">{category}</span><h1>{title}</h1><p>{excerpt}</p><div className="article-byline"><strong>{author}</strong><span>•</span><time>{published}</time><span>•</span><span>{demo?.readTime ?? "3 րոպե"} ընթերցում</span></div></header>
     {/* eslint-disable-next-line @next/next/no-img-element */}
-    {image ? <img className="article-image" src={image} alt="" /> : <div className="article-placeholder" aria-hidden="true">AI</div>}
+    {image ? <img className="article-image" src={image} alt="" referrerPolicy="no-referrer" /> : <div className="article-placeholder" aria-hidden="true">AI</div>}
     <div className="article-content">{paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</div>
     {stored ? <aside className="source-box"><strong>Սկզբնաղբյուր</strong><p>Նյութը պատրաստվել է հրապարակված սկզբնաղբյուրի հիման վրա։</p><a href={stored.sourceUrl} target="_blank" rel="noreferrer">Բացել սկզբնաղբյուրը ↗</a></aside> : null}
     <section className="comments-section"><h2>Մեկնաբանություններ</h2><p className="comments-intro">Միացեք քննարկմանը․ մեկնաբանությունը հրապարակվելուց առաջ կստուգվի։</p><CommentForm articleSlug={slug} /></section>

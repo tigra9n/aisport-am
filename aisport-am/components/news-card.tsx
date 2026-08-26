@@ -6,7 +6,7 @@ export function NewsCard({ article, compact = false }: { article: ArticlePreview
     <article className={`modern-news-card ${compact ? "compact" : ""}`}>
       <Link className="card-media" href={`/news/${article.slug}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={article.image} alt="" loading="lazy" />
+        <img src={article.image} alt="" loading="lazy" referrerPolicy="no-referrer" />
         {article.local ? <span className="armenia-chip">Հայաստան</span> : null}
       </Link>
       <div className="card-copy">
