@@ -14,16 +14,19 @@ jobs:
       - uses: actions/checkout@v4
       - name: Load test - concurrent requests to homepage and article
         run: |
+          mkdir -p /tmp/lt
+          START=$(date +%s%N)
+          for i in $(seq 1 30); do
+            curl -s -o /dev/null -w "%{http_code} %{time_total}s\n" --max-time 20 "https://aisport.am/?_lt=$i" > "/tmp/lt/$i.txt" &
+          done
+          wait
+          END=$(date +%s%N)
           {
             echo "=== 30 concurrent requests to homepage ==="
-            START=$(date +%s%N)
-            for i in $(seq 1 30); do
-              (curl -s -o /dev/null -w "%{http_code} %{time_total}s\n" --max-time 20 "https://aisport.am/?_lt=$i" &)
-            done
-            wait
-            END=$(date +%s%N)
+            cat /tmp/lt/*.txt
             echo "wall clock: $(( (END-START)/1000000 ))ms"
-          } > add-source-result.txt 2>&1 || true
+            echo "success count: $(grep -c '^200' /tmp/lt/*.txt | grep -c ':1')"
+          } > add-source-result.txt
           cat add-source-result.txt
       - run: |
           git config user.email "actions@github.com"
