@@ -23,7 +23,7 @@ jobs:
       - name: Test
         run: |
           echo "=== rss ===" > test.txt
-          curl -s --max-time 120 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=rss&_c=$(date +%s)" >> test.txt 2>&1
+          curl -s --max-time 120 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=rss&_c=$(date +%s)v2" >> test.txt 2>&1
         continue-on-error: true
       - run: |
           git config user.email "actions@github.com"
