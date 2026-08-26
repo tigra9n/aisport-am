@@ -12,10 +12,13 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Verify homepage og:image now present
+      - name: Verify control page is protected
         run: |
           {
-            curl -s --max-time 15 "https://aisport.am/" | grep -oE '<meta[^>]*og:image[^>]*>'
+            echo "=== without token ==="
+            curl -s --max-time 15 "https://aisport.am/control" | grep -o "Կառավարման վահանակ\|Ավտոմատ գործարկումները" | head -1
+            echo "=== with token ==="
+            curl -s --max-time 15 "https://aisport.am/control?token=GZfaXwSyo95ooQNDr714eMSv-G_0X2Vf" | grep -o "Ավտոմատ հրապարակում\|Կառավարման վահանակ" | head -1
           } > add-source-result.txt || true
           cat add-source-result.txt
       - run: |
