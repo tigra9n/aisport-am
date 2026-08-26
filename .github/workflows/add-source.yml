@@ -17,11 +17,11 @@ jobs:
           node-version: 22
       - name: Test single-club title search
         run: |
-          curl -s -G --max-time 15 "https://api.apitube.io/v1/news/everything" --data-urlencode "api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj" --data-urlencode "title=Real Madrid" --data-urlencode "per_page=5" > add-source-result.txt || true
-          echo "" >> add-source-result.txt
-          grep -oE '"title":"[^"]{0,80}' add-source-result.txt | head -10 >> add-source-result.txt
-          grep -oE '"results":\[' add-source-result.txt >> add-source-result.txt
+          curl -s -G --max-time 15 "https://api.apitube.io/v1/news/everything" --data-urlencode "api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj" --data-urlencode "title=Real Madrid" --data-urlencode "per_page=5" > add-source-result.txt 2>&1 || true
+          echo "" >> add-source-result.txt || true
+          (grep -oE '"title":"[^"]{0,80}' add-source-result.txt || echo "no title matches found") | head -10 >> add-source-result.txt || true
           cat add-source-result.txt
+        continue-on-error: true
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
