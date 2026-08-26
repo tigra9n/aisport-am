@@ -12,38 +12,23 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Test comments end to end
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Clean up test comments
+        working-directory: aisport-am
         run: |
+          npm install --no-audit --no-fund
           {
-            echo "=== 1. Get an article slug ==="
-            SLUG="ley-ompsony-ayamium-anisi-koghqin-87787400"
-            echo "using slug=$SLUG"
-
-            echo "=== 2. Submit a test comment ==="
-            curl -s -X POST "https://aisport.am/api/comments" \
-              -H "Content-Type: application/json" \
-              -d "{\"articleSlug\":\"$SLUG\",\"author\":\"Test User\",\"body\":\"Test comment for moderation flow\"}"
-            echo ""
-
-            echo "=== 3. Check pending queue via moderate GET ==="
-            curl -s "https://aisport.am/api/comments/moderate?token=${{ secrets.CRON_TOKEN }}"
-            echo ""
-
-            echo "=== 4. Confirm no comments show yet (still pending) ==="
-            curl -s "https://aisport.am/api/comments?articleSlug=$SLUG"
-            echo ""
-
-            echo "=== 5. Approve the comment ==="
-            curl -s -X POST "https://aisport.am/api/comments/moderate" \
-              -H "Content-Type: application/json" \
-              -d "{\"token\":\"${{ secrets.CRON_TOKEN }}\",\"id\":1,\"action\":\"approve\"}"
-            echo ""
-
-            echo "=== 6. Confirm it now shows publicly ==="
-            curl -s "https://aisport.am/api/comments?articleSlug=$SLUG"
-            echo ""
-          } > add-source-result.txt || true
-          cat add-source-result.txt
+            echo "=== delete test comments ==="
+            npx wrangler d1 execute aisport-db --remote --command "DELETE FROM comments WHERE author = 'Test User';" 2>&1
+            echo "=== verify ==="
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id, author FROM comments;" 2>&1
+          } > ../add-source-result.txt || true
+          cat ../add-source-result.txt
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
