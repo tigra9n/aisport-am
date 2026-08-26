@@ -3,8 +3,8 @@ import { getDb } from "../../../../db";
 import { sources } from "../../../../db/schema";
 import { articleExistsForSource, saveGeneratedArticle } from "../../../../lib/articles";
 import { generateFromSourceSnippet, generateMatchPreview, generateMatchRecap, lastGenerationDebug } from "../../../../lib/content-generation";
-import { fetchArticlePage, fetchFeed, fetchApiTubeEntity, validateImageUrl } from "../../../../lib/feeds";
-import { pickEntityQuery } from "../../../../lib/football-entities";
+import { fetchArticlePage, fetchFeed, fetchApiTubeEntity, validateImageUrl, type FeedItem } from "../../../../lib/feeds";
+import { pickEntityQueryChain } from "../../../../lib/football-entities";
 import { getLiveMatches } from "../../../../lib/live-football-server";
 import { getLiveMatchDetailsV2 } from "../../../../lib/live-match-details-v2";
 
@@ -162,17 +162,28 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
       // lib/football-entities.ts. One-hour cycles so the priority-100
       // (Armenia) entities get queried every cycle, 90 every 2nd, 80
       // every 4th, 70 every 8th, per the provided config.
-      let items;
+      let items: FeedItem[];
       if (source.feedUrl.includes("/api/feeds/apitube")) {
         const apiTubeKey = new URL(source.feedUrl).searchParams.get("api_key");
         const cycle = Math.floor(Date.now() / (60 * 60 * 1000));
-        const picked = apiTubeKey ? pickEntityQuery(cycle) : null;
-        if (apiTubeKey && picked) {
-          log.push(`rss debug: entity query ${picked.filterType}=${picked.value.slice(0, 60)}...`);
-          items = await fetchApiTubeEntity(apiTubeKey, picked.filterType, picked.value, 30);
-        } else {
-          items = await fetchFeed(source.feedUrl, 30);
+        items = [];
+        if (apiTubeKey) {
+          // Armenian domestic clubs (priority 100) aren't indexed by
+          // APITube at all in practice - querying only the "due" tier
+          // meant most cycles found zero candidates and nothing ever got
+          // generated. Try the chain in priority order, stopping at the
+          // first tier that actually returns results.
+          for (const pick of pickEntityQueryChain(cycle)) {
+            const found = await fetchApiTubeEntity(apiTubeKey, pick.filterType, pick.value, 30);
+            if (found.length) {
+              log.push(`rss debug: entity query ${pick.filterType}=${pick.value.slice(0, 50)}... -> ${found.length} items`);
+              items = found;
+              break;
+            }
+            if (Date.now() > deadline) break;
+          }
         }
+        if (!items.length) items = await fetchFeed(source.feedUrl, 30);
       } else {
         items = await fetchFeed(source.feedUrl, 30);
       }

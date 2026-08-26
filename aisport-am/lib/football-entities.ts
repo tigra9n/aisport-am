@@ -237,6 +237,18 @@ const TIER_CADENCE: Record<100 | 90 | 80 | 70, number> = { 100: 1, 90: 2, 80: 4,
 // 4th, 70 every 8th - cycles where a lower tier is "due" get first crack,
 // otherwise falls back to tier 100 so every cycle still queries something.
 export function pickEntityQuery(cycle: number): { filterType: EntityClass; value: string } | null {
+  const all = pickEntityQueryChain(cycle);
+  return all.length ? all[0] : null;
+}
+
+// Same as pickEntityQuery, but returns the full ordered candidate list for
+// this cycle instead of just the first pick. Needed because the
+// priority-100 (Armenia) entities are due every single cycle but APITube
+// doesn't appear to index Armenian domestic football at all - querying
+// them alone would mean most cycles find zero candidates and nothing
+// ever gets generated. The caller tries entries in order and stops at
+// the first one that actually returns results.
+export function pickEntityQueryChain(cycle: number): { filterType: EntityClass; value: string }[] {
   const classes: [EntityClass, Record<100 | 90 | 80 | 70, string[]>][] = [
     ["organization.name", ORG_CHUNKS],
     ["person.name", PERSON_CHUNKS],
@@ -247,17 +259,21 @@ export function pickEntityQuery(cycle: number): { filterType: EntityClass; value
   // Prefer the most specific (highest-cadence, i.e. least frequent) due
   // tier this cycle so 70/80-priority entities actually get a turn
   // instead of tier 100 crowding out everything else every single time.
+  // Non-due tiers are appended after as fallbacks (tier 100 last, since
+  // it's most likely to be empty for APITube specifically) rather than
+  // giving up entirely on a cycle with no other content.
+  const allTiers = [100, 90, 80, 70] as const;
   const orderedDue = [...dueTiers].sort((a, b) => TIER_CADENCE[b] - TIER_CADENCE[a]);
+  const fallbackTiers = allTiers.filter((t) => !dueTiers.includes(t)).sort((a, b) => TIER_CADENCE[b] - TIER_CADENCE[a]);
+  const tierOrder = [...orderedDue, ...fallbackTiers];
 
-  for (const tier of orderedDue) {
-    // Rotate through classes and their chunks for this tier using the
-    // cycle number so repeated cycles at the same tier don't always pick
-    // the same chunk.
+  const chain: { filterType: EntityClass; value: string }[] = [];
+  for (const tier of tierOrder) {
     const options: { filterType: EntityClass; value: string }[] = [];
     for (const [filterType, chunks] of classes) {
       for (const value of chunks[tier]) options.push({ filterType, value });
     }
-    if (options.length) return options[cycle % options.length];
+    if (options.length) chain.push(options[cycle % options.length]);
   }
-  return null;
+  return chain;
 }
