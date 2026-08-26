@@ -225,7 +225,13 @@ export async function GET(request: Request) {
   const { env } = await import("cloudflare:workers");
   const runtime = env as unknown as Record<string, string | undefined>;
   const url = new URL(request.url);
-  if (url.searchParams.get("token") !== runtime.CRON_TOKEN || !runtime.CRON_TOKEN) {
+  const token = url.searchParams.get("token");
+  // Accept either CRON_TOKEN (Cloudflare native + GitHub Actions backup)
+  // or CRONJOB_TOKEN (third independent trigger via cron-job.org) - two
+  // separate tokens so an external service never needs the same secret
+  // used internally.
+  const validToken = (token && token === runtime.CRON_TOKEN) || (token && token === runtime.CRONJOB_TOKEN);
+  if (!validToken) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
   const apiKey = runtime.ANTHROPIC_API_KEY;
