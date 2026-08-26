@@ -12,21 +12,34 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Deep QA - check recent articles for broken images/links
-        working-directory: aisport-am
+      - name: Deep QA round 2 - hotlink, XSS, search
         run: |
-          npm install --no-audit --no-fund
           {
-            echo "=== recent 10 article slugs + image_url + source_url ==="
-            npx wrangler d1 execute aisport-db --remote --command "SELECT slug, image_url, source_url FROM articles ORDER BY id DESC LIMIT 10;" 2>&1
-          } > ../add-source-result.txt || true
-          cat ../add-source-result.txt
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+            echo "=== 1. hotlink check on other recent image sources ==="
+            for url in \
+              "https://images.sidearmdev.com/resize?url=https%3A%2F%2Fdxbhsrqyrr690.cloudfront.net%2Fsidearm.nextgen.sites%2Fsfajacks.com%2Fimages%2F2026%2F8%2F25%2FFB_Game_Themes_Landscape.png&width=1600&type=jpeg" \
+              "https://lemaroc360.com/uploads/articles/1787679047-t0Quu8MTWR.webp" \
+              "https://assets.khelnow.com/news/uploads/2026/08/Alexandra-Eala.jpg" \
+              "https://media.assettype.com/goodisonnews%2F2026-08-21%2F4y4o1kx6%2Fjack-grealish.jpg?w=1200&ar=40%3A21&auto=format%2Ccompress&ogImage=true&mode=crop&enlarge=true&overlay=false&overlay_position=bottom&overlay_width=100" \
+              ; do
+              code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 -A "Mozilla/5.0" -e "https://aisport.am/" "$url")
+              echo "$code  $url"
+            done
+
+            echo ""
+            echo "=== 2. XSS test: submit comment with HTML tag ==="
+            SLUG="ley-ompsony-ayamium-anisi-koghqin-87787400"
+            curl -s -X POST "https://aisport.am/api/comments" -H "Content-Type: application/json" \
+              -d "{\"articleSlug\":\"$SLUG\",\"author\":\"XSS Test\",\"body\":\"<script>alert(1)</script> and <b>bold</b>\"}"
+            echo ""
+
+            echo "=== 3. search endpoint check ==="
+            curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/search?q=ֆուտբոլ"
+
+            echo "=== 4. moderate unauthorized check ==="
+            curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/api/comments/moderate?token=wrong-token"
+          } > add-source-result.txt || true
+          cat add-source-result.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
