@@ -53,6 +53,13 @@ jobs:
               curl -s "https://aisport.am/api/comments?articleSlug=ley-ompsony-ayamium-anisi-koghqin-87787400"
               echo ""
             fi
+
+            echo "=== 6. check raw HTML escaping on article page ==="
+            curl -s --max-time 15 "https://aisport.am/news/ley-ompsony-ayamium-anisi-koghqin-87787400" -o /tmp/article.html
+            echo "literal <script> tag count:"
+            grep -oc "<script>alert" /tmp/article.html || echo 0
+            echo "escaped &lt;script&gt; count:"
+            grep -oc "&lt;script&gt;" /tmp/article.html || echo 0
           } > add-source-result.txt || true
           cat add-source-result.txt
       - run: |
