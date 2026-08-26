@@ -12,35 +12,15 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Deep QA round 3 - control page exposure, 404 handling, headers
+      - name: Verify security fix
         run: |
           {
-            echo "=== 1. is /control publicly accessible? ==="
-            curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/control"
-            curl -s --max-time 15 "https://aisport.am/control" | head -c 500
-            echo ""
-
-            echo "=== 2. 404 handling for fake article ==="
-            curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/news/this-does-not-exist-12345"
-
-            echo "=== 3. response headers (caching, compression) on homepage ==="
-            curl -sI --max-time 15 "https://aisport.am/" | grep -iE "cache-control|content-encoding|x-frame|content-security"
-
-            echo "=== 4. homepage og:image present? ==="
-            curl -s --max-time 15 "https://aisport.am/" | grep -oE '<meta[^>]*og:image[^>]*>' | head -3
-
-            echo "=== 5. viewport meta tag (mobile) ==="
-            curl -s --max-time 15 "https://aisport.am/" | grep -oE '<meta[^>]*viewport[^>]*>'
-
-            echo "=== 6. automation status/run API exposure ==="
+            echo "=== automation/status WITHOUT token (should be 401) ==="
             curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/api/automation/status"
-            echo "=== 6b. automation status body ==="
-            curl -s --max-time 15 "https://aisport.am/api/automation/status" | head -c 1000
+            curl -s --max-time 15 "https://aisport.am/api/automation/status"
             echo ""
-            echo "=== 1b. control page - scan for exposed secrets ==="
-            curl -s --max-time 15 "https://aisport.am/control" -o /tmp/control.html
-            wc -c /tmp/control.html
-            grep -oiE "token|secret|api.?key" /tmp/control.html | sort | uniq -c | head -20
+            echo "=== automation/status WITH correct token (should work) ==="
+            curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/api/automation/status?token=GZfaXwSyo95ooQNDr714eMSv-G_0X2Vf"
           } > add-source-result.txt || true
           cat add-source-result.txt
       - run: |
