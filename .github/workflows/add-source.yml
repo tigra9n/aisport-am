@@ -15,15 +15,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Clean up test comments
+      - name: Set MODERATION_TOKEN secret
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
           {
-            echo "=== delete test comments ==="
-            npx wrangler d1 execute aisport-db --remote --command "DELETE FROM comments WHERE author = 'Test User';" 2>&1
-            echo "=== verify ==="
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id, author FROM comments;" 2>&1
+            echo "=== setting secret ==="
+            echo "GZfaXwSyo95ooQNDr714eMSv-G_0X2Vf" | npx wrangler secret put MODERATION_TOKEN --name aisport-am 2>&1
           } > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
