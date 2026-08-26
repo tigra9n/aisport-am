@@ -15,23 +15,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Test entity recognition with proper URL encoding
+      - name: Test person.name with comma-separated list
         run: |
           {
-            echo "=== org: Manchester United ==="
-            curl -s -G --max-time 15 "https://api.apitube.io/v1/news/everything" --data-urlencode "api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj" --data-urlencode "organization.name=Manchester United" --data-urlencode "per_page=3" | head -c 350
-            echo ""
-            echo "=== org: FC Barcelona ==="
-            curl -s -G --max-time 15 "https://api.apitube.io/v1/news/everything" --data-urlencode "api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj" --data-urlencode "organization.name=FC Barcelona" --data-urlencode "per_page=3" | head -c 350
-            echo ""
-            echo "=== person: Lionel Messi ==="
-            curl -s -G --max-time 15 "https://api.apitube.io/v1/news/everything" --data-urlencode "api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj" --data-urlencode "person.name=Lionel Messi" --data-urlencode "per_page=3" | head -c 350
-            echo ""
-            echo "=== person: Henrikh Mkhitaryan ==="
-            curl -s -G --max-time 15 "https://api.apitube.io/v1/news/everything" --data-urlencode "api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj" --data-urlencode "person.name=Henrikh Mkhitaryan" --data-urlencode "per_page=3" | head -c 350
-            echo ""
-            echo "=== event: UEFA Champions League ==="
-            curl -s -G --max-time 15 "https://api.apitube.io/v1/news/everything" --data-urlencode "api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj" --data-urlencode "event.name=UEFA Champions League" --data-urlencode "per_page=3" | head -c 350
+            echo "=== person.name: multiple names comma-separated ==="
+            curl -s -G --max-time 15 "https://api.apitube.io/v1/news/everything" --data-urlencode "api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj" --data-urlencode "person.name=Lionel Messi,Henrikh Mkhitaryan,Kylian Mbappe" --data-urlencode "per_page=5" | head -c 600
           } > add-source-result.txt || true
           cat add-source-result.txt
       - run: |
