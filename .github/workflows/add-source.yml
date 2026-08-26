@@ -15,13 +15,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Remove duplicate Olympiacos articles from my testing
+      - name: Check for new article at 22:00-22:04 window
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
           {
-            npx wrangler d1 execute aisport-db --remote --command "DELETE FROM articles WHERE id IN (59, 60);" 2>&1
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title FROM articles ORDER BY id DESC LIMIT 5;" 2>&1
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, published_at FROM articles ORDER BY id DESC LIMIT 3;" 2>&1
           } > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
