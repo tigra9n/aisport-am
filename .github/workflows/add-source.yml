@@ -12,23 +12,15 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Delete malformed article
-        working-directory: aisport-am
+      - name: QA sweep - check key pages
         run: |
-          npm install --no-audit --no-fund
           {
-            echo "=== delete ==="
-            npx wrangler d1 execute aisport-db --remote --command "DELETE FROM articles WHERE id = 55;" 2>&1
-            echo "=== verify ==="
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id FROM articles WHERE id = 55;" 2>&1
-          } > ../add-source-result.txt || true
-          cat ../add-source-result.txt
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+            for path in "/" "/live" "/standings" "/armenia" "/podcasts" "/opinions" "/privacy" "/terms" "/moderate" "/search"; do
+              code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "https://aisport.am$path")
+              echo "$path -> $code"
+            done
+          } > add-source-result.txt || true
+          cat add-source-result.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
