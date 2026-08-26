@@ -6,7 +6,7 @@ async function checkAuth(token: string | null): Promise<boolean> {
   if (!token) return false;
   const { env } = await import("cloudflare:workers");
   const runtime = env as unknown as Record<string, string | undefined>;
-  return Boolean(runtime.CRON_TOKEN) && token === runtime.CRON_TOKEN;
+  return Boolean(runtime.MODERATION_TOKEN) && token === runtime.MODERATION_TOKEN;
 }
 
 export async function GET(request: Request) {
