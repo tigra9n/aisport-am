@@ -119,6 +119,38 @@ function looksLikeSportsArticle(a: ApiTubeArticle): boolean {
   return SPORT_KEYWORDS.some((k) => text.includes(k));
 }
 
+// Same spam/exclude checks as looksLikeSportsArticle, but without
+// requiring a generic sport keyword match - used for entity-filtered
+// (organization.name/person.name/event.name) queries, where the entity
+// filter itself is already a strong football-relevance signal. A
+// transfer-rumor headline about a named player, for example, may not
+// contain words like "match" or "league" at all.
+function passesSpamCheck(a: ApiTubeArticle): boolean {
+  const text = `${a.title ?? ""} ${a.description ?? ""}`.toLowerCase();
+  if (SPAM_PATTERNS.some((p) => text.includes(p))) return false;
+  if (EXCLUDE_KEYWORDS.some((p) => text.includes(p))) return false;
+  if (a.href && EXCLUDE_DOMAINS.some((d) => a.href!.includes(d))) return false;
+  return true;
+}
+
+function mapApiTubeResults(results: ApiTubeArticle[], limit: number, useEntitySafetyCheck = false): FeedItem[] {
+  const filtered = results.filter(useEntitySafetyCheck ? passesSpamCheck : looksLikeSportsArticle);
+  return filtered.slice(0, limit)
+    .map((a) => {
+      const desc = a.description ?? "";
+      const body = a.body ?? "";
+      const best = body.length > desc.length ? body : desc;
+      return {
+        title: a.title ?? "",
+        link: a.href ?? "",
+        snippet: best.slice(0, 2000),
+        imageUrl: a.image ?? null,
+        pubDate: a.published_at ?? null,
+      };
+    })
+    .filter((item) => item.title && item.link);
+}
+
 async function fetchApiTubeDirect(bridgeUrl: string, limit: number): Promise<FeedItem[]> {
   try {
     const params = new URL(bridgeUrl).searchParams;
@@ -132,27 +164,49 @@ async function fetchApiTubeDirect(bridgeUrl: string, limit: number): Promise<Fee
     const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
     if (!res.ok) return [];
     const data = await res.json() as { results?: ApiTubeArticle[] };
-    const filtered = (data.results ?? []).filter(looksLikeSportsArticle);
-    return filtered.slice(0, limit)
-      .map((a) => {
-        const desc = a.description ?? "";
-        const body = a.body ?? "";
-        // Now on Starter plan, APITube may include fuller body text; use
-        // whichever is longer as the fallback snippet (fetchArticlePage's
-        // full page scrape is still the primary source in
-        // generateFromSourceSnippet - this only matters if that fails).
-        const best = body.length > desc.length ? body : desc;
-        return {
-          title: a.title ?? "",
-          link: a.href ?? "",
-          snippet: best.slice(0, 2000),
-          imageUrl: a.image ?? null,
-          pubDate: a.published_at ?? null,
-        };
-      })
-      .filter((item) => item.title && item.link);
+    return mapApiTubeResults(data.results ?? [], limit);
   } catch (err) {
     console.error(`[feeds] apitube direct fetch failed: ${String(err)}`);
+    return [];
+  }
+}
+
+// APITube error codes indicating a bad/unsupported filter value (typo'd
+// or unrecognized entity name) per the provided named-entity config -
+// quarantine just that value and move on rather than failing the whole
+// feed for one bad chunk.
+const BAD_VALUE_ERROR_CODES = ["ER0151", "ER0216", "ER0220", "ER0228"];
+
+// Football-focused named-entity query: filters by a specific
+// organization.name / person.name / event.name value (a comma-separated
+// OR chunk) instead of the broad category.id="Sport" feed. See
+// lib/football-entities.ts for the entity list, chunking, and priority
+// rotation this is called with.
+export async function fetchApiTubeEntity(
+  apiKey: string,
+  filterType: "organization.name" | "person.name" | "event.name",
+  value: string,
+  limit: number,
+): Promise<FeedItem[]> {
+  try {
+    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&${encodeURIComponent(filterType)}=${encodeURIComponent(value)}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
+    const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
+    if (!res.ok) {
+      const bodyText = await res.text().catch(() => "");
+      if (BAD_VALUE_ERROR_CODES.some((code) => bodyText.includes(code))) {
+        const { quarantineValue } = await import("./football-entities");
+        // Only the first value in the chunk is quarantined when we can't
+        // tell which specific one triggered the error - APITube's error
+        // body doesn't reliably identify which comma-separated value was
+        // the problem, so this errs toward not losing legitimate ones.
+        quarantineValue(value.split(",")[0]);
+      }
+      return [];
+    }
+    const data = await res.json() as { results?: ApiTubeArticle[] };
+    return mapApiTubeResults(data.results ?? [], limit, true);
+  } catch (err) {
+    console.error(`[feeds] apitube entity fetch failed (${filterType}=${value}): ${String(err)}`);
     return [];
   }
 }
