@@ -15,10 +15,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Test combined club+person entity system end to end v2
+      - name: Check recent articles and cron status
+        working-directory: aisport-am
         run: |
-          curl -s -w "\ncurl_exit=%{exitcode}, http=%{http_code}, time=%{time_total}s\n" --max-time 100 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=rss&_c=$(date +%s)-2" > add-source-result.txt 2>&1 || true
-          cat add-source-result.txt
+          npm install --no-audit --no-fund
+          {
+            echo "=== last 10 articles ==="
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, published_at FROM articles ORDER BY id DESC LIMIT 10;" 2>&1
+          } > ../add-source-result.txt || true
+          cat ../add-source-result.txt
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
