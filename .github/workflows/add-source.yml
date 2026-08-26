@@ -12,13 +12,26 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Check hotlink protection
+      - name: Test comments end to end
         run: |
           {
-            echo "=== without referer ==="
-            curl -sI --max-time 15 "https://punchdrunkgamer.com/wp-content/uploads/2026/08/private-id-3us1p0pgypy-youtube-a.jpg" -A "Mozilla/5.0" | head -3
-            echo "=== with aisport.am referer ==="
-            curl -sI --max-time 15 "https://punchdrunkgamer.com/wp-content/uploads/2026/08/private-id-3us1p0pgypy-youtube-a.jpg" -A "Mozilla/5.0" -e "https://aisport.am/" | head -3
+            echo "=== 1. Get an article slug ==="
+            SLUG="ley-ompsony-ayamium-anisi-koghqin-87787400"
+            echo "using slug=$SLUG"
+
+            echo "=== 2. Submit a test comment ==="
+            curl -s -X POST "https://aisport.am/api/comments" \
+              -H "Content-Type: application/json" \
+              -d "{\"articleSlug\":\"$SLUG\",\"author\":\"Test User\",\"body\":\"Test comment for moderation flow\"}"
+            echo ""
+
+            echo "=== 3. Check pending queue via moderate GET ==="
+            curl -s "https://aisport.am/api/comments/moderate?token=${{ secrets.CRON_TOKEN }}"
+            echo ""
+
+            echo "=== 4. Confirm no comments show yet (still pending) ==="
+            curl -s "https://aisport.am/api/comments?articleSlug=$SLUG"
+            echo ""
           } > add-source-result.txt || true
           cat add-source-result.txt
       - run: |
