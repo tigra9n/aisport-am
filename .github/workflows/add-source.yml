@@ -22,6 +22,8 @@ jobs:
             done
             echo "=== sitemap.xml ==="
             curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/sitemap.xml"
+            curl -s --max-time 15 "https://aisport.am/sitemap.xml" | head -c 800
+            echo ""
             echo "=== robots.txt content ==="
             curl -s --max-time 15 "https://aisport.am/robots.txt"
             echo ""
