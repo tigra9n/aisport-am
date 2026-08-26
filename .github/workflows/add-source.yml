@@ -12,25 +12,19 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Check for duplicate articles
-        working-directory: aisport-am
+      - name: Load test - concurrent requests to homepage and article
         run: |
-          npm install --no-audit --no-fund
           {
-            echo "=== duplicate titles ==="
-            npx wrangler d1 execute aisport-db --remote --command "SELECT title, COUNT(*) as cnt FROM articles GROUP BY title HAVING cnt > 1;" 2>&1
-            echo "=== duplicate source_url ==="
-            npx wrangler d1 execute aisport-db --remote --command "SELECT source_url, COUNT(*) as cnt FROM articles GROUP BY source_url HAVING cnt > 1;" 2>&1
-            echo "=== total article count ==="
-            npx wrangler d1 execute aisport-db --remote --command "SELECT COUNT(*) as total FROM articles;" 2>&1
-          } > ../add-source-result.txt || true
-          cat ../add-source-result.txt
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+            echo "=== 30 concurrent requests to homepage ==="
+            START=$(date +%s%N)
+            for i in $(seq 1 30); do
+              (curl -s -o /dev/null -w "%{http_code} %{time_total}s\n" --max-time 20 "https://aisport.am/?_lt=$i" &)
+            done
+            wait
+            END=$(date +%s%N)
+            echo "wall clock: $(( (END-START)/1000000 ))ms"
+          } > add-source-result.txt 2>&1 || true
+          cat add-source-result.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
