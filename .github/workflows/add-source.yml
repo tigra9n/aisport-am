@@ -15,10 +15,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Test entity chain fallback
+      - name: Test entity query syntax directly against APITube
         run: |
           {
-            curl -s -w "\ncurl_exit=%{exitcode}, http=%{http_code}, time=%{time_total}s\n" --max-time 100 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=rss&_c=$(date +%s)" 2>&1
+            echo "=== organization.name=Real Madrid ==="
+            curl -s --max-time 15 "https://api.apitube.io/v1/news/everything?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&organization.name=Real+Madrid&per_page=5&language.code=en" | head -c 600
+            echo ""
+            echo "=== event.name=Premier League ==="
+            curl -s --max-time 15 "https://api.apitube.io/v1/news/everything?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&event.name=Premier+League&per_page=5&language.code=en" | head -c 600
           } > add-source-result.txt || true
           cat add-source-result.txt
       - run: |
