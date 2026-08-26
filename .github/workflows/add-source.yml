@@ -12,13 +12,20 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: QA sweep - check key pages
+      - name: QA sweep - key pages, sitemap, robots
         run: |
           {
+            echo "=== key pages ==="
             for path in "/" "/live" "/standings" "/armenia" "/podcasts" "/opinions" "/privacy" "/terms" "/moderate" "/search"; do
               code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "https://aisport.am$path")
               echo "$path -> $code"
             done
+            echo "=== sitemap.xml ==="
+            curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/sitemap.xml"
+            echo "=== robots.txt ==="
+            curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/robots.txt"
+            echo "=== favicon ==="
+            curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/favicon.svg"
           } > add-source-result.txt || true
           cat add-source-result.txt
       - run: |
