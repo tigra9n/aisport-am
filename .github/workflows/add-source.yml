@@ -12,12 +12,13 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Check article page rendering
+      - name: Check hotlink protection
         run: |
           {
-            echo "=== homepage img tags ==="
-            curl -s --max-time 20 "https://aisport.am/" -o /tmp/home.html
-            grep -oE '<img[^>]*src="[^"]*"' /tmp/home.html | head -8
+            echo "=== without referer ==="
+            curl -sI --max-time 15 "https://punchdrunkgamer.com/wp-content/uploads/2026/08/private-id-3us1p0pgypy-youtube-a.jpg" -A "Mozilla/5.0" | head -3
+            echo "=== with aisport.am referer ==="
+            curl -sI --max-time 15 "https://punchdrunkgamer.com/wp-content/uploads/2026/08/private-id-3us1p0pgypy-youtube-a.jpg" -A "Mozilla/5.0" -e "https://aisport.am/" | head -3
           } > add-source-result.txt || true
           cat add-source-result.txt
       - run: |
