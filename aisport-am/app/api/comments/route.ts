@@ -1,8 +1,26 @@
 import { getDb } from "../../../db";
 import { comments } from "../../../db/schema";
+import { and, asc, eq } from "drizzle-orm";
 
 function clean(value: unknown, limit: number) {
   return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, limit);
+}
+
+export async function GET(request: Request) {
+  try {
+    const url = new URL(request.url);
+    const articleSlug = clean(url.searchParams.get("articleSlug"), 160);
+    if (!articleSlug) return Response.json({ error: "articleSlug required" }, { status: 400 });
+
+    const rows = await (await getDb())
+      .select({ id: comments.id, author: comments.author, body: comments.body, createdAt: comments.createdAt })
+      .from(comments)
+      .where(and(eq(comments.articleSlug, articleSlug), eq(comments.status, "approved")))
+      .orderBy(asc(comments.createdAt));
+    return Response.json({ comments: rows });
+  } catch {
+    return Response.json({ error: "Չհաջողվեց բեռնել մեկնաբանությունները։" }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {
@@ -23,3 +41,4 @@ export async function POST(request: Request) {
     return Response.json({ error: "Մեկնաբանությունը չհաջողվեց ուղարկել։" }, { status: 500 });
   }
 }
+

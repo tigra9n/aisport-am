@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
 import { SiteHeader } from "../../../components/site-header";
 import { CommentForm } from "../../../components/comment-form";
+import { CommentList } from "../../../components/comment-list";
 import { demoArticles } from "../../../lib/content";
 import { getArticleBySlug } from "../../../lib/articles";
 import { resolveArticleImage } from "../../../lib/article-image";
@@ -65,6 +66,6 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
     {image ? <img className="article-image" src={image} alt="" referrerPolicy="no-referrer" /> : <div className="article-placeholder" aria-hidden="true">AI</div>}
     <div className="article-content">{paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</div>
     {stored ? <aside className="source-box"><strong>Սկզբնաղբյուր</strong><p>Նյութը պատրաստվել է հրապարակված սկզբնաղբյուրի հիման վրա։</p><a href={stored.sourceUrl} target="_blank" rel="noreferrer">Բացել սկզբնաղբյուրը ↗</a></aside> : null}
-    <section className="comments-section"><h2>Մեկնաբանություններ</h2><p className="comments-intro">Միացեք քննարկմանը․ մեկնաբանությունը հրապարակվելուց առաջ կստուգվի։</p><CommentForm articleSlug={slug} /></section>
+    <section className="comments-section"><h2>Մեկնաբանություններ</h2><p className="comments-intro">Միացեք քննարկմանը․ մեկնաբանությունը հրապարակվելուց առաջ կստուգվի։</p><CommentList articleSlug={slug} /><CommentForm articleSlug={slug} /></section>
   </article><SiteFooter /></main>;
 }
