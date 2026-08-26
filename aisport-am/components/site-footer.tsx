@@ -13,7 +13,7 @@ export function SiteFooter() {
         <div><strong>AISport</strong><Link prefetch={false} href="/armenia">Հայկական սպորտ</Link><Link prefetch={false} href="/podcasts">Փոդքաստներ</Link><Link prefetch={false} href="/standings">Աղյուսակներ</Link><Link prefetch={false} href="/live">Live</Link><Link prefetch={false} href="/opinions">Հեղինակային նյութեր</Link></div>
         <div><strong>Հետևեք մեզ</strong><span>Facebook</span><span>Instagram</span><span>Telegram</span><span>Threads</span></div>
       </div>
-      <div className="site-shell footer-bottom"><span>© 2026 AISport</span><span>Բովանդակության օգտագործումը՝ սկզբնաղբյուրի հղումով</span></div>
+      <div className="site-shell footer-bottom"><span>© 2026 AISport</span><span>Բովանդակության օգտագործումը՝ սկզբնաղբյուրի հղումով</span><span><Link prefetch={false} href="/privacy">Գաղտնիության քաղաքականություն</Link> · <Link prefetch={false} href="/terms">Օգտագործման կանոններ</Link></span></div>
     </footer>
   );
 }
