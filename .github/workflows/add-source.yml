@@ -12,20 +12,15 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Check latest article image
-        working-directory: aisport-am
+      - name: Check if the image URL loads
         run: |
-          npm install --no-audit --no-fund
           {
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, image_url, source_url, published_at FROM articles ORDER BY id DESC LIMIT 3;" 2>&1
-          } > ../add-source-result.txt || true
-          cat ../add-source-result.txt
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+            echo "=== without referer ==="
+            curl -sI --max-time 15 -A "Mozilla/5.0" "https://www.cappertek.com/images/news/twins-vs-athletics-betting-odds-free-picks-and-predictions-8-26-2026-415696.jpg" | head -5
+            echo "=== with aisport.am referer ==="
+            curl -sI --max-time 15 -A "Mozilla/5.0" -e "https://aisport.am/" "https://www.cappertek.com/images/news/twins-vs-athletics-betting-odds-free-picks-and-predictions-8-26-2026-415696.jpg" | head -5
+          } > add-source-result.txt || true
+          cat add-source-result.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
