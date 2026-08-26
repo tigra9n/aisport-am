@@ -3,7 +3,7 @@ import { getDb } from "../../../../db";
 import { sources } from "../../../../db/schema";
 import { articleExistsForSource, saveGeneratedArticle } from "../../../../lib/articles";
 import { generateFromSourceSnippet, generateMatchPreview, generateMatchRecap, lastGenerationDebug } from "../../../../lib/content-generation";
-import { fetchArticlePage, fetchFeed } from "../../../../lib/feeds";
+import { fetchArticlePage, fetchFeed, validateImageUrl } from "../../../../lib/feeds";
 import { getLiveMatches } from "../../../../lib/live-football-server";
 import { getLiveMatchDetailsV2 } from "../../../../lib/live-match-details-v2";
 
@@ -169,7 +169,10 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
         const page = await fetchArticlePage(item.link);
         const article = await generateFromSourceSnippet(apiKey, { title: item.title, snippet: item.snippet, sourceName: source.name, fullText: page.bodyText });
         if (!article) { log.push(`rss generation failed: ${item.title.slice(0, 40)} | ${lastGenerationDebug}`); continue; }
-        const resolvedImage = item.imageUrl ?? page.image;
+        // item.imageUrl (from APITube/RSS directly) can itself be a dead
+        // link on the source's end (found: cappertek.com's own listed
+        // image 404'd) - validate before trusting it, same as page.image.
+        const resolvedImage = (await validateImageUrl(item.imageUrl)) ?? page.image;
         const saved = await saveGeneratedArticle({
           ...article, imageUrl: resolvedImage, sourceName: source.name, sourceUrl: item.link, uniquePart: String(Date.now()).slice(-8),
         });

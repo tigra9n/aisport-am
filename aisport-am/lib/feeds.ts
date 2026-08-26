@@ -157,6 +157,24 @@ async function fetchApiTubeDirect(bridgeUrl: string, limit: number): Promise<Fee
   }
 }
 
+// Verifies an image URL actually resolves (HEAD 200) before we accept it -
+// both APITube's own "image" field and og:image scraped from the source
+// page have been observed to point at dead/404'd images (the source site
+// itself had a stale meta tag or removed the file), which would otherwise
+// get saved and shown as a broken picture on our article page.
+export async function validateImageUrl(url: string | null | undefined): Promise<string | null> {
+  if (!url) return null;
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6_000);
+    const res = await fetch(url, { method: "HEAD", signal: controller.signal, headers: { "User-Agent": "Mozilla/5.0" } });
+    clearTimeout(timeoutId);
+    return res.ok ? url : null;
+  } catch {
+    return null;
+  }
+}
+
 // Fetches the actual source article page once and pulls out (a) the
 // og:image/twitter:image for a real per-story photo, and (b) a chunk of
 // plain body text for much richer factual grounding than the short RSS
@@ -187,7 +205,11 @@ export async function fetchArticlePage(articleUrl: string): Promise<{ image: str
       ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
       ?? html.match(/<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i)
       ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
-    const image = ogMatch ? ogMatch[1] : null;
+    // The og:image meta tag itself can be stale/broken on the source site
+    // (e.g. cappertek.com pointed to a 404'd image) - verify it actually
+    // loads before accepting it. Falls back to the category stock-photo
+    // pool (handled by the caller) if this check fails.
+    const image = await validateImageUrl(ogMatch?.[1]);
 
     // Crude but effective plain-text extraction: strip script/style/nav/
     // header/footer/noscript blocks and all remaining tags, collapse
