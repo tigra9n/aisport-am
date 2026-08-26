@@ -12,22 +12,23 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Load test - concurrent requests to homepage and article
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Rotate APITube API key in D1
+        working-directory: aisport-am
         run: |
-          mkdir -p /tmp/lt
-          START=$(date +%s%N)
-          for i in $(seq 1 30); do
-            curl -s -o /dev/null -w "%{http_code} %{time_total}s\n" --max-time 20 "https://aisport.am/?_lt=$i" > "/tmp/lt/$i.txt" &
-          done
-          wait
-          END=$(date +%s%N)
+          npm install --no-audit --no-fund
           {
-            echo "=== 30 concurrent requests to homepage ==="
-            cat /tmp/lt/*.txt
-            echo "wall clock: $(( (END-START)/1000000 ))ms"
-            echo "success count: $(grep -c '^200' /tmp/lt/*.txt | grep -c ':1')"
-          } > add-source-result.txt
-          cat add-source-result.txt
+            echo "=== update feed_url with new key ==="
+            npx wrangler d1 execute aisport-db --remote --command "UPDATE sources SET feed_url = 'https://aisport.am/api/feeds/apitube?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&category_id=medtop:15000000&per_page=20' WHERE name = 'APITube Sport';" 2>&1
+            echo "=== verify ==="
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id, name, feed_url FROM sources;" 2>&1
+          } > ../add-source-result.txt || true
+          cat ../add-source-result.txt
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
