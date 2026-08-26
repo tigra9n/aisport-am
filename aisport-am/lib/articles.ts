@@ -45,14 +45,23 @@ export async function articleExistsForSource(sourceUrl: string): Promise<boolean
 
 const HY_TO_LATIN: Record<string, string> = {
   "ա":"a","բ":"b","գ":"g","դ":"d","ե":"e","զ":"z","է":"e","ը":"y","թ":"t","ժ":"zh",
-  "ի":"i","լ":"l","խ":"kh","ծ":"ts","կ":"k","հ":"h","ձ":"dz","ղ":"gh","չ":"ch",
+  "ի":"i","լ":"l","խ":"kh","ծ":"ts","կ":"k","հ":"h","ձ":"dz","ղ":"gh",
   "մ":"m","յ":"y","ն":"n","շ":"sh","ո":"o","չ":"ch","պ":"p","ջ":"j","ռ":"r",
   "ս":"s","վ":"v","տ":"t","ր":"r","ց":"ts","ու":"u","փ":"p","ք":"q","օ":"o","ֆ":"f",
   "և":"ev",
 };
 
 function transliterateHy(text: string): string {
+  // Bug found: the HY_TO_LATIN map only covers lowercase Armenian letters.
+  // Titles always start with an uppercase Armenian letter (different
+  // Unicode codepoints, Ա-Ֆ vs ա-ֆ), which silently failed to
+  // transliterate and then got stripped by slugify's cleanup regex -
+  // e.g. "Ֆուքեթում" became "uqetum" instead of "fuqetum", losing the
+  // first letter of nearly every article's slug. Lowercasing first
+  // (JS's toLowerCase correctly handles Armenian case folding) fixes
+  // this for the whole alphabet at once.
   return text
+    .toLowerCase()
     .replace(/ու/g, "u")
     .replace(/[ա-և]/g, (ch) => HY_TO_LATIN[ch] ?? ch);
 }
