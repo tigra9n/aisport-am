@@ -33,11 +33,26 @@ jobs:
               -d "{\"articleSlug\":\"$SLUG\",\"author\":\"XSS Test\",\"body\":\"<script>alert(1)</script> and <b>bold</b>\"}"
             echo ""
 
-            echo "=== 3. search endpoint check ==="
-            curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/search?q=ֆուտբոլ"
+            echo "=== 3. search endpoint check (properly encoded) ==="
+            curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 -G "https://aisport.am/search" --data-urlencode "q=ֆուտբոլ"
+            echo "=== 3b. search with no query ==="
+            curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/search"
 
             echo "=== 4. moderate unauthorized check ==="
             curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/api/comments/moderate?token=wrong-token"
+
+            echo "=== 5. approve XSS test comment and check rendering ==="
+            MOD_LIST=$(curl -s "https://aisport.am/api/comments/moderate?token=GZfaXwSyo95ooQNDr714eMSv-G_0X2Vf")
+            echo "$MOD_LIST"
+            XSS_ID=$(echo "$MOD_LIST" | python3 -c "import json,sys; d=json.load(sys.stdin); print(next((c['id'] for c in d['comments'] if c['author']=='XSS Test'), ''))")
+            echo "xss comment id: $XSS_ID"
+            if [ -n "$XSS_ID" ]; then
+              curl -s -X POST "https://aisport.am/api/comments/moderate" -H "Content-Type: application/json" \
+                -d "{\"token\":\"GZfaXwSyo95ooQNDr714eMSv-G_0X2Vf\",\"id\":$XSS_ID,\"action\":\"approve\"}"
+              echo ""
+              curl -s "https://aisport.am/api/comments?articleSlug=ley-ompsony-ayamium-anisi-koghqin-87787400"
+              echo ""
+            fi
           } > add-source-result.txt || true
           cat add-source-result.txt
       - run: |
