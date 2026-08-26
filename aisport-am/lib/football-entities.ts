@@ -6,17 +6,80 @@
 // essentially every name tried, including extremely famous ones
 // ("Manchester United", "UEFA Champions League") - APITube's entity
 // taxonomy doesn't appear to cover football clubs/competitions this way.
-// person.name DOES work (confirmed: "Lionel Messi", "Henrikh Mkhitaryan"
-// both return real results), but coverage is inconsistent even among
-// star players ("Kylian Mbappe" wasn't found), and a comma-separated
-// list fails entirely if even one name in it isn't recognized. So:
-// person.name only, queried one name at a time (no chunking), with a
-// per-cycle fallback chain trying the next name if one comes back empty
-// or "not found".
+//
+// person.name DOES work for players/coaches (confirmed real results for
+// Lionel Messi, Henrikh Mkhitaryan), and a plain title= free-text search
+// works well for clubs (confirmed 5 real, on-topic results for
+// title=Real Madrid) - clubs just aren't in the tagged-entity taxonomy,
+// but their names obviously appear in article titles. Both query one
+// name/club at a time (no chunking) since a comma-separated
+// person.name list fails entirely if even one name isn't recognized.
 
-export type EntityClass = "person.name";
+export type EntityClass = "person.name" | "title";
 
 type Entity = { name: string; priority: 100 | 90 | 80 | 70; section: string };
+
+const CLUBS: Entity[] = [
+  { name: "FC Noah", priority: 100, section: "armenia" },
+  { name: "FC Pyunik", priority: 100, section: "armenia" },
+  { name: "FC Ararat-Armenia", priority: 100, section: "armenia" },
+  { name: "FC Urartu", priority: 100, section: "armenia" },
+  { name: "FC Alashkert", priority: 100, section: "armenia" },
+  { name: "FC Ararat", priority: 100, section: "armenia" },
+  { name: "FC Shirak", priority: 100, section: "armenia" },
+  { name: "FC Van", priority: 100, section: "armenia" },
+  { name: "FC BKMA", priority: 100, section: "armenia" },
+  { name: "FC Gandzasar", priority: 100, section: "armenia" },
+  { name: "FC Syunik", priority: 100, section: "armenia" },
+  { name: "Sardarapat FC", priority: 100, section: "armenia" },
+
+  { name: "Real Madrid", priority: 90, section: "europe" },
+  { name: "FC Barcelona", priority: 90, section: "europe" },
+  { name: "Atletico Madrid", priority: 90, section: "europe" },
+  { name: "Manchester City", priority: 90, section: "europe" },
+  { name: "Manchester United", priority: 90, section: "europe" },
+  { name: "Liverpool FC", priority: 90, section: "europe" },
+  { name: "Arsenal FC", priority: 90, section: "europe" },
+  { name: "Chelsea FC", priority: 90, section: "europe" },
+  { name: "Paris Saint-Germain", priority: 90, section: "europe" },
+  { name: "Bayern Munich", priority: 90, section: "europe" },
+  { name: "Borussia Dortmund", priority: 90, section: "europe" },
+  { name: "Inter Milan", priority: 90, section: "europe" },
+  { name: "AC Milan", priority: 90, section: "europe" },
+  { name: "Juventus FC", priority: 90, section: "europe" },
+
+  { name: "Athletic Bilbao", priority: 80, section: "europe" },
+  { name: "Sevilla FC", priority: 80, section: "europe" },
+  { name: "Villarreal CF", priority: 80, section: "europe" },
+  { name: "Tottenham Hotspur", priority: 80, section: "europe" },
+  { name: "Newcastle United", priority: 80, section: "europe" },
+  { name: "Aston Villa", priority: 80, section: "europe" },
+  { name: "Olympique de Marseille", priority: 80, section: "europe" },
+  { name: "AS Monaco", priority: 80, section: "europe" },
+  { name: "Bayer Leverkusen", priority: 80, section: "europe" },
+  { name: "RB Leipzig", priority: 80, section: "europe" },
+  { name: "SSC Napoli", priority: 80, section: "europe" },
+  { name: "AS Roma", priority: 80, section: "europe" },
+  { name: "Atalanta BC", priority: 80, section: "europe" },
+  { name: "SL Benfica", priority: 80, section: "europe" },
+  { name: "FC Porto", priority: 80, section: "europe" },
+  { name: "Sporting CP", priority: 80, section: "europe" },
+  { name: "AFC Ajax", priority: 80, section: "europe" },
+  { name: "Galatasaray SK", priority: 80, section: "europe" },
+  { name: "Fenerbahce SK", priority: 80, section: "europe" },
+
+  { name: "Olympique Lyonnais", priority: 70, section: "europe" },
+  { name: "Eintracht Frankfurt", priority: 70, section: "europe" },
+  { name: "SS Lazio", priority: 70, section: "europe" },
+  { name: "PSV Eindhoven", priority: 70, section: "europe" },
+  { name: "Feyenoord", priority: 70, section: "europe" },
+  { name: "Olympiacos FC", priority: 70, section: "europe" },
+  { name: "Celtic FC", priority: 70, section: "europe" },
+  { name: "Rangers FC", priority: 70, section: "europe" },
+  { name: "Shakhtar Donetsk", priority: 70, section: "europe" },
+  { name: "Dynamo Kyiv", priority: 70, section: "europe" },
+  { name: "Qarabag FK", priority: 70, section: "europe" },
+];
 
 const PERSONS: Entity[] = [
   { name: "Henrikh Mkhitaryan", priority: 100, section: "armenia" },
@@ -94,11 +157,11 @@ const PERSONS: Entity[] = [
   { name: "Lionel Scaloni", priority: 70, section: "coaches" },
 ];
 
-// Names that returned ER0216 "entity person name not found" get pushed
+// Names/clubs that returned an "entity/value not found" error get pushed
 // here at runtime and skipped for the rest of this invocation. Doesn't
 // persist across invocations (Workers are stateless) - acceptable
 // tradeoff over adding a D1 table just for this; a permanently-invalid
-// name just gets retried occasionally instead of remembered forever.
+// value just gets retried occasionally instead of remembered forever.
 const runtimeQuarantine = new Set<string>();
 export function quarantineValue(name: string) {
   runtimeQuarantine.add(name);
@@ -106,16 +169,15 @@ export function quarantineValue(name: string) {
 
 const TIER_CADENCE: Record<100 | 90 | 80 | 70, number> = { 100: 1, 90: 2, 80: 4, 70: 8 };
 
-// Returns an ordered list of individual person names to try this cycle,
-// most-specific-due-tier first, falling back through the other tiers
-// (tier 100 - Armenia - last, since APITube coverage of Armenian players
-// is spottier than world-famous names). The caller tries them one at a
-// time and stops at the first one that actually returns articles, since
-// even well-known names sometimes come back "not found" and a
-// comma-separated list fails entirely if any one name in it is bad.
-export function pickPersonQueryChain(cycle: number): string[] {
+// Shared priority-tier chain builder for a flat entity list: most-
+// specific-due-tier first, falling back through the other tiers (tier
+// 100 - Armenia - last, since APITube coverage of Armenian
+// players/clubs is spottier than world-famous ones). The caller tries
+// entries one at a time and stops at the first one that actually
+// returns articles.
+function buildChain(entities: Entity[], cycle: number): string[] {
   const byTier: Record<100 | 90 | 80 | 70, string[]> = { 100: [], 90: [], 80: [], 70: [] };
-  for (const e of PERSONS) {
+  for (const e of entities) {
     if (runtimeQuarantine.has(e.name)) continue;
     byTier[e.priority].push(e.name);
   }
@@ -135,4 +197,21 @@ export function pickPersonQueryChain(cycle: number): string[] {
     for (let i = 0; i < names.length; i++) chain.push(names[(start + i) % names.length]);
   }
   return chain;
+}
+
+export function pickPersonQueryChain(cycle: number): string[] {
+  return buildChain(PERSONS, cycle);
+}
+
+export function pickClubQueryChain(cycle: number): string[] {
+  return buildChain(CLUBS, cycle);
+}
+
+// Alternates which type (club title-search vs person.name) gets tried
+// first each cycle, with the other type as fallback, so both clubs and
+// players get regular turns rather than one crowding out the other.
+export function pickCombinedChain(cycle: number): { filterType: EntityClass; value: string }[] {
+  const persons = pickPersonQueryChain(cycle).map((value) => ({ filterType: "person.name" as const, value }));
+  const clubs = pickClubQueryChain(cycle).map((value) => ({ filterType: "title" as const, value }));
+  return cycle % 2 === 0 ? [...clubs, ...persons] : [...persons, ...clubs];
 }

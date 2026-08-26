@@ -202,6 +202,26 @@ export async function fetchApiTubePerson(apiKey: string, personName: string, lim
   }
 }
 
+// Club-focused query: clubs aren't in APITube's tagged organization
+// entity taxonomy (confirmed: "Real Madrid", "Manchester United" both
+// "not found" as organization.name), but a plain title= free-text search
+// works well (confirmed real, on-topic results for title=Real Madrid).
+// language.code is omitted here since title search already found
+// English/Spanish/French results for the same query - restricting
+// language would just narrow an already-working search unnecessarily.
+export async function fetchApiTubeTitle(apiKey: string, clubName: string, limit: number): Promise<FeedItem[]> {
+  try {
+    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&title=${encodeURIComponent(clubName)}&per_page=50&sort.by=published_at&sort.order=desc`;
+    const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
+    if (!res.ok) return [];
+    const data = await res.json() as { results?: ApiTubeArticle[] };
+    return mapApiTubeResults(data.results ?? [], limit, true);
+  } catch (err) {
+    console.error(`[feeds] apitube title fetch failed (${clubName}): ${String(err)}`);
+    return [];
+  }
+}
+
 // Verifies an image URL actually resolves (HEAD 200) before we accept it -
 // both APITube's own "image" field and og:image scraped from the source
 // page have been observed to point at dead/404'd images (the source site

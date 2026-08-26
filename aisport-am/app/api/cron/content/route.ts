@@ -3,8 +3,8 @@ import { getDb } from "../../../../db";
 import { sources } from "../../../../db/schema";
 import { articleExistsForSource, saveGeneratedArticle } from "../../../../lib/articles";
 import { generateFromSourceSnippet, generateMatchPreview, generateMatchRecap, lastGenerationDebug } from "../../../../lib/content-generation";
-import { fetchArticlePage, fetchFeed, fetchApiTubePerson, validateImageUrl, type FeedItem } from "../../../../lib/feeds";
-import { pickPersonQueryChain } from "../../../../lib/football-entities";
+import { fetchArticlePage, fetchFeed, fetchApiTubePerson, fetchApiTubeTitle, validateImageUrl, type FeedItem } from "../../../../lib/feeds";
+import { pickCombinedChain } from "../../../../lib/football-entities";
 import { getLiveMatches } from "../../../../lib/live-football-server";
 import { getLiveMatchDetailsV2 } from "../../../../lib/live-match-details-v2";
 
@@ -163,21 +163,25 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
       // (Armenia) entities get queried every cycle, 90 every 2nd, 80
       // every 4th, 70 every 8th, per the provided config.
       // Football-focused named-entity query for the APITube source:
-      // filters by a specific rotating player/coach name from
+      // filters by a rotating club (title= free-text search) or
+      // player/coach (person.name entity filter) from
       // lib/football-entities.ts instead of the broad category.id="Sport"
-      // feed. Tries names one at a time (not comma-lists - a single
-      // unrecognized name fails the whole request) until one actually
-      // returns articles, falling back to the old category feed as a
-      // last resort if every name in the chain comes up empty.
+      // feed. Alternates which type leads each cycle so both get regular
+      // turns. Tries one value at a time (not comma-lists - a single
+      // unrecognized person.name fails the whole request) until one
+      // actually returns articles, falling back to the old category feed
+      // as a last resort if the whole chain comes up empty.
       let items: FeedItem[] = [];
       if (source.feedUrl.includes("/api/feeds/apitube")) {
         const apiTubeKey = new URL(source.feedUrl).searchParams.get("api_key");
         if (apiTubeKey) {
           const cycle = Math.floor(Date.now() / (60 * 60 * 1000));
-          for (const personName of pickPersonQueryChain(cycle)) {
-            const found = await fetchApiTubePerson(apiTubeKey, personName, 30);
+          for (const pick of pickCombinedChain(cycle)) {
+            const found = pick.filterType === "title"
+              ? await fetchApiTubeTitle(apiTubeKey, pick.value, 30)
+              : await fetchApiTubePerson(apiTubeKey, pick.value, 30);
             if (found.length) {
-              log.push(`rss debug: person.name=${personName} -> ${found.length} items`);
+              log.push(`rss debug: ${pick.filterType}=${pick.value} -> ${found.length} items`);
               items = found;
               break;
             }
