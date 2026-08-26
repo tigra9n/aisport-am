@@ -17,7 +17,27 @@ async function loadControlData() {
   }
 }
 
-export default async function ControlPage() {
+// Was fully public (no auth at all) - an internal automation dashboard
+// anyone could load. Doesn't render the raw feedUrl (so no direct key
+// leak like /api/automation/status had), but pipeline status/source names
+// shouldn't be open to random visitors either. Same token as moderation.
+async function checkAuth(token: string | undefined): Promise<boolean> {
+  if (!token) return false;
+  const { env } = await import("cloudflare:workers");
+  const runtime = env as unknown as Record<string, string | undefined>;
+  return Boolean(runtime.MODERATION_TOKEN) && token === runtime.MODERATION_TOKEN;
+}
+
+export default async function ControlPage({ searchParams }: { searchParams: Promise<{ token?: string }> }) {
+  const { token } = await searchParams;
+  if (!(await checkAuth(token))) {
+    return (
+      <main style={{ maxWidth: 420, margin: "80px auto", padding: 24, fontFamily: "sans-serif" }}>
+        <h1 style={{ fontSize: 20, marginBottom: 12 }}>Կառավարման վահանակ</h1>
+        <p style={{ color: "#666", fontSize: 13 }}>Այս էջը պաշտպանված է։ Ավելացրու <code>?token=...</code> URL-ի վերջում։</p>
+      </main>
+    );
+  }
   const { sourceRows, runRows } = await loadControlData();
   const configured = await configuredPlatforms();
   const channels = [
