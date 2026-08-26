@@ -34,6 +34,13 @@ jobs:
 
             echo "=== 6. automation status/run API exposure ==="
             curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/api/automation/status"
+            echo "=== 6b. automation status body ==="
+            curl -s --max-time 15 "https://aisport.am/api/automation/status" | head -c 1000
+            echo ""
+            echo "=== 1b. control page - scan for exposed secrets ==="
+            curl -s --max-time 15 "https://aisport.am/control" -o /tmp/control.html
+            wc -c /tmp/control.html
+            grep -oiE "token|secret|api.?key" /tmp/control.html | sort | uniq -c | head -20
           } > add-source-result.txt || true
           cat add-source-result.txt
       - run: |
