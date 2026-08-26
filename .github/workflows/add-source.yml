@@ -15,10 +15,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Test person-based entity system end to end
+      - name: Test title-based keyword search for clubs
         run: |
           {
-            curl -s -w "\ncurl_exit=%{exitcode}, http=%{http_code}, time=%{time_total}s\n" --max-time 100 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=rss&_c=$(date +%s)" 2>&1
+            echo "=== title=Real Madrid ==="
+            curl -s -G --max-time 15 "https://api.apitube.io/v1/news/everything" --data-urlencode "api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj" --data-urlencode "title=Real Madrid" --data-urlencode "per_page=3" | head -c 500
+            echo ""
+            echo "=== title=Real Madrid,FC Barcelona,Manchester United ==="
+            curl -s -G --max-time 15 "https://api.apitube.io/v1/news/everything" --data-urlencode "api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj" --data-urlencode "title=Real Madrid,FC Barcelona,Manchester United" --data-urlencode "per_page=3" | head -c 500
           } > add-source-result.txt || true
           cat add-source-result.txt
       - run: |
