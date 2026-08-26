@@ -12,25 +12,21 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: QA sweep - key pages, sitemap, robots
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Deep QA - check recent articles for broken images/links
+        working-directory: aisport-am
         run: |
+          npm install --no-audit --no-fund
           {
-            echo "=== key pages ==="
-            for path in "/" "/live" "/standings" "/armenia" "/podcasts" "/opinions" "/privacy" "/terms" "/moderate" "/search"; do
-              code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 15 "https://aisport.am$path")
-              echo "$path -> $code"
-            done
-            echo "=== sitemap.xml ==="
-            curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/sitemap.xml"
-            curl -s --max-time 15 "https://aisport.am/sitemap.xml" | head -c 800
-            echo ""
-            echo "=== robots.txt content ==="
-            curl -s --max-time 15 "https://aisport.am/robots.txt"
-            echo ""
-            echo "=== favicon ==="
-            curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/favicon.svg"
-          } > add-source-result.txt || true
-          cat add-source-result.txt
+            echo "=== recent 10 article slugs + image_url + source_url ==="
+            npx wrangler d1 execute aisport-db --remote --command "SELECT slug, image_url, source_url FROM articles ORDER BY id DESC LIMIT 10;" 2>&1
+          } > ../add-source-result.txt || true
+          cat ../add-source-result.txt
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
