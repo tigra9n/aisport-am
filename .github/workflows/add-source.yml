@@ -15,14 +15,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Test new key directly against APITube
+      - name: Retest rss generation with new key
         run: |
           {
-            echo "=== direct APITube API test with new key ==="
-            curl -s --max-time 15 "https://api.apitube.io/v1/news/everything?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&category.id=medtop:15000000&per_page=5&language.code=en" -H "Content-Type: application/json" | head -c 500
-            echo ""
-            echo "=== bridge route test with new key ==="
-            curl -s --max-time 15 "https://aisport.am/api/feeds/apitube?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&category_id=medtop:15000000&per_page=10&debug=1"
+            curl -s -w "\ncurl_exit=%{exitcode}, http=%{http_code}, time=%{time_total}s\n" --max-time 100 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=rss&_c=$(date +%s)" 2>&1
           } > add-source-result.txt || true
           cat add-source-result.txt
       - run: |
