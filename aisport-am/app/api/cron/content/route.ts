@@ -176,7 +176,8 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
         const apiTubeKey = new URL(source.feedUrl).searchParams.get("api_key");
         if (apiTubeKey) {
           const cycle = Math.floor(Date.now() / (60 * 60 * 1000));
-          for (const pick of pickCombinedChain(cycle)) {
+          const rotationSeed = Math.floor(Date.now() / (60 * 1000));
+          for (const pick of pickCombinedChain(cycle, rotationSeed)) {
             const found = pick.filterType === "title"
               ? await fetchApiTubeTitle(apiTubeKey, pick.value, 30)
               : await fetchApiTubePerson(apiTubeKey, pick.value, 30);

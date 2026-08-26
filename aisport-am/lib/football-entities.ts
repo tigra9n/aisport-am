@@ -175,14 +175,22 @@ const TIER_CADENCE: Record<100 | 90 | 80 | 70, number> = { 100: 1, 90: 2, 80: 4,
 // players/clubs is spottier than world-famous ones). The caller tries
 // entries one at a time and stops at the first one that actually
 // returns articles.
-function buildChain(entities: Entity[], cycle: number): string[] {
+//
+// tierCycle (hourly) controls which priority tiers are "due" this hour.
+// rotationSeed is separate and finer-grained (minutes, not hours) - using
+// only tierCycle for the starting offset meant repeated calls within the
+// same hour (manual testing, or the native+backup cron systems both
+// firing in the same throttle window) always picked the same starting
+// entity, producing several near-duplicate articles about the same club
+// in a row (observed: 3 Olympiacos articles in 10 minutes).
+function buildChain(entities: Entity[], tierCycle: number, rotationSeed: number): string[] {
   const byTier: Record<100 | 90 | 80 | 70, string[]> = { 100: [], 90: [], 80: [], 70: [] };
   for (const e of entities) {
     if (runtimeQuarantine.has(e.name)) continue;
     byTier[e.priority].push(e.name);
   }
 
-  const dueTiers = ([100, 90, 80, 70] as const).filter((t) => cycle % TIER_CADENCE[t] === 0);
+  const dueTiers = ([100, 90, 80, 70] as const).filter((t) => tierCycle % TIER_CADENCE[t] === 0);
   const orderedDue = [...dueTiers].sort((a, b) => TIER_CADENCE[b] - TIER_CADENCE[a]);
   const fallbackTiers = ([100, 90, 80, 70] as const).filter((t) => !dueTiers.includes(t)).sort((a, b) => TIER_CADENCE[b] - TIER_CADENCE[a]);
   const tierOrder = [...orderedDue, ...fallbackTiers];
@@ -191,27 +199,28 @@ function buildChain(entities: Entity[], cycle: number): string[] {
   for (const tier of tierOrder) {
     const names = byTier[tier];
     if (!names.length) continue;
-    // Rotate the starting point within this tier by cycle so repeated
-    // cycles at the same tier don't always try the same name first.
-    const start = cycle % names.length;
+    const start = rotationSeed % names.length;
     for (let i = 0; i < names.length; i++) chain.push(names[(start + i) % names.length]);
   }
   return chain;
 }
 
-export function pickPersonQueryChain(cycle: number): string[] {
-  return buildChain(PERSONS, cycle);
+export function pickPersonQueryChain(cycle: number, rotationSeed: number = cycle): string[] {
+  return buildChain(PERSONS, cycle, rotationSeed);
 }
 
-export function pickClubQueryChain(cycle: number): string[] {
-  return buildChain(CLUBS, cycle);
+export function pickClubQueryChain(cycle: number, rotationSeed: number = cycle): string[] {
+  return buildChain(CLUBS, cycle, rotationSeed);
 }
 
 // Alternates which type (club title-search vs person.name) gets tried
 // first each cycle, with the other type as fallback, so both clubs and
 // players get regular turns rather than one crowding out the other.
-export function pickCombinedChain(cycle: number): { filterType: EntityClass; value: string }[] {
-  const persons = pickPersonQueryChain(cycle).map((value) => ({ filterType: "person.name" as const, value }));
-  const clubs = pickClubQueryChain(cycle).map((value) => ({ filterType: "title" as const, value }));
+// rotationSeed should be a finer-grained value than the hourly cycle
+// (e.g. total elapsed minutes) so repeated calls within the same hour
+// don't all pick the same starting entity - see buildChain.
+export function pickCombinedChain(cycle: number, rotationSeed: number = cycle): { filterType: EntityClass; value: string }[] {
+  const persons = pickPersonQueryChain(cycle, rotationSeed).map((value) => ({ filterType: "person.name" as const, value }));
+  const clubs = pickClubQueryChain(cycle, rotationSeed).map((value) => ({ filterType: "title" as const, value }));
   return cycle % 2 === 0 ? [...clubs, ...persons] : [...persons, ...clubs];
 }
