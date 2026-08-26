@@ -91,6 +91,15 @@ function parseArticleJson(raw: string, fallbackCategory: string): { article: Gen
     if (!parsed.title || !parsed.excerpt || !parsed.content) {
       return { article: null, reason: `missing fields: title=${!!parsed.title}, excerpt=${!!parsed.excerpt}, content=${!!parsed.content}` };
     }
+    // Occasionally the model gets stuck in a repetition loop and pads out
+    // a field with the same character dozens of times (e.g. a title
+    // truncated mid-word followed by 60 "։" characters instead of ending
+    // properly) - a known LLM degeneration failure mode, not something
+    // that should ever appear in real text. Reject rather than publish it.
+    const degenerate = /(.)\1{4,}/;
+    if (degenerate.test(parsed.title) || degenerate.test(parsed.excerpt) || degenerate.test(parsed.content)) {
+      return { article: null, reason: "degenerate repeated-character output detected, discarding" };
+    }
     return {
       article: {
         title: parsed.title.trim(),
