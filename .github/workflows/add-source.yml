@@ -15,15 +15,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Content quality sample + internal link check
+      - name: Check latest article image
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
           {
-            echo "=== content length distribution (last 15) ==="
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id, LENGTH(content) as content_len, LENGTH(title) as title_len FROM articles ORDER BY id DESC LIMIT 15;" 2>&1
-            echo "=== check for truncated content (ends mid-word, no punctuation) ==="
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, SUBSTR(content, -30) as content_tail FROM articles ORDER BY id DESC LIMIT 10;" 2>&1
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, image_url, source_url, published_at FROM articles ORDER BY id DESC LIMIT 3;" 2>&1
           } > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
