@@ -172,41 +172,32 @@ async function fetchApiTubeDirect(bridgeUrl: string, limit: number): Promise<Fee
 }
 
 // APITube error codes indicating a bad/unsupported filter value (typo'd
-// or unrecognized entity name) per the provided named-entity config -
-// quarantine just that value and move on rather than failing the whole
-// feed for one bad chunk.
+// or unrecognized entity name) - quarantine just that name and move on
+// rather than failing the whole cycle for one unrecognized name.
 const BAD_VALUE_ERROR_CODES = ["ER0151", "ER0216", "ER0220", "ER0228"];
 
-// Football-focused named-entity query: filters by a specific
-// organization.name / person.name / event.name value (a comma-separated
-// OR chunk) instead of the broad category.id="Sport" feed. See
-// lib/football-entities.ts for the entity list, chunking, and priority
-// rotation this is called with.
-export async function fetchApiTubeEntity(
-  apiKey: string,
-  filterType: "organization.name" | "person.name" | "event.name",
-  value: string,
-  limit: number,
-): Promise<FeedItem[]> {
+// Football-focused named-entity query: filters by a single person.name
+// value instead of the broad category.id="Sport" feed. See
+// lib/football-entities.ts for the player/coach list and priority
+// rotation this is called with, and for why it's one name at a time
+// rather than a comma-separated OR list (a bad name anywhere in a list
+// fails the whole request).
+export async function fetchApiTubePerson(apiKey: string, personName: string, limit: number): Promise<FeedItem[]> {
   try {
-    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&${encodeURIComponent(filterType)}=${encodeURIComponent(value)}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
+    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&person.name=${encodeURIComponent(personName)}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
     const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
     if (!res.ok) {
       const bodyText = await res.text().catch(() => "");
       if (BAD_VALUE_ERROR_CODES.some((code) => bodyText.includes(code))) {
         const { quarantineValue } = await import("./football-entities");
-        // Only the first value in the chunk is quarantined when we can't
-        // tell which specific one triggered the error - APITube's error
-        // body doesn't reliably identify which comma-separated value was
-        // the problem, so this errs toward not losing legitimate ones.
-        quarantineValue(value.split(",")[0]);
+        quarantineValue(personName);
       }
       return [];
     }
     const data = await res.json() as { results?: ApiTubeArticle[] };
     return mapApiTubeResults(data.results ?? [], limit, true);
   } catch (err) {
-    console.error(`[feeds] apitube entity fetch failed (${filterType}=${value}): ${String(err)}`);
+    console.error(`[feeds] apitube person fetch failed (${personName}): ${String(err)}`);
     return [];
   }
 }

@@ -3,7 +3,8 @@ import { getDb } from "../../../../db";
 import { sources } from "../../../../db/schema";
 import { articleExistsForSource, saveGeneratedArticle } from "../../../../lib/articles";
 import { generateFromSourceSnippet, generateMatchPreview, generateMatchRecap, lastGenerationDebug } from "../../../../lib/content-generation";
-import { fetchArticlePage, fetchFeed, validateImageUrl, type FeedItem } from "../../../../lib/feeds";
+import { fetchArticlePage, fetchFeed, fetchApiTubePerson, validateImageUrl, type FeedItem } from "../../../../lib/feeds";
+import { pickPersonQueryChain } from "../../../../lib/football-entities";
 import { getLiveMatches } from "../../../../lib/live-football-server";
 import { getLiveMatchDetailsV2 } from "../../../../lib/live-match-details-v2";
 
@@ -161,7 +162,30 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
       // lib/football-entities.ts. One-hour cycles so the priority-100
       // (Armenia) entities get queried every cycle, 90 every 2nd, 80
       // every 4th, 70 every 8th, per the provided config.
-      let items: FeedItem[] = await fetchFeed(source.feedUrl, 30);
+      // Football-focused named-entity query for the APITube source:
+      // filters by a specific rotating player/coach name from
+      // lib/football-entities.ts instead of the broad category.id="Sport"
+      // feed. Tries names one at a time (not comma-lists - a single
+      // unrecognized name fails the whole request) until one actually
+      // returns articles, falling back to the old category feed as a
+      // last resort if every name in the chain comes up empty.
+      let items: FeedItem[] = [];
+      if (source.feedUrl.includes("/api/feeds/apitube")) {
+        const apiTubeKey = new URL(source.feedUrl).searchParams.get("api_key");
+        if (apiTubeKey) {
+          const cycle = Math.floor(Date.now() / (60 * 60 * 1000));
+          for (const personName of pickPersonQueryChain(cycle)) {
+            const found = await fetchApiTubePerson(apiTubeKey, personName, 30);
+            if (found.length) {
+              log.push(`rss debug: person.name=${personName} -> ${found.length} items`);
+              items = found;
+              break;
+            }
+            if (Date.now() > deadline) break;
+          }
+        }
+      }
+      if (!items.length) items = await fetchFeed(source.feedUrl, 30);
       log.push(`rss debug: source=${source.name}, items=${items.length}`);
       for (const item of items) {
         if (generated >= MAX_PER_TYPE || attempted >= MAX_ATTEMPTS) break;
