@@ -15,11 +15,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Verify title filter returns real results
+      - name: Test single-club title search
         run: |
-          curl -s -G --max-time 15 "https://api.apitube.io/v1/news/everything" --data-urlencode "api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj" --data-urlencode "title=Real Madrid,FC Barcelona,Manchester United,Liverpool,Arsenal,Chelsea" --data-urlencode "per_page=10" > add-source-result.txt || true
+          curl -s -G --max-time 15 "https://api.apitube.io/v1/news/everything" --data-urlencode "api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj" --data-urlencode "title=Real Madrid" --data-urlencode "per_page=5" > add-source-result.txt || true
           echo "" >> add-source-result.txt
           grep -oE '"title":"[^"]{0,80}' add-source-result.txt | head -10 >> add-source-result.txt
+          grep -oE '"results":\[' add-source-result.txt >> add-source-result.txt
           cat add-source-result.txt
       - run: |
           git config user.email "actions@github.com"
