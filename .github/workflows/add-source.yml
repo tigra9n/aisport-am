@@ -32,6 +32,16 @@ jobs:
             echo "=== 4. Confirm no comments show yet (still pending) ==="
             curl -s "https://aisport.am/api/comments?articleSlug=$SLUG"
             echo ""
+
+            echo "=== 5. Approve the comment ==="
+            curl -s -X POST "https://aisport.am/api/comments/moderate" \
+              -H "Content-Type: application/json" \
+              -d "{\"token\":\"${{ secrets.CRON_TOKEN }}\",\"id\":1,\"action\":\"approve\"}"
+            echo ""
+
+            echo "=== 6. Confirm it now shows publicly ==="
+            curl -s "https://aisport.am/api/comments?articleSlug=$SLUG"
+            echo ""
           } > add-source-result.txt || true
           cat add-source-result.txt
       - run: |
