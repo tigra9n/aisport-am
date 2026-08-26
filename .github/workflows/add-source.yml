@@ -15,14 +15,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Fix broken image on id 56
+      - name: Check latest article + test entity rss
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
           {
-            npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET image_url = NULL WHERE id = 56;" 2>&1
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id, image_url FROM articles WHERE id = 56;" 2>&1
+            echo "=== latest 3 articles ==="
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, published_at FROM articles ORDER BY id DESC LIMIT 3;" 2>&1
           } > ../add-source-result.txt || true
+          {
+            echo "=== manual rss test with entity system ==="
+            curl -s -w "\ncurl_exit=%{exitcode}, http=%{http_code}, time=%{time_total}s\n" --max-time 100 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}&mode=rss&_c=$(date +%s)" 2>&1
+          } >> ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
