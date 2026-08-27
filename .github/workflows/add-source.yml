@@ -19,12 +19,17 @@ jobs:
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
-          npx wrangler d1 execute aisport-db --remote --command "SELECT id, slug FROM articles WHERE id = 71 OR slug LIKE '%zaltsburgum-karmen%';" 2>&1 > ../add-source-result.txt
-          cat ../add-source-result.txt
+          echo "---SAUDI---" > ../add-source-result.txt
+          curl -s "https://v3.football.api-sports.io/leagues?search=Saudi" -H "x-apisports-key: ${API_FOOTBALL_KEY}" | python3 -c "import json,sys; d=json.load(sys.stdin); [print(r['league']['id'], r['league']['name'], r['league']['type'], r['country']['name']) for r in d['response']]" >> ../add-source-result.txt
+          echo "---MLS---" >> ../add-source-result.txt
+          curl -s "https://v3.football.api-sports.io/leagues?search=MLS" -H "x-apisports-key: ${API_FOOTBALL_KEY}" | python3 -c "import json,sys; d=json.load(sys.stdin); [print(r['league']['id'], r['league']['name'], r['league']['type'], r['country']['name']) for r in d['response']]" >> ../add-source-result.txt
+          echo "---Major League Soccer (full name fallback)---" >> ../add-source-result.txt
+          curl -s "https://v3.football.api-sports.io/leagues?search=Major%20League%20Soccer" -H "x-apisports-key: ${API_FOOTBALL_KEY}" | python3 -c "import json,sys; d=json.load(sys.stdin); [print(r['league']['id'], r['league']['name'], r['league']['type'], r['country']['name']) for r in d['response']]" >> ../add-source-result.txt
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
