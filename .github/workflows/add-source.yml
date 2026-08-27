@@ -12,12 +12,24 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Verify GA4 tag is live
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check latest articles and test natural tick
+        working-directory: aisport-am
         run: |
+          npm install --no-audit --no-fund
           {
-            curl -s --max-time 15 "https://aisport.am/" | grep -o "G-LETFRQPT04" | head -1
-          } > add-source-result.txt || true
-          cat add-source-result.txt
+            echo "=== latest 3 ==="
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, published_at FROM articles ORDER BY id DESC LIMIT 3;" 2>&1 | grep -E '"id"|"title"|"published_at"'
+            echo "=== natural tick test ==="
+            curl -s -w "\ncurl_exit=%{exitcode}, http=%{http_code}, time=%{time_total}s\n" --max-time 100 -G "https://aisport.am/api/cron/content" --data-urlencode "token=$CRON_TOKEN" --data-urlencode "_c=$(date +%s)" 2>&1
+          } > ../add-source-result.txt || true
+          cat ../add-source-result.txt
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
