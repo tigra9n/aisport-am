@@ -12,22 +12,28 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Full SEO fix verification
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify article JSON-LD and get a real slug
+        working-directory: aisport-am
         run: |
+          npm install --no-audit --no-fund
+          SLUG=$(npx wrangler d1 execute aisport-db --remote --command "SELECT slug FROM articles WHERE status='published' ORDER BY id DESC LIMIT 1;" 2>&1 | grep -oE '"slug": ?"[^"]*"' | head -1 | sed 's/.*"slug": *"//;s/"$//')
           {
-            echo "=== robots.txt now ==="
-            curl -s --max-time 15 "https://aisport.am/robots.txt"
-            echo ""
-            echo "=== sitemap.xml URL count ==="
-            curl -s --max-time 15 "https://aisport.am/sitemap.xml" -o /tmp/sm.xml
-            grep -oc "<loc>" /tmp/sm.xml || echo 0
-            echo "=== homepage JSON-LD present? ==="
-            curl -s --max-time 15 "https://aisport.am/" | grep -oc "application/ld+json" || echo 0
-            echo "=== article page JSON-LD + noindex check ==="
-            curl -s --max-time 15 "https://aisport.am/moderate" | grep -oE '<meta name="robots"[^>]*>'
-            curl -s --max-time 15 "https://aisport.am/control" | grep -oE '<meta name="robots"[^>]*>'
-          } > add-source-result.txt || true
-          cat add-source-result.txt
+            echo "testing slug: $SLUG"
+            curl -s --max-time 15 "https://aisport.am/news/$SLUG" -o /tmp/article.html
+            echo "=== JSON-LD present? ==="
+            grep -oc "NewsArticle" /tmp/article.html || echo 0
+            echo "=== title tag ==="
+            grep -oE '<title>[^<]*</title>' /tmp/article.html
+            echo "=== canonical ==="
+            grep -oE '<link rel="canonical"[^>]*>' /tmp/article.html
+          } > ../add-source-result.txt || true
+          cat ../add-source-result.txt
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
