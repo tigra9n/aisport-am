@@ -12,7 +12,7 @@ import { leagues } from "../lib/football";
 import { getStandings } from "../lib/football-server";
 import { getTopScorers } from "../lib/topscorers-server";
 import { getLiveMatches } from "../lib/live-football-server";
-import { getPublishedArticles, toPreview } from "../lib/articles";
+import { getPublishedArticles, getArticlesByCategory, getArmenianArticles, toPreview } from "../lib/articles";
 
 // The live-score request must run in the production Worker. Without this,
 // the page can be prerendered at deploy time and never reach the live API.
@@ -52,16 +52,14 @@ export default async function Home() {
   const scorerTables = Object.fromEntries(scorers);
   const headlineStream = articles.slice(0, 9);
   const heroArticles = articles.slice(0, 6);
-  const sportSections = homepageSports.map((sport) => {
-    const seen = new Set<string>();
-    const items = articles.filter((article) => {
-      const matches = sport.slug === "armenia" ? article.local : article.category === sport.name;
-      if (!matches || seen.has(article.slug)) return false;
-      seen.add(article.slug);
-      return true;
-    }).slice(0, 4);
+  const sportSectionsData = await Promise.all(homepageSports.map(async (sport) => {
+    const rows = sport.slug === "armenia"
+      ? await getArmenianArticles(4)
+      : await getArticlesByCategory(sport.name, 4);
+    const items = rows.map(toPreview);
     return { ...sport, href: sport.href ?? `/category/${sport.slug}`, items };
-  });
+  }));
+  const sportSections = sportSectionsData;
 
   const homeJsonLd = {
     "@context": "https://schema.org",
