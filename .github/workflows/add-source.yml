@@ -19,7 +19,8 @@ jobs:
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
-          npx wrangler d1 execute aisport-db --remote --command "DELETE FROM articles WHERE id = 71;" 2>&1 > ../add-source-result.txt || true
+          npx wrangler d1 execute aisport-db --remote --command "SELECT id, slug FROM articles WHERE id = 71 OR slug LIKE '%zaltsburgum-karmen%';" 2>&1 > ../add-source-result.txt
+          cat ../add-source-result.txt
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
