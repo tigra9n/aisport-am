@@ -19,22 +19,23 @@ jobs:
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
-          SLUG=$(npx wrangler d1 execute aisport-db --remote --command "SELECT slug FROM articles WHERE status='published' ORDER BY id DESC LIMIT 1;" 2>&1 | grep -oE '"slug": ?"[^"]*"' | head -1 | sed 's/.*"slug": *"//;s/"$//')
-          echo "testing slug: $SLUG"
-          curl -s --max-time 15 "https://aisport.am/news/$SLUG" -o ../article.html
-          echo "=== h1 count ==="
-          grep -oE '<h1' ../article.html | wc -l
-          echo "=== related articles section ==="
-          grep -oE '<h2>[^<]*ևս</h2>' ../article.html
-          grep -oE 'related-list' ../article.html | head -1
+          {
+            SLUG=$(npx wrangler d1 execute aisport-db --remote --command "SELECT slug FROM articles WHERE status='published' ORDER BY id DESC LIMIT 1;" 2>&1 | grep -oE '"slug": ?"[^"]*"' | head -1 | sed 's/.*"slug": *"//;s/"$//')
+            echo "testing slug: $SLUG"
+            curl -s --max-time 15 "https://aisport.am/news/$SLUG" -o /tmp/article.html
+            echo "=== h1 count ==="
+            grep -oE '<h1' /tmp/article.html | wc -l
+            echo "=== related articles section ==="
+            grep -oE '<h2>[^<]*ևս</h2>' /tmp/article.html
+            grep -oc 'related-list' /tmp/article.html || echo "0"
+          } > ../add-source-result.txt || true
+          cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
-          git add -f add-source-result.txt 2>/dev/null || true
-          echo "done" > add-source-result.txt
           git add -f add-source-result.txt
           git commit -m "add-source result [skip ci]" || true
           git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
