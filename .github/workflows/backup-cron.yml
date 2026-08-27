@@ -29,9 +29,11 @@ jobs:
       - name: Warm cache
         run: curl -s --max-time 20 "https://aisport.am/api/cron/warm?token=${{ secrets.CRON_TOKEN }}" || true
       - name: Generate content
-        # Bumped 65s -> 100s: generation with Sonnet 5 has been observed
-        # taking up to ~90s (Claude API latency + APITube fetch), and a
-        # too-short client timeout here defeats the whole purpose of this
-        # workflow being the trigger that ISN'T capped like cron-job.org's
-        # 30s. Give it real headroom to actually finish.
-        run: curl -s --max-time 100 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}" || true
+        # Bumped 65s -> 100s -> 130s: the server's own TIME_BUDGET_MS is
+        # 115s, so a 100s client timeout could disconnect (and, per
+        # documented Cloudflare Workers behavior, kill in-progress
+        # generation server-side) before the server's own deadline ever
+        # had a chance to finish naturally. Client timeout must stay
+        # comfortably above the server deadline, not just above the
+        # typical/expected generation time.
+        run: curl -s --max-time 130 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}" || true
