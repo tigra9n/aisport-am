@@ -18,17 +18,16 @@ jobs:
       - name: Check latest articles
         working-directory: aisport-am
         run: |
-          echo "---title=Real Madrid + single domain marca.com---" > ../add-source-result.txt
-          curl -s "https://api.apitube.io/v1/news/everything?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&title=Real%20Madrid&source.domain=marca.com&per_page=10" > /tmp/single.json
-          jq '.results | length' /tmp/single.json >> ../add-source-result.txt
-          jq '.status,.message' /tmp/single.json >> ../add-source-result.txt 2>&1 || true
-          echo "---title=Real Madrid + source.domain.url=marca.com (alt param name)---" >> ../add-source-result.txt
-          curl -s "https://api.apitube.io/v1/news/everything?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&title=Real%20Madrid&source.domain.url=marca.com&per_page=10" > /tmp/alt.json
-          jq '.results | length' /tmp/alt.json >> ../add-source-result.txt
-          echo "---just source.domain=marca.com, no title, no category---" >> ../add-source-result.txt
-          curl -s "https://api.apitube.io/v1/news/everything?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&source.domain=marca.com&per_page=5" > /tmp/domainonly.json
-          jq '.results | length' /tmp/domainonly.json >> ../add-source-result.txt
-          jq '[.results[0:2][] | {title, domain: .source.domain}]' /tmp/domainonly.json >> ../add-source-result.txt
+          echo "---2 domains---" > ../add-source-result.txt
+          curl -s "https://api.apitube.io/v1/news/everything?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&title=Real%20Madrid&source.domain=marca.com,skysports.com&per_page=10" > /tmp/two.json
+          jq '.results | length' /tmp/two.json >> ../add-source-result.txt
+          jq '.status,.message' /tmp/two.json >> ../add-source-result.txt 2>&1 || true
+          echo "---2 domains, URL-ENCODED comma---" >> ../add-source-result.txt
+          curl -s "https://api.apitube.io/v1/news/everything?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&title=Real%20Madrid&source.domain=marca.com%2Cskysports.com&per_page=10" > /tmp/twoenc.json
+          jq '.results | length' /tmp/twoenc.json >> ../add-source-result.txt
+          echo "---5 domains---" >> ../add-source-result.txt
+          curl -s "https://api.apitube.io/v1/news/everything?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&title=Real%20Madrid&source.domain=marca.com,skysports.com,bbc.com,espn.com,as.com&per_page=10" > /tmp/five.json
+          jq '.results | length' /tmp/five.json >> ../add-source-result.txt
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
