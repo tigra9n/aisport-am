@@ -15,14 +15,20 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Fix id 66 category to Formula 1
+      - name: Count total published articles
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
           {
-            npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET category = 'Ֆորմուլա 1' WHERE id = 66;" 2>&1
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, category FROM articles WHERE id = 66;" 2>&1
+            npx wrangler d1 execute aisport-db --remote --command "SELECT COUNT(*) as total FROM articles WHERE status='published';" 2>&1
           } > ../add-source-result.txt || true
+          {
+            echo "=== robots.txt ==="
+            curl -s --max-time 15 "https://aisport.am/robots.txt"
+            echo ""
+            echo "=== sitemap.xml current status ==="
+            curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/sitemap.xml"
+          } >> ../add-source-result.txt
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
