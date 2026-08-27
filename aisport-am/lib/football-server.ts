@@ -62,10 +62,17 @@ export async function getStandings(code: string): Promise<{ rows: StandingRow[];
     });
     if (!response.ok) throw new Error(`http ${response.status}`);
     const data = await response.json() as ApiFootballStandingsResponse;
-    const table = data.response?.[0]?.league?.standings?.[0];
-    if (!table?.length) throw new Error("empty table");
-    const rows: StandingRow[] = table.map((row) => ({
-      position: row.rank,
+    // Most leagues return a single flat table in standings[0]. US-style
+    // leagues (MLS confirmed) split into multiple groups instead (Eastern
+    // Conference, Western Conference) - taking only standings[0] silently
+    // dropped half the league. Flatten every group into one table and
+    // re-rank by points/goal difference so nothing is missing.
+    const groups = data.response?.[0]?.league?.standings ?? [];
+    const table = groups.flat();
+    if (!table.length) throw new Error("empty table");
+    const sorted = [...table].sort((a, b) => b.points - a.points || b.goalsDiff - a.goalsDiff);
+    const rows: StandingRow[] = sorted.map((row, index) => ({
+      position: index + 1,
       team: armenianTeamName(row.team.name),
       teamId: row.team.id,
       teamLogo: row.team.logo ?? null,

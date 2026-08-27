@@ -18,7 +18,7 @@ export const leagues = [
   { code: "BL1", short: "Բունդեսլիգա", name: "Բունդեսլիգա", country: "Գերմանիա" },
   { code: "FL1", short: "Լիգա 1", name: "Լիգա 1", country: "Ֆրանսիա" },
   { code: "SPL", short: "Սաուդյան լիգա", name: "Սաուդյան Արաբիայի պրոֆեսիոնալ լիգա", country: "Սաուդյան Արաբիա" },
-  { code: "MLS", short: "MLS", name: "Մայր լիգայի ֆուտբոլ (MLS)", country: "ԱՄՆ" },
+  { code: "MLS", short: "MLS", name: "MLS", country: "ԱՄՆ" },
 ];
 
 const teams: Record<string, string[]> = {
