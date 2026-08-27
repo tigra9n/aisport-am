@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Check if background generation actually completed
+      - name: Recheck for background generation completion
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
