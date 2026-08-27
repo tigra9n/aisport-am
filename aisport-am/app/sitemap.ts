@@ -2,7 +2,14 @@ import type { MetadataRoute } from "next";
 import { getPublishedArticles } from "../lib/articles";
 import { categories } from "../lib/content";
 
+// force-dynamic alone has been observed to still let this metadata route
+// get frozen at its build-time snapshot in this Workers build pipeline
+// (confirmed: every static entry's lastModified stayed pinned to one
+// exact build timestamp across multiple later deploys, and a deleted
+// article kept appearing). Pairing it with revalidate=0 is the standard
+// belt-and-suspenders fix for Next.js metadata routes.
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const BASE_URL = "https://aisport.am";
 
