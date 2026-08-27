@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "https://aisport.am/live" },
 };
 
-// Sites redeploy trigger: 2026-08-23
+// Sites redeploy trigger: 2026-08-27b
 export const dynamic = "force-dynamic";
 const visibleOffsets = Array.from({ length: 15 }, (_, index) => index - 7);
 const weekdays = ["Կիր", "Երկ", "Երք", "Չրք", "Հնգ", "Ուրբ", "Շբթ"];
