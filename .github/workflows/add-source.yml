@@ -18,13 +18,18 @@ jobs:
       - name: Check latest articles
         working-directory: aisport-am
         run: |
-          npm install --no-audit --no-fund
-          npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, source_name, source_url, published_at FROM articles ORDER BY id DESC LIMIT 5;" 2>&1 > ../add-source-result.txt || true
+          curl -s "https://api.apitube.io/v1/news/everything?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&category.id=medtop:15000000&source.domain=skysports.com,bbc.com,espn.com&per_page=5&language.code=en&sort.by=published_at&sort.order=desc" > /tmp/apitube_test.json
+          jq '.results | length' /tmp/apitube_test.json > ../add-source-result.txt
+          echo "---domains returned---" >> ../add-source-result.txt
+          jq '[.results[].source.domain]' /tmp/apitube_test.json >> ../add-source-result.txt
+          echo "---any error field---" >> ../add-source-result.txt
+          jq '.status, .message' /tmp/apitube_test.json >> ../add-source-result.txt 2>&1 || echo "no status/message fields" >> ../add-source-result.txt
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          APITUBE_KEY: ${{ secrets.APITUBE_API_KEY }}
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
