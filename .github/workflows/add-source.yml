@@ -12,10 +12,17 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Test Haiku generation timing
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Set GH_DISPATCH_TOKEN Cloudflare secret
+        working-directory: aisport-am
         run: |
-          curl -s -w "\ncurl_exit=%{exitcode}, http=%{http_code}, time=%{time_total}s\n" --max-time 100 -G "https://aisport.am/api/cron/content" --data-urlencode "token=${{ secrets.CRON_TOKEN }}" --data-urlencode "mode=rss" --data-urlencode "_c=$(date +%s)" > add-source-result.txt 2>&1 || true
-          cat add-source-result.txt
+          npm install --no-audit --no-fund
+          echo "${{ secrets.AISPORT_GH_PAT }}" | npx wrangler secret put GH_DISPATCH_TOKEN --name aisport-am 2>&1 | tee ../add-source-result.txt
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
