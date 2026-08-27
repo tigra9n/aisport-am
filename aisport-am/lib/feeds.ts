@@ -193,6 +193,24 @@ function mapApiTubeResults(results: ApiTubeArticle[], limit: number, useEntitySa
     .filter((item) => item.title && item.link);
 }
 
+// Trusted football-news domains only. This replaces relying purely on
+// keyword/domain blacklists (EXCLUDE_KEYWORDS/EXCLUDE_DOMAINS above),
+// which is inherently reactive - each surprise category that slips past
+// APITube's own "Sport" tagging (opera reviews, academic papers, car
+// reviews, gambling spam, all seen in practice) needed a new keyword
+// added after the fact. A domain whitelist is proactive: only known
+// football outlets are ever considered, so an unrelated category simply
+// can't appear regardless of how APITube mis-tags it.
+const TRUSTED_FOOTBALL_DOMAINS = [
+  "skysports.com", "bbc.com", "espn.com", "marca.com", "as.com",
+  "lequipe.fr", "football-italia.net", "goal.com", "football365.com",
+  "transfermarkt.com", "theathletic.com", "90min.com", "onefootball.com",
+  "fourfourtwo.com", "givemesport.com", "mirror.co.uk", "standard.co.uk",
+  "independent.co.uk", "theguardian.com", "eurosport.com", "uefa.com",
+  "fifa.com", "premierleague.com", "bundesliga.com", "gazzetta.it",
+  "footmercato.net", "rmcsport.bfmtv.com", "sport.es", "mundodeportivo.com",
+].join(",");
+
 async function fetchApiTubeDirect(bridgeUrl: string, limit: number): Promise<FeedItem[]> {
   try {
     const params = new URL(bridgeUrl).searchParams;
@@ -202,7 +220,7 @@ async function fetchApiTubeDirect(bridgeUrl: string, limit: number): Promise<Fee
     // Starter plan allows up to 50 results per page (was capped at 10 on
     // free tier). More candidates per tick means fewer "everything in the
     // window is already published, nothing new to pick" empty ticks.
-    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&category.id=${encodeURIComponent(categoryId)}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
+    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&category.id=${encodeURIComponent(categoryId)}&source.domain=${encodeURIComponent(TRUSTED_FOOTBALL_DOMAINS)}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
     const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
     if (!res.ok) return [];
     const data = await res.json() as { results?: ApiTubeArticle[] };
