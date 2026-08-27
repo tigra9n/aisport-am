@@ -19,15 +19,7 @@ jobs:
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
-          npx wrangler d1 execute aisport-db --remote --command "SELECT COUNT(*) as total FROM articles;" 2>&1 > ../add-source-result.txt
-          echo "---CATEGORY BREAKDOWN---" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT category, COUNT(*) as c FROM articles GROUP BY category ORDER BY c DESC;" 2>&1 >> ../add-source-result.txt
-          echo "---RECENT 20 TITLES---" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT id, category, title, published_at, image_url FROM articles ORDER BY id DESC LIMIT 20;" 2>&1 >> ../add-source-result.txt
-          echo "---DUPLICATE SLUGS CHECK---" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT slug, COUNT(*) as c FROM articles GROUP BY slug HAVING c > 1;" 2>&1 >> ../add-source-result.txt
-          echo "---NULL/EMPTY IMAGE CHECK---" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT COUNT(*) as no_image FROM articles WHERE image_url IS NULL OR image_url = '';" 2>&1 >> ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, source_url, source_name FROM articles WHERE id = 71;" 2>&1 > ../add-source-result.txt
           cat ../add-source-result.txt
           cat ../add-source-result.txt
         env:
