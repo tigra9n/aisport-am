@@ -67,25 +67,22 @@ export async function getStandings(code: string): Promise<{ rows: StandingRow[];
     // Most leagues return a single flat table in standings[0]. US-style
     // leagues (MLS confirmed) split into multiple groups instead (Eastern
     // Conference, Western Conference) - taking only standings[0] silently
-    // dropped half the league. Flatten every group into one table. Sort
-    // Eastern Conference block first, then Western (each internally by
-    // points/goal difference), with continuous 1..N ranking - matches how
-    // Tigran wants it displayed (one full conference finishes, then the
-    // next begins) rather than interleaving both by points.
+    // dropped half the league. Combine both into one table: Eastern block
+    // first, then Western, each sorted by points/goal difference and each
+    // restarting its own 1..N rank (matches how MLS itself displays it -
+    // two independent conference tables, not one continuous 1-30 ranking).
     const groups = data.response?.[0]?.league?.standings ?? [];
-    const table = groups.flat();
-    if (!table.length) throw new Error("empty table");
+    if (!groups.length || !groups[0]?.length) throw new Error("empty table");
     const groupPriority = (group?: string | null) => {
       if (!group) return 0;
       if (group.includes("Eastern")) return 0;
       if (group.includes("Western")) return 1;
       return 0;
     };
-    const sorted = [...table].sort((a, b) =>
-      groupPriority(a.group) - groupPriority(b.group)
-      || b.points - a.points
-      || b.goalsDiff - a.goalsDiff);
-    const rows: StandingRow[] = sorted.map((row, index) => ({
+    const orderedGroups = [...groups].sort((a, b) => groupPriority(a[0]?.group) - groupPriority(b[0]?.group));
+    const rows: StandingRow[] = orderedGroups.flatMap((group) => {
+      const sortedGroup = [...group].sort((a, b) => b.points - a.points || b.goalsDiff - a.goalsDiff);
+      return sortedGroup.map((row, index) => ({
       position: index + 1,
       team: armenianTeamName(row.team.name),
       teamId: row.team.id,
@@ -96,7 +93,8 @@ export async function getStandings(code: string): Promise<{ rows: StandingRow[];
       lost: row.all.lose,
       goalDifference: row.goalsDiff,
       points: row.points,
-    }));
+      }));
+    });
     if (db) {
       await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey, JSON.stringify(rows), Date.now()).run();
     }
