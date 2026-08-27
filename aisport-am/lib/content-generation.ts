@@ -60,14 +60,19 @@ const CATEGORY_KEYWORDS: [string, string[]][] = [
   ["Բռնցքամարտ / ՄՄԱ", ["boxing", "ufc", "mma", "heavyweight", "knockout"]],
   ["Ամերիկյան ֆուտբոլ", ["nfl", "super bowl", "quarterback", "touchdown"]],
   ["Հոկեյ", ["nhl", "hockey", "ice hockey"]],
-  ["Ֆորմուլա 1", ["formula 1", "f1 ", "grand prix", "pole position"]],
+  ["Ֆորմուլա 1", ["formula 1", "f1", "grand prix", "pole position"]],
   ["Գոլֆ", ["golf", "pga tour", "masters tournament"]],
 ];
 
 function guessCategory(text: string, fallback: string): string {
   const lower = text.toLowerCase();
   for (const [category, keywords] of CATEGORY_KEYWORDS) {
-    if (keywords.some((k) => lower.includes(k))) return category;
+    // Word-boundary matching instead of naive substring includes() - a
+    // short generic keyword like cricket's "odi" (One Day International)
+    // matched as a raw substring inside completely unrelated words
+    // ("period", "melody", "custody"), once miscategorizing a clearly
+    // Formula 1 article (Andretti, Verstappen) as Cricket.
+    if (keywords.some((k) => new RegExp(`\\b${k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(lower))) return category;
   }
   return fallback;
 }
