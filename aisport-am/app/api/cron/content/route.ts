@@ -121,7 +121,7 @@ async function runPreviews(apiKey: string, log: string[], deadline: number): Pro
   return generated;
 }
 
-async function runRss(apiKey: string, log: string[], deadline: number, sourceFilter?: string | null): Promise<number> {
+async function runRss(apiKey: string, log: string[], deadline: number, sourceFilter?: string | null, debugTitleQuery?: string | null): Promise<number> {
   let generated = 0;
   let attempted = 0;
   // Cap total generation attempts, not just successes. Each attempt can
@@ -175,18 +175,29 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
       if (source.feedUrl.includes("/api/feeds/apitube")) {
         const apiTubeKey = new URL(source.feedUrl).searchParams.get("api_key");
         if (apiTubeKey) {
-          const cycle = Math.floor(Date.now() / (60 * 60 * 1000));
-          const rotationSeed = Math.floor(Date.now() / (60 * 1000));
-          for (const pick of pickCombinedChain(cycle, rotationSeed)) {
-            const found = pick.filterType === "title"
-              ? await fetchApiTubeTitle(apiTubeKey, pick.value, 30)
-              : await fetchApiTubePerson(apiTubeKey, pick.value, 30);
-            if (found.length) {
-              log.push(`rss debug: ${pick.filterType}=${pick.value} -> ${found.length} items`);
-              items = found;
-              break;
+          // One-off manual debug override (?titleQuery=...) to test
+          // coverage outside the current football-only entity rotation,
+          // e.g. verifying a category page works once real content in a
+          // not-yet-covered sport (Formula 1) actually exists.
+          if (debugTitleQuery) {
+            const found = await fetchApiTubeTitle(apiTubeKey, debugTitleQuery, 30);
+            log.push(`rss debug: manual titleQuery=${debugTitleQuery} -> ${found.length} items`);
+            items = found;
+          }
+          if (!items.length) {
+            const cycle = Math.floor(Date.now() / (60 * 60 * 1000));
+            const rotationSeed = Math.floor(Date.now() / (60 * 1000));
+            for (const pick of pickCombinedChain(cycle, rotationSeed)) {
+              const found = pick.filterType === "title"
+                ? await fetchApiTubeTitle(apiTubeKey, pick.value, 30)
+                : await fetchApiTubePerson(apiTubeKey, pick.value, 30);
+              if (found.length) {
+                log.push(`rss debug: ${pick.filterType}=${pick.value} -> ${found.length} items`);
+                items = found;
+                break;
+              }
+              if (Date.now() > deadline) break;
             }
-            if (Date.now() > deadline) break;
           }
         }
       }
@@ -295,7 +306,7 @@ export async function GET(request: Request) {
   let generated = 0;
   if (mode === "recap") generated = await runRecaps(apiKey, log, deadline);
   else if (mode === "preview") generated = await runPreviews(apiKey, log, deadline);
-  else generated = await runRss(apiKey, log, deadline, url.searchParams.get("source"));
+  else generated = await runRss(apiKey, log, deadline, url.searchParams.get("source"), url.searchParams.get("titleQuery"));
 
   return Response.json({ ok: true, mode, generated, log });
 }
