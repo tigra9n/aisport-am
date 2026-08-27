@@ -1,9 +1,24 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
 import { SiteHeader } from "../../../components/site-header";
 import { getPlayerProfile, getPlayerTransfers } from "../../../lib/player-server";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const playerId = Number.parseInt(id, 10);
+  if (!Number.isFinite(playerId)) return {};
+  const profile = await getPlayerProfile(playerId);
+  if (!profile) return {};
+  const description = `${profile.name}-ի պրոֆիլը, վիճակագրություն և կարիերայի պատմություն։`;
+  return {
+    title: `${profile.name} — Խաղացողի պրոֆիլ | AISport.am`,
+    description,
+    alternates: { canonical: `https://aisport.am/player/${id}` },
+  };
+}
 
 function formatDate(value: string) {
   try {

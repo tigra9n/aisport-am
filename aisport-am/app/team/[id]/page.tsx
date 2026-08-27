@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
@@ -5,6 +6,20 @@ import { SiteHeader } from "../../../components/site-header";
 import { getCoach, getSquad, positionLabel, POSITION_ORDER } from "../../../lib/squad-server";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const teamId = Number.parseInt(id, 10);
+  if (!Number.isFinite(teamId)) return {};
+  const squad = await getSquad(teamId);
+  if (!squad) return {};
+  const description = `${squad.teamName}-ի կազմը, խաղացողները և մարզիչը։`;
+  return {
+    title: `${squad.teamName} — Կազմ | AISport.am`,
+    description,
+    alternates: { canonical: `https://aisport.am/team/${id}` },
+  };
+}
 
 export default async function TeamPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

@@ -1,9 +1,24 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
 import { SiteHeader } from "../../../components/site-header";
 import { getCoachById } from "../../../lib/squad-server";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
+  const { id } = await params;
+  const coachId = Number.parseInt(id, 10);
+  if (!Number.isFinite(coachId)) return {};
+  const coach = await getCoachById(coachId);
+  if (!coach) return {};
+  const description = `${coach.name}-ի մարզչական կարիերայի պատմությունը։`;
+  return {
+    title: `${coach.name} — Մարզիչ | AISport.am`,
+    description,
+    alternates: { canonical: `https://aisport.am/coach/${id}` },
+  };
+}
 
 function formatDate(value: string | null) {
   if (!value) return "մինչ օրս";

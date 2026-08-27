@@ -1,8 +1,11 @@
+import type { Metadata } from "next";
 import { desc } from "drizzle-orm";
 import Link from "next/link";
 import { getDb } from "../../db";
 import { automationRuns, sources } from "../../db/schema";
 import { configuredPlatforms } from "../../lib/automation";
+
+export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 async function loadControlData() {
   try {

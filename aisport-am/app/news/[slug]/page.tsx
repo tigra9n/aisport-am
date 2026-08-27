@@ -55,7 +55,28 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
   // article page being a dead end.
   const related = (await getArticlesByCategory(category, 7)).filter((a) => a.slug !== slug).slice(0, 3);
 
+  const publishedIso = new Date(stored.publishedAt + "Z").toISOString();
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
+    headline: title,
+    description: excerpt,
+    image: [image],
+    datePublished: publishedIso,
+    dateModified: publishedIso,
+    author: [{ "@type": "Organization", name: "AISport խմբագրություն", url: "https://aisport.am" }],
+    publisher: {
+      "@type": "Organization",
+      name: "AISport",
+      logo: { "@type": "ImageObject", url: "https://aisport.am/favicon.svg" },
+    },
+    mainEntityOfPage: { "@type": "WebPage", "@id": `https://aisport.am/news/${slug}` },
+    articleSection: category,
+    inLanguage: "hy",
+  };
+
   return <main><SiteHeader /><article className="article-shell">
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
     <header className="article-header"><span className="section-label">{category}</span><h1>{title}</h1><p>{excerpt}</p><div className="article-byline"><strong>{author}</strong><span>•</span><time>{published}</time><span>•</span><span>3 րոպե ընթերցում</span></div></header>
     {/* eslint-disable-next-line @next/next/no-img-element */}
     {image ? <img className="article-image" src={image} alt="" referrerPolicy="no-referrer" /> : <div className="article-placeholder" aria-hidden="true">AI</div>}

@@ -63,8 +63,35 @@ export default async function Home() {
     return { ...sport, href: sport.href ?? `/category/${sport.slug}`, items };
   });
 
+  const homeJsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://aisport.am/#organization",
+        name: "AISport",
+        url: "https://aisport.am",
+        logo: { "@type": "ImageObject", url: "https://aisport.am/favicon.svg" },
+      },
+      {
+        "@type": "WebSite",
+        "@id": "https://aisport.am/#website",
+        name: "AISport",
+        url: "https://aisport.am",
+        inLanguage: "hy",
+        publisher: { "@id": "https://aisport.am/#organization" },
+        potentialAction: {
+          "@type": "SearchAction",
+          target: "https://aisport.am/search?q={search_term_string}",
+          "query-input": "required name=search_term_string",
+        },
+      },
+    ],
+  };
+
   return (
     <main className="aisport-site">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(homeJsonLd) }} />
       <SiteHeader />
       <AdSpaces />
 
