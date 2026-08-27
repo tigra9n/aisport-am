@@ -12,17 +12,10 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Set GH_DISPATCH_TOKEN Cloudflare secret
-        working-directory: aisport-am
+      - name: Test dispatch endpoint
         run: |
-          npm install --no-audit --no-fund
-          echo "${{ secrets.AISPORT_DISPATCH_PAT }}" | npx wrangler secret put GH_DISPATCH_TOKEN --name aisport-am 2>&1 | tee ../add-source-result.txt
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          curl -s -w "\ncurl_exit=%{exitcode}, http=%{http_code}, time=%{time_total}s\n" --max-time 15 -G "https://aisport.am/api/cron/dispatch" --data-urlencode "token=${{ secrets.CRONJOB_TOKEN }}" > add-source-result.txt 2>&1 || true
+          cat add-source-result.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
