@@ -12,9 +12,15 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Trigger real Formula 1 article generation
+      - name: Check homepage for Formula 1 section
         run: |
-          curl -s -w "\ncurl_exit=%{exitcode}, http=%{http_code}, time=%{time_total}s\n" --max-time 100 -G "https://aisport.am/api/cron/content" --data-urlencode "token=${{ secrets.CRON_TOKEN }}" --data-urlencode "mode=rss" --data-urlencode "titleQuery=Formula 1" --data-urlencode "_c=$(date +%s)" > add-source-result.txt 2>&1 || true
+          {
+            curl -s --max-time 15 "https://aisport.am/" -o /tmp/home.html
+            echo "=== Formula 1 mentioned? ==="
+            grep -c "Ֆորմուլա" /tmp/home.html || echo "0 - NOT FOUND"
+            echo "=== category/formula-1 link present? ==="
+            grep -c "category/formula-1" /tmp/home.html || echo "0 - NOT FOUND"
+          } > add-source-result.txt || true
           cat add-source-result.txt
       - run: |
           git config user.email "actions@github.com"
