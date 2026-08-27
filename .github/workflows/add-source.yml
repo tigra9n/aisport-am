@@ -12,21 +12,15 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Delete off-topic Angry Chickz article
-        working-directory: aisport-am
+      - name: Check Cloudflare Analytics for Google referrer traffic
         run: |
-          npm install --no-audit --no-fund
           {
-            npx wrangler d1 execute aisport-db --remote --command "DELETE FROM articles WHERE slug = 'angry-chickz-y-togharkel-e-sepakan-havelvats-23844289';" 2>&1
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id FROM articles WHERE slug = 'angry-chickz-y-togharkel-e-sepakan-havelvats-23844289';" 2>&1
-          } > ../add-source-result.txt || true
-          cat ../add-source-result.txt
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+            echo "=== zone analytics dashboard (last 2h) ==="
+            curl -s "https://api.cloudflare.com/client/v4/zones/0cfdb0280564b0d8a244a21835bfc724/analytics/dashboard?since=-120&until=0" \
+              -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
+              -H "Content-Type: application/json"
+          } > add-source-result.txt || true
+          cat add-source-result.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
