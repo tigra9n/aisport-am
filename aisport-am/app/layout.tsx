@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Script from "next/script";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -28,7 +29,20 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="hy" data-theme="dark" suppressHydrationWarning>
-      <body>{children}</body>
+      <body>
+        {children}
+        {/* Google Analytics 4 - property created 2026-08-27 for real
+            traffic/source tracking (Search Console alone doesn't show
+            session-level behavior). afterInteractive so it doesn't block
+            initial page render/LCP. */}
+        <Script src="https://www.googletagmanager.com/gtag/js?id=G-LETFRQPT04" strategy="afterInteractive" />
+        <Script id="ga4-init" strategy="afterInteractive">
+          {`window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', 'G-LETFRQPT04');`}
+        </Script>
+      </body>
     </html>
   );
 }
