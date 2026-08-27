@@ -61,6 +61,8 @@ const TRACKED_LEAGUES:Record<number,{priority:number;label:string}>={
   81:{priority:12,label:"Գերմանիայի գավաթ (DFB Pokal)"},
   61:{priority:13,label:"Ֆրանսիայի Լիգա 1"},
   66:{priority:14,label:"Ֆրանսիայի գավաթ (Coupe de France)"},
+  253:{priority:15,label:"MLS"},
+  307:{priority:16,label:"Սաուդյան Արաբիայի պրոֆեսիոնալ լիգա"},
 };
 
 function statusLabel(status:{short:string;elapsed?:number|null}){
