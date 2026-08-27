@@ -29,4 +29,9 @@ jobs:
       - name: Warm cache
         run: curl -s --max-time 20 "https://aisport.am/api/cron/warm?token=${{ secrets.CRON_TOKEN }}" || true
       - name: Generate content
-        run: curl -s --max-time 65 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}" || true
+        # Bumped 65s -> 100s: generation with Sonnet 5 has been observed
+        # taking up to ~90s (Claude API latency + APITube fetch), and a
+        # too-short client timeout here defeats the whole purpose of this
+        # workflow being the trigger that ISN'T capped like cron-job.org's
+        # 30s. Give it real headroom to actually finish.
+        run: curl -s --max-time 100 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}" || true
