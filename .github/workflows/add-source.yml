@@ -15,13 +15,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Check category distribution for related articles debugging
+      - name: Fix corrupted category and verify related articles
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
           {
-            npx wrangler d1 execute aisport-db --remote --command "SELECT category, COUNT(*) as cnt FROM articles WHERE status='published' GROUP BY category ORDER BY cnt DESC;" 2>&1
-            echo "=== this specific article's category ==="
+            npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET category = 'Ֆուտբոլ' WHERE slug = 'chalkhanoghlui-paymanagri-hartsy-larvatsutyun-e-steghtsel-14844251';" 2>&1
+            echo "=== verify ==="
             npx wrangler d1 execute aisport-db --remote --command "SELECT slug, category FROM articles WHERE slug = 'chalkhanoghlui-paymanagri-hartsy-larvatsutyun-e-steghtsel-14844251';" 2>&1
           } > ../add-source-result.txt || true
           cat ../add-source-result.txt
