@@ -12,27 +12,22 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Count total published articles
-        working-directory: aisport-am
+      - name: Full SEO fix verification
         run: |
-          npm install --no-audit --no-fund
           {
-            npx wrangler d1 execute aisport-db --remote --command "SELECT COUNT(*) as total FROM articles WHERE status='published';" 2>&1
-          } > ../add-source-result.txt || true
-          {
-            echo "=== robots.txt ==="
+            echo "=== robots.txt now ==="
             curl -s --max-time 15 "https://aisport.am/robots.txt"
             echo ""
-            echo "=== sitemap.xml current status ==="
-            curl -s -o /dev/null -w "http_code=%{http_code}\n" --max-time 15 "https://aisport.am/sitemap.xml"
-          } >> ../add-source-result.txt
-          cat ../add-source-result.txt
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+            echo "=== sitemap.xml URL count ==="
+            curl -s --max-time 15 "https://aisport.am/sitemap.xml" -o /tmp/sm.xml
+            grep -oc "<loc>" /tmp/sm.xml || echo 0
+            echo "=== homepage JSON-LD present? ==="
+            curl -s --max-time 15 "https://aisport.am/" | grep -oc "application/ld+json" || echo 0
+            echo "=== article page JSON-LD + noindex check ==="
+            curl -s --max-time 15 "https://aisport.am/moderate" | grep -oE '<meta name="robots"[^>]*>'
+            curl -s --max-time 15 "https://aisport.am/control" | grep -oE '<meta name="robots"[^>]*>'
+          } > add-source-result.txt || true
+          cat add-source-result.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
