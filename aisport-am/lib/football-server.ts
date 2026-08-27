@@ -18,6 +18,7 @@ type ApiFootballStandingsResponse = {
     team: { id: number; name: string; logo?: string | null };
     points: number;
     goalsDiff: number;
+    group?: string | null;
     all: { played: number; win: number; draw: number; lose: number };
   }>> } }[];
 };
@@ -66,12 +67,24 @@ export async function getStandings(code: string): Promise<{ rows: StandingRow[];
     // Most leagues return a single flat table in standings[0]. US-style
     // leagues (MLS confirmed) split into multiple groups instead (Eastern
     // Conference, Western Conference) - taking only standings[0] silently
-    // dropped half the league. Flatten every group into one table and
-    // re-rank by points/goal difference so nothing is missing.
+    // dropped half the league. Flatten every group into one table. Sort
+    // Eastern Conference block first, then Western (each internally by
+    // points/goal difference), with continuous 1..N ranking - matches how
+    // Tigran wants it displayed (one full conference finishes, then the
+    // next begins) rather than interleaving both by points.
     const groups = data.response?.[0]?.league?.standings ?? [];
     const table = groups.flat();
     if (!table.length) throw new Error("empty table");
-    const sorted = [...table].sort((a, b) => b.points - a.points || b.goalsDiff - a.goalsDiff);
+    const groupPriority = (group?: string | null) => {
+      if (!group) return 0;
+      if (group.includes("Eastern")) return 0;
+      if (group.includes("Western")) return 1;
+      return 0;
+    };
+    const sorted = [...table].sort((a, b) =>
+      groupPriority(a.group) - groupPriority(b.group)
+      || b.points - a.points
+      || b.goalsDiff - a.goalsDiff);
     const rows: StandingRow[] = sorted.map((row, index) => ({
       position: index + 1,
       team: armenianTeamName(row.team.name),
