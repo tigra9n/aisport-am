@@ -12,22 +12,15 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Fix corrupted category and verify related articles
-        working-directory: aisport-am
+      - name: Verify related articles now show
         run: |
-          npm install --no-audit --no-fund
           {
-            npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET category = 'Ֆուտբոլ' WHERE slug = 'chalkhanoghlui-paymanagri-hartsy-larvatsutyun-e-steghtsel-14844251';" 2>&1
-            echo "=== verify ==="
-            npx wrangler d1 execute aisport-db --remote --command "SELECT slug, category FROM articles WHERE slug = 'chalkhanoghlui-paymanagri-hartsy-larvatsutyun-e-steghtsel-14844251';" 2>&1
-          } > ../add-source-result.txt || true
-          cat ../add-source-result.txt
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+            curl -s --max-time 15 "https://aisport.am/news/chalkhanoghlui-paymanagri-hartsy-larvatsutyun-e-steghtsel-14844251" -o /tmp/article.html
+            echo "=== related section present ==="
+            grep -oc 'related-list' /tmp/article.html || echo 0
+            grep -oE '<h2>[^<]*ևս</h2>' /tmp/article.html
+          } > add-source-result.txt || true
+          cat add-source-result.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
