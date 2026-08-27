@@ -249,6 +249,10 @@ export async function GET(request: Request) {
   if (!apiKey) {
     return Response.json({ ok: false, reason: "no ANTHROPIC_API_KEY configured yet" });
   }
+  // Re-bind as an explicitly-typed const: TypeScript's narrowing from the
+  // early-return above doesn't carry into the nested doGeneration()
+  // function declaration below otherwise.
+  const claudeApiKey: string = apiKey;
 
   const forcedMode = url.searchParams.get("mode");
 
@@ -300,13 +304,30 @@ export async function GET(request: Request) {
     }
   }
   const mode = forcedMode ?? "rss";
-
   const deadline = Date.now() + TIME_BUDGET_MS;
   const log: string[] = [];
-  let generated = 0;
-  if (mode === "recap") generated = await runRecaps(apiKey, log, deadline);
-  else if (mode === "preview") generated = await runPreviews(apiKey, log, deadline);
-  else generated = await runRss(apiKey, log, deadline, url.searchParams.get("source"), url.searchParams.get("titleQuery"));
 
+  async function doGeneration(): Promise<number> {
+    if (mode === "recap") return runRecaps(claudeApiKey, log, deadline);
+    if (mode === "preview") return runPreviews(claudeApiKey, log, deadline);
+    return runRss(claudeApiKey, log, deadline, url.searchParams.get("source"), url.searchParams.get("titleQuery"));
+  }
+
+  // Real cron triggers (no ?mode= override) return immediately and let
+  // generation continue in the background via waitUntil - found via
+  // cron-job.org's dashboard that its free-plan 30s hard timeout was
+  // aborting the connection before generation (which routinely takes
+  // 35-90s: Claude API call + APITube fetch) could finish, marking every
+  // run "failed (timeout)" even though nothing was actually broken
+  // server-side other than the client giving up too early. Manual/debug
+  // calls (?mode=...) stay synchronous so testing can see the real
+  // generated count and log immediately, same as before.
+  if (!forcedMode) {
+    const { waitUntil } = await import("cloudflare:workers");
+    waitUntil(doGeneration().catch((err) => console.error(`[cron/content] background generation failed: ${String(err)}`)));
+    return Response.json({ ok: true, mode, status: "started in background", note: "check D1 for the actual result - this response returns immediately so callers with short timeouts (e.g. cron-job.org's 30s cap) don't mark the run as failed" });
+  }
+
+  const generated = await doGeneration();
   return Response.json({ ok: true, mode, generated, log });
 }
