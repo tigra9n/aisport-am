@@ -15,20 +15,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Verify article JSON-LD and get a real slug
+      - name: Check latest article timing
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
-          SLUG=$(npx wrangler d1 execute aisport-db --remote --command "SELECT slug FROM articles WHERE status='published' ORDER BY id DESC LIMIT 1;" 2>&1 | grep -oE '"slug": ?"[^"]*"' | head -1 | sed 's/.*"slug": *"//;s/"$//')
           {
-            echo "testing slug: $SLUG"
-            curl -s --max-time 15 "https://aisport.am/news/$SLUG" -o /tmp/article.html
-            echo "=== JSON-LD present? ==="
-            grep -oc "NewsArticle" /tmp/article.html || echo 0
-            echo "=== title tag ==="
-            grep -oE '<title>[^<]*</title>' /tmp/article.html
-            echo "=== canonical ==="
-            grep -oE '<link rel="canonical"[^>]*>' /tmp/article.html
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, published_at FROM articles ORDER BY id DESC LIMIT 2;" 2>&1
           } > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
