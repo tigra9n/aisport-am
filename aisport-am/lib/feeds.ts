@@ -202,6 +202,7 @@ function mapApiTubeResults(results: ApiTubeArticle[], limit: number, useEntitySa
 // football outlets are ever considered, so an unrelated category simply
 // can't appear regardless of how APITube mis-tags it.
 const TRUSTED_FOOTBALL_DOMAINS = [
+  // Major / top-tier outlets
   "skysports.com", "bbc.com", "espn.com", "marca.com", "as.com",
   "lequipe.fr", "football-italia.net", "goal.com", "football365.com",
   "transfermarkt.com", "theathletic.com", "90min.com", "onefootball.com",
@@ -209,6 +210,11 @@ const TRUSTED_FOOTBALL_DOMAINS = [
   "independent.co.uk", "theguardian.com", "eurosport.com", "uefa.com",
   "fifa.com", "premierleague.com", "bundesliga.com", "gazzetta.it",
   "footmercato.net", "rmcsport.bfmtv.com", "sport.es", "mundodeportivo.com",
+  // Wider-coverage / high-volume outlets, added for broader daily pickup
+  "bleacherreport.com", "sportsmole.co.uk", "sportbible.com", "teamtalk.com",
+  "caughtoffside.com", "footballtransfers.com", "football-espana.net",
+  "planetfootball.com", "calciomercato.com", "tuttomercatoweb.com",
+  "kicker.de", "sportskeeda.com", "dailystar.co.uk", "get-french-football-news.com",
 ].join(",");
 
 async function fetchApiTubeDirect(bridgeUrl: string, limit: number): Promise<FeedItem[]> {
