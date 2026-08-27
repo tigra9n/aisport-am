@@ -15,12 +15,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Check the actual F1 article's stored category
+      - name: Fix id 66 category to Formula 1
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
           {
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, category FROM articles ORDER BY id DESC LIMIT 3;" 2>&1
+            npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET category = 'Ֆորմուլա 1' WHERE id = 66;" 2>&1
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, category FROM articles WHERE id = 66;" 2>&1
           } > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
