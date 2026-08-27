@@ -19,7 +19,7 @@ jobs:
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
-          echo "${{ secrets.AISPORT_GH_PAT }}" | npx wrangler secret put GH_DISPATCH_TOKEN --name aisport-am 2>&1 | tee ../add-source-result.txt
+          echo "${{ secrets.AISPORT_DISPATCH_PAT }}" | npx wrangler secret put GH_DISPATCH_TOKEN --name aisport-am 2>&1 | tee ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
