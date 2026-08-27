@@ -15,19 +15,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Get a real article slug and check related articles
+      - name: Check category distribution for related articles debugging
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
           {
-            SLUG=$(npx wrangler d1 execute aisport-db --remote --command "SELECT slug FROM articles WHERE status='published' ORDER BY id DESC LIMIT 1;" 2>&1 | grep -oE '"slug": ?"[^"]*"' | head -1 | sed 's/.*"slug": *"//;s/"$//')
-            echo "testing slug: $SLUG"
-            curl -s --max-time 15 "https://aisport.am/news/$SLUG" -o /tmp/article.html
-            echo "=== h1 count ==="
-            grep -oE '<h1' /tmp/article.html | wc -l
-            echo "=== related articles section ==="
-            grep -oE '<h2>[^<]*ևս</h2>' /tmp/article.html
-            grep -oc 'related-list' /tmp/article.html || echo "0"
+            npx wrangler d1 execute aisport-db --remote --command "SELECT category, COUNT(*) as cnt FROM articles WHERE status='published' GROUP BY category ORDER BY cnt DESC;" 2>&1
+            echo "=== this specific article's category ==="
+            npx wrangler d1 execute aisport-db --remote --command "SELECT slug, category FROM articles WHERE slug = 'chalkhanoghlui-paymanagri-hartsy-larvatsutyun-e-steghtsel-14844251';" 2>&1
           } > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
