@@ -12,16 +12,20 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Check homepage for Formula 1 section
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check the actual F1 article's stored category
+        working-directory: aisport-am
         run: |
+          npm install --no-audit --no-fund
           {
-            curl -s --max-time 15 "https://aisport.am/" -o /tmp/home.html
-            echo "=== Formula 1 mentioned? ==="
-            grep -c "Ֆորմուլա" /tmp/home.html || echo "0 - NOT FOUND"
-            echo "=== category/formula-1 link present? ==="
-            grep -c "category/formula-1" /tmp/home.html || echo "0 - NOT FOUND"
-          } > add-source-result.txt || true
-          cat add-source-result.txt
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, category FROM articles WHERE title LIKE '%Andretti%' OR title LIKE '%Formula%';" 2>&1
+          } > ../add-source-result.txt || true
+          cat ../add-source-result.txt
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
