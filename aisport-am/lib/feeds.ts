@@ -249,7 +249,7 @@ const BAD_VALUE_ERROR_CODES = ["ER0151", "ER0216", "ER0220", "ER0228"];
 // request).
 export async function fetchApiTubePerson(apiKey: string, personName: string, limit: number): Promise<FeedItem[]> {
   try {
-    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&person.name=${encodeURIComponent(personName)}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
+    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&person.name=${encodeURIComponent(personName)}&source.domain=${encodeURIComponent(TRUSTED_FOOTBALL_DOMAINS)}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
     const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
     if (!res.ok) {
       const bodyText = await res.text().catch(() => "");
@@ -303,7 +303,7 @@ const FOOTBALL_CONTEXT_WORDS = [
 
 export async function fetchApiTubeTitle(apiKey: string, clubName: string, limit: number): Promise<FeedItem[]> {
   try {
-    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&title=${encodeURIComponent(clubName)}&category.id=medtop:15000000&per_page=50&sort.by=published_at&sort.order=desc`;
+    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&title=${encodeURIComponent(clubName)}&category.id=medtop:15000000&source.domain=${encodeURIComponent(TRUSTED_FOOTBALL_DOMAINS)}&per_page=50&sort.by=published_at&sort.order=desc`;
     const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
     if (!res.ok) return [];
     const data = await res.json() as { results?: ApiTubeArticle[] };
