@@ -15,12 +15,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Check article count after disconnect - did server-side complete?
+      - name: Delete off-topic Angry Chickz article
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
-          npx wrangler d1 execute aisport-db --remote --command "SELECT COUNT(*) as total FROM articles;" 2>&1 > ../add-source-result.txt || true
-          npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, published_at FROM articles ORDER BY id DESC LIMIT 1;" 2>&1 >> ../add-source-result.txt || true
+          {
+            npx wrangler d1 execute aisport-db --remote --command "DELETE FROM articles WHERE slug = 'angry-chickz-y-togharkel-e-sepakan-havelvats-23844289';" 2>&1
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id FROM articles WHERE slug = 'angry-chickz-y-togharkel-e-sepakan-havelvats-23844289';" 2>&1
+          } > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
