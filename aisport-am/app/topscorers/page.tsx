@@ -1,9 +1,16 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { TopScorersTabs } from "../../components/top-scorers-tabs";
 import { SiteFooter } from "../../components/site-footer";
 import { SiteHeader } from "../../components/site-header";
 import { leagues } from "../../lib/football";
 import { getTopScorers } from "../../lib/topscorers-server";
+
+export const metadata: Metadata = {
+  title: "Ռմբարկուներ — Թոփ 5 առաջնություններ | AISport.am",
+  description: "Անգլիայի, Իսպանիայի, Իտալիայի, Գերմանիայի և Ֆրանսիայի ֆուտբոլային առաջնությունների սեզոնի լավագույն ռմբարկուները՝ գոլերով և փոխանցումներով։",
+  alternates: { canonical: "https://aisport.am/topscorers" },
+};
 
 export const dynamic = "force-dynamic";
 

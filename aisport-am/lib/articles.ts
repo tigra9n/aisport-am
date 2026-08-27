@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { articles } from "../db/schema";
 
@@ -11,6 +11,19 @@ export async function getPublishedArticles(limit = 20): Promise<NewsArticle[]> {
       .from(articles)
       .where(eq(articles.status, "published"))
       .orderBy(desc(articles.importance), desc(articles.publishedAt))
+      .limit(limit);
+  } catch {
+    return [];
+  }
+}
+
+export async function getArticlesByCategory(category: string, limit = 20): Promise<NewsArticle[]> {
+  try {
+    return await (await getDb())
+      .select()
+      .from(articles)
+      .where(and(eq(articles.status, "published"), eq(articles.category, category)))
+      .orderBy(desc(articles.publishedAt))
       .limit(limit);
   } catch {
     return [];

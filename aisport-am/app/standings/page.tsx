@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { LeagueTabs } from "../../components/league-tabs";
 import { SiteFooter } from "../../components/site-footer";
@@ -5,6 +6,12 @@ import { SiteHeader } from "../../components/site-header";
 import { leagues } from "../../lib/football";
 import { getStandings } from "../../lib/football-server";
 import { getTopScorers } from "../../lib/topscorers-server";
+
+export const metadata: Metadata = {
+  title: "Աղյուսակներ — Թոփ 5 առաջնություններ | AISport.am",
+  description: "Անգլիայի, Իսպանիայի, Իտալիայի, Գերմանիայի և Ֆրանսիայի ֆուտբոլային առաջնությունների թարմ աղյուսակներն ու ռմբարկուների ցուցակները։",
+  alternates: { canonical: "https://aisport.am/standings" },
+};
 
 export default async function StandingsPage() {
   const [standingsEntries, scorerEntries] = await Promise.all([

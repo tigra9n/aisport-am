@@ -1,7 +1,14 @@
+import type { Metadata } from "next";
 import { NewsCard } from "../../components/news-card";
 import { SiteFooter } from "../../components/site-footer";
 import { SiteHeader } from "../../components/site-header";
 import { demoArticles } from "../../lib/content";
+
+export const metadata: Metadata = {
+  title: "Հայկական սպորտ — Հայաստանի ֆուտբոլ | AISport.am",
+  description: "Հայաստանի ազգային հավաքականների, հայկական ակումբների և տեղական առաջնությունների նորություններ։",
+  alternates: { canonical: "https://aisport.am/armenia" },
+};
 
 export default function ArmeniaPage() {
   const local = demoArticles.filter((article) => article.local);

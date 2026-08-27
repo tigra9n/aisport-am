@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { MatchModal } from "../../components/match-modal";
@@ -7,6 +8,12 @@ import { SiteHeader } from "../../components/site-header";
 import { LiveAutoRefresh } from "../../components/live-auto-refresh";
 import { AdSpaces } from "../../components/ad-spaces";
 import { getLiveMatches } from "../../lib/live-football-server";
+
+export const metadata: Metadata = {
+  title: "Ուղիղ արդյունքներ — Live Scores | AISport.am",
+  description: "Ֆուտբոլային խաղերի ուղիղ արդյունքներ իրական ժամանակում՝ Հայաստանի Պրեմիեր լիգայից մինչև Champions League և թոփ 5 եվրոպական առաջնություններ։",
+  alternates: { canonical: "https://aisport.am/live" },
+};
 
 // Sites redeploy trigger: 2026-08-23
 export const dynamic = "force-dynamic";
