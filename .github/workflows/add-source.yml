@@ -18,32 +18,8 @@ jobs:
       - name: Check latest articles
         working-directory: aisport-am
         run: |
-          echo "---MLS STANDINGS STRUCTURE---" > ../add-source-result.txt
-          curl -s "https://v3.football.api-sports.io/standings?league=253&season=2026" -H "x-apisports-key: ${API_FOOTBALL_KEY}" > /tmp/mls.json
-          cat > /tmp/inspect.py << 'PYEOF'
-import json
-with open("/tmp/mls.json") as f:
-    d = json.load(f)
-resp = d.get("response", [])
-print("response array length:", len(resp))
-for i, r in enumerate(resp):
-    standings = r.get("league", {}).get("standings", [])
-    print(f"response[{i}] has {len(standings)} group(s)")
-    for j, g in enumerate(standings):
-        names = [t["team"]["name"] for t in g[:3]]
-        print(f"  group[{j}]: {len(g)} teams -", names)
-PYEOF
-          python3 /tmp/inspect.py >> ../add-source-result.txt
-          echo "---ARMENIAN PREMIER LEAGUE SEARCH---" >> ../add-source-result.txt
-          curl -s "https://v3.football.api-sports.io/leagues?search=Armenia" -H "x-apisports-key: ${API_FOOTBALL_KEY}" > /tmp/armenia.json
-          cat > /tmp/armenia.py << 'PYEOF'
-import json
-with open("/tmp/armenia.json") as f:
-    d = json.load(f)
-for r in d["response"]:
-    print(r["league"]["id"], r["league"]["name"], r["league"]["type"], r["country"]["name"])
-PYEOF
-          python3 /tmp/armenia.py >> ../add-source-result.txt
+          echo "---DEBUG: raw curl test---" > ../add-source-result.txt
+          curl -s -w "\nHTTP_STATUS:%{http_code}\n" "https://v3.football.api-sports.io/leagues?search=Armenia" -H "x-apisports-key: ${API_FOOTBALL_KEY}" >> ../add-source-result.txt 2>&1 || echo "CURL FAILED with exit $?" >> ../add-source-result.txt
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
