@@ -18,16 +18,7 @@ jobs:
       - name: Check latest articles
         working-directory: aisport-am
         run: |
-          echo "---2 domains---" > ../add-source-result.txt
-          curl -s "https://api.apitube.io/v1/news/everything?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&title=Real%20Madrid&source.domain=marca.com,skysports.com&per_page=10" > /tmp/two.json
-          jq '.results | length' /tmp/two.json >> ../add-source-result.txt
-          jq '.status,.message' /tmp/two.json >> ../add-source-result.txt 2>&1 || true
-          echo "---2 domains, URL-ENCODED comma---" >> ../add-source-result.txt
-          curl -s "https://api.apitube.io/v1/news/everything?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&title=Real%20Madrid&source.domain=marca.com%2Cskysports.com&per_page=10" > /tmp/twoenc.json
-          jq '.results | length' /tmp/twoenc.json >> ../add-source-result.txt
-          echo "---5 domains---" >> ../add-source-result.txt
-          curl -s "https://api.apitube.io/v1/news/everything?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&title=Real%20Madrid&source.domain=marca.com,skysports.com,bbc.com,espn.com,as.com&per_page=10" > /tmp/five.json
-          jq '.results | length' /tmp/five.json >> ../add-source-result.txt
+          curl -s --max-time 130 "https://aisport.am/api/cron/content?token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" > ../add-source-result.txt 2>&1 || echo "curl failed exit $?" >> ../add-source-result.txt
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
