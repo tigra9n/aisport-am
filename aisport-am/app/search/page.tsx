@@ -1,12 +1,21 @@
+import type { Metadata } from "next";
 import { NewsCard } from "../../components/news-card";
 import { SiteFooter } from "../../components/site-footer";
 import { SiteHeader } from "../../components/site-header";
-import { categories, demoArticles } from "../../lib/content";
+import { categories } from "../../lib/content";
+import { searchArticles, toPreview } from "../../lib/articles";
+
+export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Որոնում | AISport.am",
+  description: "Փնտրիր թիմ, մարզիկ կամ մրցաշար AISport.am-ի հրապարակած նյութերում։",
+};
 
 export default async function SearchPage({ searchParams }: { searchParams: Promise<{ q?: string; category?: string }> }) {
   const { q = "", category = "" } = await searchParams;
-  const normalized = q.toLocaleLowerCase("hy-AM");
-  const results = demoArticles.filter((article) => (!normalized || `${article.title} ${article.excerpt} ${article.author}`.toLocaleLowerCase("hy-AM").includes(normalized)) && (!category || article.category === category));
+  const stored = await searchArticles(q, category, 30);
+  const results = stored.map(toPreview);
   return <main><SiteHeader /><div className="site-shell inner-page"><span className="page-kicker">Արագ գտնել</span><h1 className="page-title">Որոնում</h1>
     <form className="search-form-large"><input name="q" defaultValue={q} placeholder="Թիմ, մարզիկ, մրցաշար…" /><button type="submit">Որոնել</button></form>
     <div className="page-toolbar"><a className={!category ? "active" : ""} href={`/search?q=${encodeURIComponent(q)}`}>Բոլորը</a>{categories.slice(0,5).map((item) => <a className={category === item.name ? "active" : ""} href={`/search?q=${encodeURIComponent(q)}&category=${encodeURIComponent(item.name)}`} key={item.slug}>{item.name}</a>)}</div>

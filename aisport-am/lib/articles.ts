@@ -1,8 +1,27 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, like, or } from "drizzle-orm";
 import { getDb } from "../db";
 import { articles } from "../db/schema";
+import type { ArticlePreview } from "./content";
+import { resolveArticleImage } from "./article-image";
 
 export type NewsArticle = typeof articles.$inferSelect;
+
+// Shared DB-row -> homepage/list-card shape mapping, previously
+// duplicated inline across app/page.tsx, category pages, etc.
+export function toPreview(a: NewsArticle): ArticlePreview {
+  return {
+    slug: a.slug,
+    category: a.category,
+    title: a.title,
+    excerpt: a.excerpt,
+    author: "AISport խմբագրություն",
+    time: new Date(a.publishedAt + "Z").toLocaleString("hy-AM", { timeZone: "Asia/Yerevan", hour: "2-digit", minute: "2-digit", hour12: false }),
+    readTime: "3 րոպե",
+    image: a.imageUrl || resolveArticleImage(a.category, a.slug),
+    local: a.category.includes("Հայաստան"),
+    featured: false,
+  };
+}
 
 export async function getPublishedArticles(limit = 20): Promise<NewsArticle[]> {
   try {
@@ -23,6 +42,47 @@ export async function getArticlesByCategory(category: string, limit = 20): Promi
       .select()
       .from(articles)
       .where(and(eq(articles.status, "published"), eq(articles.category, category)))
+      .orderBy(desc(articles.publishedAt))
+      .limit(limit);
+  } catch {
+    return [];
+  }
+}
+
+// No explicit "is this Armenian content" column exists, so this detects
+// it by matching known Armenian club/national-team names in the title -
+// covers recap/preview articles from the Armenian Premier League/Cup and
+// any RSS/entity-sourced coverage that mentions them.
+const ARMENIAN_KEYWORDS = ["Փյունիկ", "Նոահ", "Արարատ", "Ուրարտու", "Ալաշկերտ", "Շիրակ", "Վան", "ԲԿՄԱ", "Գանձասար", "Սյունիք", "Սարդարապատ", "Հայաստանի հավաքական", "Մխիթարյան", "Սպերծյան"];
+
+export async function getArmenianArticles(limit = 20): Promise<NewsArticle[]> {
+  try {
+    const db = await getDb();
+    const conditions = ARMENIAN_KEYWORDS.map((kw) => like(articles.title, `%${kw}%`));
+    return await db
+      .select()
+      .from(articles)
+      .where(and(eq(articles.status, "published"), or(...conditions)))
+      .orderBy(desc(articles.publishedAt))
+      .limit(limit);
+  } catch {
+    return [];
+  }
+}
+
+export async function searchArticles(query: string, category: string, limit = 20): Promise<NewsArticle[]> {
+  try {
+    const db = await getDb();
+    const conditions = [eq(articles.status, "published")];
+    if (query.trim()) {
+      const term = `%${query.trim()}%`;
+      conditions.push(or(like(articles.title, term), like(articles.excerpt, term))!);
+    }
+    if (category) conditions.push(eq(articles.category, category));
+    return await db
+      .select()
+      .from(articles)
+      .where(and(...conditions))
       .orderBy(desc(articles.publishedAt))
       .limit(limit);
   } catch {

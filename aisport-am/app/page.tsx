@@ -7,13 +7,12 @@ import { SiteHeader } from "../components/site-header";
 import { HeroCarousel } from "../components/hero-carousel";
 import { AdSpaces } from "../components/ad-spaces";
 import { MatchModal } from "../components/match-modal";
-import { demoArticles, opinions, trendingTopics, type ArticlePreview } from "../lib/content";
+import { opinions, trendingTopics, type ArticlePreview } from "../lib/content";
 import { leagues } from "../lib/football";
 import { getStandings } from "../lib/football-server";
 import { getTopScorers } from "../lib/topscorers-server";
 import { getLiveMatches } from "../lib/live-football-server";
-import { getPublishedArticles } from "../lib/articles";
-import { resolveArticleImage } from "../lib/article-image";
+import { getPublishedArticles, toPreview } from "../lib/articles";
 
 // The live-score request must run in the production Worker. Without this,
 // the page can be prerendered at deploy time and never reach the live API.
@@ -36,19 +35,7 @@ const homepageSports = [
 
 async function homepageArticles(): Promise<ArticlePreview[]> {
   const stored = await getPublishedArticles(20);
-  if (!stored.length) return demoArticles;
-  return stored.map((article) => ({
-    slug: article.slug,
-    category: article.category,
-    title: article.title,
-    excerpt: article.excerpt,
-    author: "AISport խմբագրություն",
-    time: new Date(article.publishedAt + "Z").toLocaleString("hy-AM", { timeZone: "Asia/Yerevan", hour: "2-digit", minute: "2-digit", hour12: false }),
-    readTime: "3 րոպե",
-    image: article.imageUrl || resolveArticleImage(article.category, article.slug),
-    local: article.category.includes("Հայաստան"),
-    featured: false,
-  }));
+  return stored.map(toPreview);
 }
 
 export default async function Home() {
@@ -67,7 +54,7 @@ export default async function Home() {
   const heroArticles = articles.slice(0, 6);
   const sportSections = homepageSports.map((sport) => {
     const seen = new Set<string>();
-    const items = [...articles, ...demoArticles].filter((article) => {
+    const items = articles.filter((article) => {
       const matches = sport.slug === "armenia" ? article.local : article.category === sport.name;
       if (!matches || seen.has(article.slug)) return false;
       seen.add(article.slug);
@@ -113,7 +100,7 @@ export default async function Home() {
           <section className="latest-news-section" id="latest">
             <div className="modern-section-head"><div><span>Գլխավոր թեմաները</span><h2>Վերջին լուրերը՝ ըստ մարզաձևի</h2></div><Link href="/search">Դիտել բոլորը →</Link></div>
             <div className="sport-news-sections">
-              {sportSections.map((sport) => <section className="sport-news-block" key={sport.slug}>
+              {sportSections.filter((sport) => sport.items.length > 0).map((sport) => <section className="sport-news-block" key={sport.slug}>
                 <div className="sport-news-head"><div><span /> <h3>{sport.name}</h3></div><Link href={sport.href}>Բոլոր լուրերը →</Link></div>
                 <div className="sport-news-grid">
                   {sport.items.map((article, index) => <article className={index === 0 ? "sport-news-card featured" : "sport-news-card"} key={article.slug}>
