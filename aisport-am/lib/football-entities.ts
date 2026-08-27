@@ -190,10 +190,22 @@ function buildChain(entities: Entity[], tierCycle: number, rotationSeed: number)
     byTier[e.priority].push(e.name);
   }
 
-  const dueTiers = ([100, 90, 80, 70] as const).filter((t) => tierCycle % TIER_CADENCE[t] === 0);
+  // BUG FIXED: tier 100 (Armenia) was meant to go last per the comment
+  // above (spottier international coverage), but including it in the
+  // same due/fallback sort as the other tiers actually put it FIRST in
+  // the common case - 100 is "due" every single cycle (cadence 1), and
+  // whenever 90/80/70 weren't also due that cycle, 100 was the only
+  // entry in dueTiers, landing at the front of tierOrder. That meant
+  // most chains led with ~12 Armenian club/player names guaranteed to
+  // fail the trusted-domain whitelist (major international outlets don't
+  // cover them), burning API calls and time before ever reaching an
+  // entity likely to actually match. Tier 100 is now explicitly placed
+  // last, unconditionally, regardless of its own due/cadence status.
+  const otherTiers = ([90, 80, 70] as const);
+  const dueTiers = otherTiers.filter((t) => tierCycle % TIER_CADENCE[t] === 0);
   const orderedDue = [...dueTiers].sort((a, b) => TIER_CADENCE[b] - TIER_CADENCE[a]);
-  const fallbackTiers = ([100, 90, 80, 70] as const).filter((t) => !dueTiers.includes(t)).sort((a, b) => TIER_CADENCE[b] - TIER_CADENCE[a]);
-  const tierOrder = [...orderedDue, ...fallbackTiers];
+  const fallbackTiers = otherTiers.filter((t) => !dueTiers.includes(t)).sort((a, b) => TIER_CADENCE[b] - TIER_CADENCE[a]);
+  const tierOrder = [...orderedDue, ...fallbackTiers, 100 as const];
 
   const chain: string[] = [];
   for (const tier of tierOrder) {
