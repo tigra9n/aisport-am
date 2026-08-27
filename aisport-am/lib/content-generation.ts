@@ -1,3 +1,5 @@
+import { categories } from "./content";
+
 export type GeneratedArticle = { title: string; excerpt: string; content: string; category: string };
 export let lastGenerationDebug = "";
 
@@ -100,12 +102,22 @@ function parseArticleJson(raw: string, fallbackCategory: string): { article: Gen
     if (degenerate.test(parsed.title) || degenerate.test(parsed.excerpt) || degenerate.test(parsed.content)) {
       return { article: null, reason: "degenerate repeated-character output detected, discarding" };
     }
+    // Validate the category against our canonical list before trusting
+    // it. Found: a stray corrupted byte (invalid UTF-8 replacement
+    // character) ended up prepended to a category value once, producing
+    // a category string that looked right visually but didn't match the
+    // canonical "Ֆուտբոլ" anywhere - silently breaking category filtering
+    // and related-articles lookups for that one article. Any category
+    // that doesn't exactly match a known name now falls back instead of
+    // being trusted verbatim.
+    const rawCategory = parsed.category?.trim();
+    const category = rawCategory && categories.some((c) => c.name === rawCategory) ? rawCategory : fallbackCategory;
     return {
       article: {
         title: parsed.title.trim(),
         excerpt: parsed.excerpt.trim(),
         content: parsed.content.trim(),
-        category: parsed.category?.trim() || fallbackCategory,
+        category,
       },
       reason: "ok",
     };
