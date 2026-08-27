@@ -15,31 +15,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Insert test Formula 1 article
+      - name: Delete test F1 article
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
           {
-            npx wrangler d1 execute aisport-db --remote --command "INSERT INTO articles (slug, title, excerpt, content, category, source_name, source_url, status) VALUES ('test-f1-article-verification', 'Թեստային Ֆորմուլա 1 նյութ', 'Սա category page-ի ստուգման համար ավելացված test հոդված է։', 'Սա test content է category page-ի dynamic rendering-ը ստուգելու համար։ Կջնջվի ստուգումից անմիջապես հետո։', 'Ֆորմուլա 1', 'Test', 'https://example.com/test-f1', 'published');" 2>&1
-            echo "=== verify inserted ==="
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id, slug, category FROM articles WHERE slug = 'test-f1-article-verification';" 2>&1
+            npx wrangler d1 execute aisport-db --remote --command "DELETE FROM articles WHERE slug = 'test-f1-article-verification';" 2>&1
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id FROM articles WHERE slug = 'test-f1-article-verification';" 2>&1
           } > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      - name: Verify Formula 1 category page shows the article
-        run: |
-          {
-            curl -s --max-time 15 "https://aisport.am/category/formula-1" -o /tmp/f1.html
-            echo "=== title tag ==="
-            grep -oE '<title>[^<]*</title>' /tmp/f1.html
-            echo "=== has empty-search? ==="
-            grep -c "empty-search" /tmp/f1.html || echo "0 (has content, good)"
-            echo "=== test article title present? ==="
-            grep -c "Թեստային Ֆորմուլա" /tmp/f1.html || echo "0 (not found - problem)"
-          } > add-source-result.txt || true
-          cat add-source-result.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
