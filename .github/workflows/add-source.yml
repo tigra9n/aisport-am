@@ -12,21 +12,10 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Delete test F1 article
-        working-directory: aisport-am
+      - name: Trigger real Formula 1 article generation
         run: |
-          npm install --no-audit --no-fund
-          {
-            npx wrangler d1 execute aisport-db --remote --command "DELETE FROM articles WHERE slug = 'test-f1-article-verification';" 2>&1
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id FROM articles WHERE slug = 'test-f1-article-verification';" 2>&1
-          } > ../add-source-result.txt || true
-          cat ../add-source-result.txt
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          curl -s -w "\ncurl_exit=%{exitcode}, http=%{http_code}, time=%{time_total}s\n" --max-time 100 -G "https://aisport.am/api/cron/content" --data-urlencode "token=${{ secrets.CRON_TOKEN }}" --data-urlencode "mode=rss" --data-urlencode "titleQuery=Formula 1" --data-urlencode "_c=$(date +%s)" > add-source-result.txt 2>&1 || true
+          cat add-source-result.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
