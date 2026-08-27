@@ -12,13 +12,18 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Verify related articles now show
+      - name: Full QA after demo removal
         run: |
           {
-            curl -s --max-time 15 "https://aisport.am/news/chalkhanoghlui-paymanagri-hartsy-larvatsutyun-e-steghtsel-14844251" -o /tmp/article.html
-            echo "=== related section present ==="
-            grep -oc 'related-list' /tmp/article.html || echo 0
-            grep -oE '<h2>[^<]*ևս</h2>' /tmp/article.html
+            for path in "/" "/armenia" "/search" "/search?q=ֆուտբոլ" "/category/football" "/category/tennis" "/category/chess" "/standings" "/live" "/topscorers"; do
+              code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "https://aisport.am$path")
+              echo "$path -> $code"
+            done
+            echo "=== homepage real article check ==="
+            curl -s --max-time 15 "https://aisport.am/" | grep -oE '<title>[^<]*</title>'
+            echo "=== armenia page content check ==="
+            curl -s --max-time 15 "https://aisport.am/armenia" -o /tmp/arm.html
+            grep -c "empty-search" /tmp/arm.html || echo "0 (has content)"
           } > add-source-result.txt || true
           cat add-source-result.txt
       - run: |
