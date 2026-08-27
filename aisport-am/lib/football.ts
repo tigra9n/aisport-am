@@ -19,6 +19,7 @@ export const leagues = [
   { code: "FL1", short: "Լիգա 1", name: "Լիգա 1", country: "Ֆրանսիա" },
   { code: "SPL", short: "Սաուդյան լիգա", name: "Սաուդյան Արաբիայի պրոֆեսիոնալ լիգա", country: "Սաուդյան Արաբիա" },
   { code: "MLS", short: "MLS", name: "MLS", country: "ԱՄՆ" },
+  { code: "ARM", short: "Հայաստանի Պրեմիեր լիգա", name: "Հայաստանի Պրեմիեր լիգա", country: "Հայաստան" },
 ];
 
 const teams: Record<string, string[]> = {
