@@ -12,24 +12,22 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Full QA after demo removal
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Insert test Formula 1 article
+        working-directory: aisport-am
         run: |
+          npm install --no-audit --no-fund
           {
-            for path in "/" "/armenia" "/search" "/search?q=ֆուտբոլ" "/category/football" "/category/tennis" "/category/chess" "/standings" "/live" "/topscorers"; do
-              code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "https://aisport.am$path")
-              echo "$path -> $code"
-            done
-            echo "=== homepage real article check ==="
-            curl -s --max-time 15 "https://aisport.am/" | grep -oE '<title>[^<]*</title>'
-            echo "=== armenia page content check ==="
-            curl -s --max-time 15 "https://aisport.am/armenia" -o /tmp/arm.html
-            grep -c "empty-search" /tmp/arm.html || echo "0 (has content)"
-            echo "=== chess category empty-state check ==="
-            curl -s --max-time 15 "https://aisport.am/category/chess" -o /tmp/chess.html
-            grep -c "empty-search" /tmp/chess.html || echo "0"
-            grep -oE '<h1[^>]*>[^<]*</h1>' /tmp/chess.html
-          } > add-source-result.txt || true
-          cat add-source-result.txt
+            npx wrangler d1 execute aisport-db --remote --command "INSERT INTO articles (slug, title, excerpt, content, category, source_name, source_url, status) VALUES ('test-f1-article-verification', 'Թեստային Ֆորմուլա 1 նյութ', 'Սա category page-ի ստուգման համար ավելացված test հոդված է։', 'Սա test content է category page-ի dynamic rendering-ը ստուգելու համար։ Կջնջվի ստուգումից անմիջապես հետո։', 'Ֆորմուլա 1', 'Test', 'https://example.com/test-f1', 'published');" 2>&1
+            echo "=== verify inserted ==="
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id, slug, category FROM articles WHERE slug = 'test-f1-article-verification';" 2>&1
+          } > ../add-source-result.txt || true
+          cat ../add-source-result.txt
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
