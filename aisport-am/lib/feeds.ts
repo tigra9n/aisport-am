@@ -194,7 +194,17 @@ export async function fetchApiTubePerson(apiKey: string, personName: string, lim
       return [];
     }
     const data = await res.json() as { results?: ApiTubeArticle[] };
-    return mapApiTubeResults(data.results ?? [], limit, true);
+    // APITube's person.name entity tagging isn't always accurate - found
+    // a completely unrelated fast-food app launch article tagged as
+    // being about "Henrikh Mkhitaryan" (the name appeared nowhere in the
+    // title or description). Don't trust the entity tag blindly: require
+    // at least the person's surname to actually appear in the text as an
+    // extra sanity check on top of APITube's own classification.
+    const surname = personName.trim().split(/\s+/).pop()?.toLowerCase() ?? "";
+    const verified = surname
+      ? (data.results ?? []).filter((a) => `${a.title ?? ""} ${a.description ?? ""}`.toLowerCase().includes(surname))
+      : (data.results ?? []);
+    return mapApiTubeResults(verified, limit, true);
   } catch (err) {
     console.error(`[feeds] apitube person fetch failed (${personName}): ${String(err)}`);
     return [];
