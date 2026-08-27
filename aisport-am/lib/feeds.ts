@@ -249,13 +249,34 @@ export async function fetchApiTubePerson(apiKey: string, personName: string, lim
 // language.code is omitted here since title search already found
 // English/Spanish/French results for the same query - restricting
 // language would just narrow an already-working search unnecessarily.
+//
+// BUG FOUND: title="Salzburg" (a club name that's also an Austrian city)
+// pulled in a completely unrelated Salzburg Festival opera review with
+// zero football content, published on-site tagged as football. Unlike
+// fetchApiTubePerson (which verifies the surname actually appears in the
+// text), this had no such check and no sports-category filter at all.
+// Fixed the same way: restrict to the sports category (matches the plain
+// category feed elsewhere in this file) AND require at least one
+// football-context word near the club name, so a generic place-name
+// collision like this can't slip through again.
+const FOOTBALL_CONTEXT_WORDS = [
+  "football", "soccer", "match", "goal", "league", "club", "fc", "coach",
+  "manager", "striker", "midfielder", "defender", "transfer", "fixture",
+  "squad", "stadium", "champions league", "europa league", "bundesliga",
+  "premier league", "la liga", "serie a", "cup",
+];
+
 export async function fetchApiTubeTitle(apiKey: string, clubName: string, limit: number): Promise<FeedItem[]> {
   try {
-    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&title=${encodeURIComponent(clubName)}&per_page=50&sort.by=published_at&sort.order=desc`;
+    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&title=${encodeURIComponent(clubName)}&category.id=medtop:15000000&per_page=50&sort.by=published_at&sort.order=desc`;
     const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
     if (!res.ok) return [];
     const data = await res.json() as { results?: ApiTubeArticle[] };
-    return mapApiTubeResults(data.results ?? [], limit, true);
+    const verified = (data.results ?? []).filter((a) => {
+      const text = `${a.title ?? ""} ${a.description ?? ""}`.toLowerCase();
+      return FOOTBALL_CONTEXT_WORDS.some((w) => text.includes(w));
+    });
+    return mapApiTubeResults(verified, limit, true);
   } catch (err) {
     console.error(`[feeds] apitube title fetch failed (${clubName}): ${String(err)}`);
     return [];
