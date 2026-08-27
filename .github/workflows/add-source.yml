@@ -24,6 +24,10 @@ jobs:
             echo "=== armenia page content check ==="
             curl -s --max-time 15 "https://aisport.am/armenia" -o /tmp/arm.html
             grep -c "empty-search" /tmp/arm.html || echo "0 (has content)"
+            echo "=== chess category empty-state check ==="
+            curl -s --max-time 15 "https://aisport.am/category/chess" -o /tmp/chess.html
+            grep -c "empty-search" /tmp/chess.html || echo "0"
+            grep -oE '<h1[^>]*>[^<]*</h1>' /tmp/chess.html
           } > add-source-result.txt || true
           cat add-source-result.txt
       - run: |
