@@ -266,37 +266,34 @@ export async function GET(request: Request) {
     }
   }
 
-  // Cost-saving mode per request: only APITube (rss), roughly once per
-  // hour, one attempt. Previously gated on "minute 0-4 of the hour", but
-  // that was too fragile in practice: Cloudflare's native cron trigger
-  // has a known intermittent bug where it stops firing for extended
-  // periods, and the GitHub Actions backup cron has its own scheduling
-  // jitter (doesn't reliably land in a narrow 5-minute window). Combined,
-  // real attempts were sometimes being skipped for over an hour even
-  // though *some* tick (native or backup) did fire during that time.
-  //
-  // Gate on "has an article already been published this UTC hour" instead
-  // of a fixed minute range - any tick, whenever it actually fires, can
-  // be the one that does this hour's attempt. If an attempt fails to find
-  // anything, later ticks that same hour will keep trying rather than
-  // giving up until next hour.
+  // 3 attempts per hour, spread across 20-minute windows (0-19, 20-39,
+  // 40-59) instead of 1 attempt per hour. Gate on "already published an
+  // article in this UTC hour AND this 20-minute window" rather than a
+  // fixed minute range - same reasoning as before: Cloudflare's native
+  // cron and the GitHub Actions backup cron both have their own jitter,
+  // so whichever tick actually fires first within a window does that
+  // window's attempt, landing close to (but not exactly on) :00/:20/:40
+  // once the ~1-2min generation time is added.
   if (!forcedMode) {
     try {
       const { getDb } = await import("../../../../db");
       const { articles } = await import("../../../../db/schema");
       const { desc } = await import("drizzle-orm");
       const db = await getDb();
-      const [latest] = await db.select({ publishedAt: articles.publishedAt }).from(articles).orderBy(desc(articles.id)).limit(1);
-      if (latest?.publishedAt) {
-        const latestDate = new Date(latest.publishedAt.replace(" ", "T") + "Z");
-        const now = new Date();
-        const sameHour = latestDate.getUTCFullYear() === now.getUTCFullYear()
-          && latestDate.getUTCMonth() === now.getUTCMonth()
-          && latestDate.getUTCDate() === now.getUTCDate()
-          && latestDate.getUTCHours() === now.getUTCHours();
-        if (sameHour) {
-          return Response.json({ ok: true, mode: "skipped", reason: "already published an article this hour", generated: 0, log: [] });
-        }
+      const recent = await db.select({ publishedAt: articles.publishedAt }).from(articles).orderBy(desc(articles.id)).limit(3);
+      const now = new Date();
+      const currentWindow = Math.floor(now.getUTCMinutes() / 20);
+      const sameHourWindowCount = recent.filter((row) => {
+        if (!row.publishedAt) return false;
+        const d = new Date(row.publishedAt.replace(" ", "T") + "Z");
+        return d.getUTCFullYear() === now.getUTCFullYear()
+          && d.getUTCMonth() === now.getUTCMonth()
+          && d.getUTCDate() === now.getUTCDate()
+          && d.getUTCHours() === now.getUTCHours()
+          && Math.floor(d.getUTCMinutes() / 20) === currentWindow;
+      }).length;
+      if (sameHourWindowCount > 0) {
+        return Response.json({ ok: true, mode: "skipped", reason: "already published an article in this 20-minute window", generated: 0, log: [] });
       }
     } catch {
       // If the check itself fails for some reason, fall through and
