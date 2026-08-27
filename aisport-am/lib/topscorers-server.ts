@@ -8,6 +8,8 @@ const LEAGUE_ID_BY_CODE: Record<string, number> = {
   SA: 135,
   BL1: 78,
   FL1: 61,
+  SPL: 307,
+  MLS: 253,
 };
 
 type ApiFootballTopScorer = {
