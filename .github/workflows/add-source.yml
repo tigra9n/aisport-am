@@ -28,6 +28,18 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Verify Formula 1 category page shows the article
+        run: |
+          {
+            curl -s --max-time 15 "https://aisport.am/category/formula-1" -o /tmp/f1.html
+            echo "=== title tag ==="
+            grep -oE '<title>[^<]*</title>' /tmp/f1.html
+            echo "=== has empty-search? ==="
+            grep -c "empty-search" /tmp/f1.html || echo "0 (has content, good)"
+            echo "=== test article title present? ==="
+            grep -c "Թեստային Ֆորմուլա" /tmp/f1.html || echo "0 (not found - problem)"
+          } > add-source-result.txt || true
+          cat add-source-result.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
