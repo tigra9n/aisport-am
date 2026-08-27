@@ -15,15 +15,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Full site health check
+      - name: Check latest articles for cron-job.org activity
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
           {
-            echo "=== homepage ==="
-            curl -s -o /dev/null -w "http_code=%{http_code}, time=%{time_total}s\n" --max-time 15 "https://aisport.am/"
-            echo "=== latest articles ==="
-            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, published_at FROM articles ORDER BY id DESC LIMIT 5;" 2>&1
+            npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, published_at FROM articles ORDER BY id DESC LIMIT 3;" 2>&1
           } > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
