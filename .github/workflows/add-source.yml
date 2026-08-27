@@ -12,13 +12,19 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Check Email Routing status
+      - name: Verify category page and metadata
         run: |
           {
-            echo "=== zone email routing status ==="
-            curl -s -X GET "https://api.cloudflare.com/client/v4/zones/0cfdb0280564b0d8a244a21835bfc724/email/routing" \
-              -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
-              -H "Content-Type: application/json"
+            echo "=== category/football title tag ==="
+            curl -s --max-time 15 "https://aisport.am/category/football" -o /tmp/cat.html
+            grep -oE '<title>[^<]*</title>' /tmp/cat.html
+            grep -oE '<meta name="description"[^>]*>' /tmp/cat.html
+
+            echo "=== standings title tag ==="
+            curl -s --max-time 15 "https://aisport.am/standings" | grep -oE '<title>[^<]*</title>'
+
+            echo "=== live title tag ==="
+            curl -s --max-time 15 "https://aisport.am/live" | grep -oE '<title>[^<]*</title>'
           } > add-source-result.txt || true
           cat add-source-result.txt
       - run: |
