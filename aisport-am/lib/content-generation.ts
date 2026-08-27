@@ -59,6 +59,64 @@ async function callClaude(systemPrompt: string, userPrompt: string, apiKey: stri
   }
 }
 
+async function callGemini(systemPrompt: string, userPrompt: string, apiKey: string): Promise<{ text: string | null; debug: string }> {
+  const started = Date.now();
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 100_000);
+    // gemini-2.5-flash: stable (non-preview) model, generous free tier
+    // (10 RPM / 250 RPD as of mid-2026), comfortably covers this
+    // pipeline's ~1 article/hour cadence. Deliberately not using a
+    // "flash-lite" or preview model here - the Haiku 4.5 experiment above
+    // is the cautionary precedent: a faster/cheaper model hallucinated
+    // completely off-topic content and broke JSON output. Same risk
+    // applies to picking too aggressive a Gemini tier.
+    const response = await fetch(
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + encodeURIComponent(apiKey),
+      {
+        method: "POST",
+        signal: controller.signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: systemPrompt }] },
+          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+          generationConfig: { maxOutputTokens: 8192, temperature: 0.7 },
+        }),
+      },
+    );
+    clearTimeout(timeoutId);
+    const ms = Date.now() - started;
+    if (!response.ok) {
+      const bodyText = await response.text().catch(() => "");
+      return { text: null, debug: `[${ms}ms] gemini http ${response.status}: ${bodyText.slice(0, 300)}` };
+    }
+    const data = await response.json() as { candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[] };
+    const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") || null;
+    if (!text) return { text: null, debug: `[${ms}ms] gemini: no text, finishReason=${data.candidates?.[0]?.finishReason}, raw=${JSON.stringify(data).slice(0, 300)}` };
+    return { text, debug: `[${ms}ms] gemini ok, finishReason=${data.candidates?.[0]?.finishReason}, len=${text.length}` };
+  } catch (err) {
+    return { text: null, debug: `[${Date.now() - started}ms] gemini threw: ${String(err)}` };
+  }
+}
+
+// Single switch point for which provider generates content. Controlled by
+// the CONTENT_MODEL_PROVIDER Cloudflare Worker env var ("claude" default,
+// "gemini" to switch) - no code change needed to flip providers, e.g. once
+// the Claude Console balance runs out and the plan is to move to Gemini's
+// free tier. Falls back to Claude on any unrecognized/missing value.
+async function callModel(systemPrompt: string, userPrompt: string, claudeApiKey: string): Promise<{ text: string | null; debug: string }> {
+  try {
+    const { env } = await import("cloudflare:workers");
+    const runtime = env as unknown as Record<string, string | undefined>;
+    if (runtime.CONTENT_MODEL_PROVIDER === "gemini" && runtime.GEMINI_API_KEY) {
+      return callGemini(systemPrompt, userPrompt, runtime.GEMINI_API_KEY);
+    }
+  } catch {
+    // cloudflare:workers unavailable (e.g. local test run) - fall through to Claude
+  }
+  return callClaude(systemPrompt, userPrompt, claudeApiKey);
+}
+
 // Sports keyword detection for fallback categorization, used when the
 // model's JSON response omits category (or for RSS content pulled from
 // non-football sources, where hardcoding "Ֆուտբոլ" as fallback was
@@ -165,7 +223,7 @@ ${eventsText}
 ${statsText ? `\nՎիճակագրություն.\n${statsText}` : ""}
 
 Հենվիր միայն այս փաստերի վրա, ոչինչ մի հորինիր (խաղացողների անուններ, գումարներ և այլն, որ չկան տվյալների մեջ)։ Եթե վիճակագրություն կա, հիշատակիր կոնկրետ թվերով (տիրապետում, հարվածներ)։ category դաշտում գրիր "Ֆուտբոլ"։`;
-  const { text, debug } = await callClaude(SYSTEM_PROMPT, userPrompt, apiKey);
+  const { text, debug } = await callModel(SYSTEM_PROMPT, userPrompt, apiKey);
   lastGenerationDebug = debug;
   if (!text) return null;
   const parsed = parseArticleJson(text, "Ֆուտբոլ");
@@ -192,7 +250,7 @@ ${match.home} - ${match.away}
 ${contextLines || "Լրացուցիչ վիճակագրություն չկա։"}
 
 Հենվիր միայն այս փաստերի վրա, ոչինչ մի հորինիր։ Եթե տվյալ կա (ձև, աղյուսակի դիրք, նախկին հանդիպումներ, հավանականություններ), պարտադիր հիշատակիր կոնկրետ թվերով, ոչ ընդհանրաբանված։ category դաշտում գրիր "Ֆուտբոլ"։`;
-  const { text, debug } = await callClaude(SYSTEM_PROMPT, userPrompt, apiKey);
+  const { text, debug } = await callModel(SYSTEM_PROMPT, userPrompt, apiKey);
   lastGenerationDebug = debug;
   if (!text) return null;
   const parsed = parseArticleJson(text, "Ֆուտբոլ");
@@ -220,7 +278,7 @@ export async function generateFromSourceSnippet(
 - Մի գրիր ընդհանրաբանված նախադասություններ ("մի թիմ հաղթեց", "խաղացողը լավ արտահայտվեց") եթե բնագրում կոնկրետ անուն/թիվ կա։
 
 Եթե բնագիրը սակավ է ու իրական խորություն հնարավոր չէ ավելացնել, գրիր ավելի կարճ, բայց ճշգրիտ ամփոփում՝ դարձյալ պահպանելով առկա անունները. մի ձգձգիր առանց իրական բովանդակության։ category դաշտում գրիր ամենահարմար մարզաձևի անունը (Ֆուտբոլ, Բասկետբոլ, Թենիս, և այլն)։`;
-  const { text, debug } = await callClaude(SYSTEM_PROMPT, userPrompt, apiKey);
+  const { text, debug } = await callModel(SYSTEM_PROMPT, userPrompt, apiKey);
   lastGenerationDebug = debug;
   if (!text) return null;
   const smartFallback = guessCategory(`${source.title} ${source.snippet}`, "Ֆուտբոլ");
