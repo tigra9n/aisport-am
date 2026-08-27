@@ -201,6 +201,16 @@ function mapApiTubeResults(results: ApiTubeArticle[], limit: number, useEntitySa
 // added after the fact. A domain whitelist is proactive: only known
 // football outlets are ever considered, so an unrelated category simply
 // can't appear regardless of how APITube mis-tags it.
+//
+// IMPORTANT: applied client-side, not via APITube's source.domain= query
+// param. Confirmed by direct testing: source.domain works fine with
+// exactly one value, but returns status "not_ok" / zero results the
+// moment a second value is added (comma-separated or otherwise) -
+// combining any 2+ domains does not work on this account/plan, silently
+// breaking every entity search that used it (root cause of a full window
+// producing zero articles). Fetching without the filter and checking each
+// result's actual domain in code sidesteps the API-side limitation
+// entirely.
 const TRUSTED_FOOTBALL_DOMAINS = [
   // Major / top-tier outlets
   "skysports.com", "bbc.com", "espn.com", "marca.com", "as.com",
@@ -215,7 +225,17 @@ const TRUSTED_FOOTBALL_DOMAINS = [
   "caughtoffside.com", "footballtransfers.com", "football-espana.net",
   "planetfootball.com", "calciomercato.com", "tuttomercatoweb.com",
   "kicker.de", "sportskeeda.com", "dailystar.co.uk", "get-french-football-news.com",
-].join(",");
+];
+
+function isTrustedFootballDomain(href: string | undefined | null): boolean {
+  if (!href) return false;
+  try {
+    const hostname = new URL(href).hostname.toLowerCase().replace(/^www\./, "");
+    return TRUSTED_FOOTBALL_DOMAINS.some((d) => hostname === d || hostname.endsWith("." + d));
+  } catch {
+    return false;
+  }
+}
 
 // APITube's own sort.by=published_at ordering isn't fully reliable on its
 // own - a Sky Sports article carrying a January publish date still showed
@@ -236,11 +256,12 @@ async function fetchApiTubeDirect(bridgeUrl: string, limit: number): Promise<Fee
     // Starter plan allows up to 50 results per page (was capped at 10 on
     // free tier). More candidates per tick means fewer "everything in the
     // window is already published, nothing new to pick" empty ticks.
-    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&category.id=${encodeURIComponent(categoryId)}&source.domain=${encodeURIComponent(TRUSTED_FOOTBALL_DOMAINS)}&published_at.start=${recentSinceParam()}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
+    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&category.id=${encodeURIComponent(categoryId)}&published_at.start=${recentSinceParam()}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
     const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
     if (!res.ok) return [];
     const data = await res.json() as { results?: ApiTubeArticle[] };
-    return mapApiTubeResults(data.results ?? [], limit);
+    const trusted = (data.results ?? []).filter((a) => isTrustedFootballDomain(a.href));
+    return mapApiTubeResults(trusted, limit);
   } catch (err) {
     console.error(`[feeds] apitube direct fetch failed: ${String(err)}`);
     return [];
@@ -259,7 +280,7 @@ const BAD_VALUE_ERROR_CODES = ["ER0151", "ER0216", "ER0220", "ER0228"];
 // request).
 export async function fetchApiTubePerson(apiKey: string, personName: string, limit: number): Promise<FeedItem[]> {
   try {
-    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&person.name=${encodeURIComponent(personName)}&source.domain=${encodeURIComponent(TRUSTED_FOOTBALL_DOMAINS)}&published_at.start=${recentSinceParam()}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
+    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&person.name=${encodeURIComponent(personName)}&published_at.start=${recentSinceParam()}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
     const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
     if (!res.ok) {
       const bodyText = await res.text().catch(() => "");
@@ -277,9 +298,11 @@ export async function fetchApiTubePerson(apiKey: string, personName: string, lim
     // at least the person's surname to actually appear in the text as an
     // extra sanity check on top of APITube's own classification.
     const surname = personName.trim().split(/\s+/).pop()?.toLowerCase() ?? "";
-    const verified = surname
-      ? (data.results ?? []).filter((a) => `${a.title ?? ""} ${a.description ?? ""}`.toLowerCase().includes(surname))
-      : (data.results ?? []);
+    const verified = (data.results ?? []).filter((a) => {
+      if (!isTrustedFootballDomain(a.href)) return false;
+      if (!surname) return true;
+      return `${a.title ?? ""} ${a.description ?? ""}`.toLowerCase().includes(surname);
+    });
     return mapApiTubeResults(verified, limit, true);
   } catch (err) {
     console.error(`[feeds] apitube person fetch failed (${personName}): ${String(err)}`);
@@ -313,11 +336,12 @@ const FOOTBALL_CONTEXT_WORDS = [
 
 export async function fetchApiTubeTitle(apiKey: string, clubName: string, limit: number): Promise<FeedItem[]> {
   try {
-    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&title=${encodeURIComponent(clubName)}&category.id=medtop:15000000&source.domain=${encodeURIComponent(TRUSTED_FOOTBALL_DOMAINS)}&published_at.start=${recentSinceParam()}&per_page=50&sort.by=published_at&sort.order=desc`;
+    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&title=${encodeURIComponent(clubName)}&category.id=medtop:15000000&published_at.start=${recentSinceParam()}&per_page=50&sort.by=published_at&sort.order=desc`;
     const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
     if (!res.ok) return [];
     const data = await res.json() as { results?: ApiTubeArticle[] };
     const verified = (data.results ?? []).filter((a) => {
+      if (!isTrustedFootballDomain(a.href)) return false;
       const text = `${a.title ?? ""} ${a.description ?? ""}`.toLowerCase();
       return FOOTBALL_CONTEXT_WORDS.some((w) => text.includes(w));
     });
