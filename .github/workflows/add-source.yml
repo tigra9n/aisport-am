@@ -12,9 +12,14 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Test the exact cron-job.org URL
+      - name: Check Email Routing status
         run: |
-          curl -s -w "\nhttp_code=%{http_code}\n" --max-time 100 "https://aisport.am/api/cron/content?token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" > add-source-result.txt 2>&1 || true
+          {
+            echo "=== zone email routing status ==="
+            curl -s -X GET "https://api.cloudflare.com/client/v4/zones/0cfdb0280564b0d8a244a21835bfc724/email/routing" \
+              -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
+              -H "Content-Type: application/json"
+          } > add-source-result.txt || true
           cat add-source-result.txt
       - run: |
           git config user.email "actions@github.com"
