@@ -12,13 +12,10 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Check Cloudflare Analytics for Google referrer traffic
+      - name: Verify GA4 tag is live
         run: |
           {
-            echo "=== zone analytics dashboard (last 2h) ==="
-            curl -s "https://api.cloudflare.com/client/v4/zones/0cfdb0280564b0d8a244a21835bfc724/analytics/dashboard?since=-120&until=0" \
-              -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
-              -H "Content-Type: application/json"
+            curl -s --max-time 15 "https://aisport.am/" | grep -o "G-LETFRQPT04" | head -1
           } > add-source-result.txt || true
           cat add-source-result.txt
       - run: |
