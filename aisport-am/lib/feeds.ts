@@ -217,6 +217,16 @@ const TRUSTED_FOOTBALL_DOMAINS = [
   "kicker.de", "sportskeeda.com", "dailystar.co.uk", "get-french-football-news.com",
 ].join(",");
 
+// APITube's own sort.by=published_at ordering isn't fully reliable on its
+// own - a Sky Sports article carrying a January publish date still showed
+// up as if fresh, with no date filter to catch it. Explicitly restrict to
+// the last few days via published_at.start so a stale article can't slip
+// through regardless of how the API sorts/dates it internally.
+function recentSinceParam(days = 3): string {
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  return cutoff.toISOString().slice(0, 10);
+}
+
 async function fetchApiTubeDirect(bridgeUrl: string, limit: number): Promise<FeedItem[]> {
   try {
     const params = new URL(bridgeUrl).searchParams;
@@ -226,7 +236,7 @@ async function fetchApiTubeDirect(bridgeUrl: string, limit: number): Promise<Fee
     // Starter plan allows up to 50 results per page (was capped at 10 on
     // free tier). More candidates per tick means fewer "everything in the
     // window is already published, nothing new to pick" empty ticks.
-    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&category.id=${encodeURIComponent(categoryId)}&source.domain=${encodeURIComponent(TRUSTED_FOOTBALL_DOMAINS)}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
+    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&category.id=${encodeURIComponent(categoryId)}&source.domain=${encodeURIComponent(TRUSTED_FOOTBALL_DOMAINS)}&published_at.start=${recentSinceParam()}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
     const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
     if (!res.ok) return [];
     const data = await res.json() as { results?: ApiTubeArticle[] };
@@ -249,7 +259,7 @@ const BAD_VALUE_ERROR_CODES = ["ER0151", "ER0216", "ER0220", "ER0228"];
 // request).
 export async function fetchApiTubePerson(apiKey: string, personName: string, limit: number): Promise<FeedItem[]> {
   try {
-    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&person.name=${encodeURIComponent(personName)}&source.domain=${encodeURIComponent(TRUSTED_FOOTBALL_DOMAINS)}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
+    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&person.name=${encodeURIComponent(personName)}&source.domain=${encodeURIComponent(TRUSTED_FOOTBALL_DOMAINS)}&published_at.start=${recentSinceParam()}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
     const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
     if (!res.ok) {
       const bodyText = await res.text().catch(() => "");
@@ -303,7 +313,7 @@ const FOOTBALL_CONTEXT_WORDS = [
 
 export async function fetchApiTubeTitle(apiKey: string, clubName: string, limit: number): Promise<FeedItem[]> {
   try {
-    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&title=${encodeURIComponent(clubName)}&category.id=medtop:15000000&source.domain=${encodeURIComponent(TRUSTED_FOOTBALL_DOMAINS)}&per_page=50&sort.by=published_at&sort.order=desc`;
+    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&title=${encodeURIComponent(clubName)}&category.id=medtop:15000000&source.domain=${encodeURIComponent(TRUSTED_FOOTBALL_DOMAINS)}&published_at.start=${recentSinceParam()}&per_page=50&sort.by=published_at&sort.order=desc`;
     const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
     if (!res.ok) return [];
     const data = await res.json() as { results?: ApiTubeArticle[] };
