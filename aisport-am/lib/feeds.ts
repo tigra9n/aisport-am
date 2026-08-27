@@ -10,6 +10,37 @@ function decodeEntities(text: string) {
     .replace(/&nbsp;/g, " ");
 }
 
+// response.text() always assumes UTF-8, which corrupts non-UTF-8 feeds
+// (e.g. Turkish sports RSS served as windows-1254) into replacement
+// characters ("Fenerbahçe" -> "�enerbah�e"). Sniff the real charset from
+// the Content-Type header first, then the XML declaration, and decode
+// the raw bytes with that charset before any further processing.
+function detectCharset(contentType: string | null, headBytes: Uint8Array): string {
+  const headerMatch = contentType?.match(/charset=["']?([\w-]+)/i);
+  if (headerMatch) return headerMatch[1].toLowerCase();
+  // XML declarations are always ASCII-safe in the prolog, so a plain
+  // latin1 decode of the first bytes is safe purely for sniffing purposes.
+  const head = new TextDecoder("windows-1252").decode(headBytes.slice(0, 1024));
+  const xmlMatch = head.match(/<\?xml[^>]*encoding=["']([\w-]+)["']/i);
+  if (xmlMatch) return xmlMatch[1].toLowerCase();
+  // HTML pages declare charset via <meta charset="..."> or the older
+  // <meta http-equiv="Content-Type" content="...charset=...">.
+  const htmlMetaMatch = head.match(/<meta[^>]+charset=["']?([\w-]+)/i);
+  if (htmlMetaMatch) return htmlMetaMatch[1].toLowerCase();
+  return "utf-8";
+}
+
+async function decodeHttpResponse(response: Response): Promise<string> {
+  const buffer = new Uint8Array(await response.arrayBuffer());
+  const charset = detectCharset(response.headers.get("content-type"), buffer);
+  try {
+    return new TextDecoder(charset).decode(buffer);
+  } catch {
+    // Unknown/unsupported label - fall back to UTF-8 rather than throwing.
+    return new TextDecoder("utf-8").decode(buffer);
+  }
+}
+
 function extractTag(block: string, tag: string): string | null {
   const cdataMatch = block.match(new RegExp(`<${tag}[^>]*>\\s*<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>\\s*</${tag}>`, "i"));
   if (cdataMatch) return decodeEntities(cdataMatch[1].trim());
@@ -55,7 +86,7 @@ export async function fetchFeed(feedUrl: string, limit = 10): Promise<FeedItem[]
   try {
     const response = await fetch(feedUrl, { headers: { "User-Agent": "AISportBot/1.0 (+https://aisport.am)" } });
     if (!response.ok) return [];
-    const xml = await response.text();
+    const xml = await decodeHttpResponse(response);
     const items = xml.match(/<item\b[\s\S]*?<\/item>/gi) ?? [];
     return items.slice(0, limit).map((block) => ({
       title: extractTag(block, "title") ?? "",
@@ -273,7 +304,7 @@ export async function fetchArticlePage(articleUrl: string): Promise<{ image: str
     });
     clearTimeout(timeoutId);
     if (!response.ok) return { image: null, bodyText: null };
-    const html = await response.text();
+    const html = await decodeHttpResponse(response);
 
     const ogMatch = html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)
       ?? html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i)
