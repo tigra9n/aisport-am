@@ -17,7 +17,18 @@ async function callClaude(systemPrompt: string, userPrompt: string, apiKey: stri
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-sonnet-5",
+        // Switched from claude-sonnet-5 to claude-haiku-4-5: found that
+        // generation was consistently taking 60-90s (mostly Sonnet's own
+        // response latency), which meant every cron-job.org tick (their
+        // free-plan hard 30s timeout) was disconnecting before generation
+        // finished - and nearly 2 hours went by with zero successful
+        // scheduled generations as a result, only recovering when a
+        // manually-triggered call with a 100s client timeout was used.
+        // Haiku is meaningfully faster for this straightforward
+        // rewrite/formatting task (no complex reasoning needed), aiming to
+        // land comfortably under 30s so cron-job.org's own timeout stops
+        // being the bottleneck.
+        model: "claude-haiku-4-5-20251001",
         // Bumped 900 -> 2048 -> 4096 -> 8192: even 4096 still produced an
         // occasional truncated/unparseable JSON response (Claude's own
         // stop_reason=max_tokens before finishing the JSON structure).
