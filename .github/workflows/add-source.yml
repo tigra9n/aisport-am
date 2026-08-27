@@ -18,7 +18,19 @@ jobs:
       - name: Check latest articles
         working-directory: aisport-am
         run: |
-          curl -s --max-time 130 -w "\nHTTP_CODE:%{http_code}\n" "https://aisport.am/api/cron/content?token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" > ../add-source-result.txt 2>&1 || echo "curl failed exit $?" >> ../add-source-result.txt
+          RECENT=$(date -u -d '3 days ago' +%Y-%m-%d)
+          echo "recent cutoff: $RECENT" > ../add-source-result.txt
+          echo "---title=Real Madrid, full filters---" >> ../add-source-result.txt
+          curl -s "https://api.apitube.io/v1/news/everything?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&title=Real%20Madrid&category.id=medtop:15000000&source.domain=skysports.com,bbc.com,espn.com,marca.com,as.com,lequipe.fr,football-italia.net,goal.com,football365.com,transfermarkt.com,theathletic.com,90min.com,onefootball.com,fourfourtwo.com,givemesport.com,mirror.co.uk,standard.co.uk,independent.co.uk,theguardian.com,eurosport.com,uefa.com,fifa.com,premierleague.com,bundesliga.com,gazzetta.it,footmercato.net,rmcsport.bfmtv.com,sport.es,mundodeportivo.com,bleacherreport.com,sportsmole.co.uk,sportbible.com,teamtalk.com,caughtoffside.com,footballtransfers.com,football-espana.net,planetfootball.com,calciomercato.com,tuttomercatoweb.com,kicker.de,sportskeeda.com,dailystar.co.uk,get-french-football-news.com&published_at.start=${RECENT}&per_page=50&sort.by=published_at&sort.order=desc" > /tmp/full.json
+          jq '.results | length' /tmp/full.json >> ../add-source-result.txt
+          jq '.status,.message' /tmp/full.json >> ../add-source-result.txt 2>&1 || true
+          echo "---same query, NO domain filter---" >> ../add-source-result.txt
+          curl -s "https://api.apitube.io/v1/news/everything?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&title=Real%20Madrid&category.id=medtop:15000000&published_at.start=${RECENT}&per_page=50&sort.by=published_at&sort.order=desc" > /tmp/nodomain.json
+          jq '.results | length' /tmp/nodomain.json >> ../add-source-result.txt
+          echo "---same query, domain filter but NO date filter---" >> ../add-source-result.txt
+          curl -s "https://api.apitube.io/v1/news/everything?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&title=Real%20Madrid&category.id=medtop:15000000&source.domain=skysports.com,bbc.com,espn.com,marca.com,as.com&per_page=50&sort.by=published_at&sort.order=desc" > /tmp/nodate.json
+          jq '.results | length' /tmp/nodate.json >> ../add-source-result.txt
+          jq '[.results[0:3][] | {date: .published_at, domain: .source.domain}]' /tmp/nodate.json >> ../add-source-result.txt
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
