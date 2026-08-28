@@ -382,7 +382,20 @@ export const demoArticles: ArticlePreview[] = [
   },
 ];
 
-export const trendingTopics = ["#ՀայաստանիՀավաքական", "#ՉեմպիոններիԼիգա", "#NBA", "#Տրանսֆերներ", "#Մենամարտ"];
+// label is the hashtag-style display text (no spaces, by convention);
+// query is the actual search term used to find matching articles - kept
+// separate because search does a plain substring match (LIKE '%term%'),
+// so deriving the query from the concatenated label (e.g.
+// "ՊրեմիերԼիգա") would never match real article text that has a space
+// ("Պրեմիեր լիգա") - this was a silent pre-existing bug where every
+// trending topic click likely returned zero results.
+export const trendingTopics = [
+  { label: "#ՉեմպիոններիԼիգա", query: "Չեմպիոնների լիգա" },
+  { label: "#ՊրեմիերԼիգա", query: "Պրեմիեր լիգա" },
+  { label: "#Փոխանցումներ", query: "փոխանցում" },
+  { label: "#ՀայկականՖուտբոլ", query: "Հայաստանի ֆուտբոլ" },
+  { label: "#ԼաԼիգա", query: "Լա Լիգա" },
+];
 
 export const liveMatches = [
   { status: "72′", competition: "Չեմպիոնների լիգա", home: "Բենֆիկա", away: "Ֆեներբահչե", homeScore: 1, awayScore: 1 },
