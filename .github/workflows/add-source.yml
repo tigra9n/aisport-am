@@ -19,6 +19,7 @@ jobs:
         working-directory: aisport-am
         run: |
           curl -s --max-time 130 "https://aisport.am/api/cron/content?token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" > ../add-source-result.txt 2>&1 || echo "curl failed exit $?" >> ../add-source-result.txt
+          echo "test after dedup-chain fix" >> ../add-source-result.txt
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
