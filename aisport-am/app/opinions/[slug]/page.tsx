@@ -1,9 +1,45 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
 import { SiteHeader } from "../../../components/site-header";
 import { getOpinionBySlug } from "../../../lib/opinions";
 
 export const dynamic = "force-dynamic";
+
+const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=1600&q=85";
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const opinion = await getOpinionBySlug(slug);
+  if (!opinion) return {};
+
+  const { title, category, imageUrl } = opinion;
+  const description = opinion.content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160);
+  const image = imageUrl ?? FALLBACK_IMAGE;
+  const url = `https://aisport.am/opinions/${slug}`;
+
+  return {
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      type: "article",
+      siteName: "AIFootball",
+      title,
+      description,
+      url,
+      locale: "hy_AM",
+      images: [{ url: image, width: 1200, height: 630, alt: title }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [image],
+    },
+    other: { "article:section": category },
+  };
+}
 
 function youtubeEmbedUrl(url: string): string | null {
   const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]{11})/);
