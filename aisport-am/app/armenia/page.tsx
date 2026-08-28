@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Հայկական սպորտ — Հայաստանի ֆուտբոլ | AIFootball.am",
   description: "Հայաստանի ազգային հավաքականների, հայկական ակումբների և տեղական առաջնությունների նորություններ։",
-  alternates: { canonical: "https://aisport.am/armenia" },
+  alternates: { canonical: "https://aifootball.am/armenia" },
 };
 
 export default async function ArmeniaPage() {

@@ -14,7 +14,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { slug } = await params;
   const category = categories.find((item) => item.slug === slug);
   if (!category) return {};
-  const url = `https://aisport.am/category/${slug}`;
+  const url = `https://aifootball.am/category/${slug}`;
   const description = `${category.name}-ի հայկական և միջազգային ամենաթարմ նորությունները, արդյունքները, վերլուծություններն ու պատմությունները։`;
   return {
     title: `${category.name} — Նորություններ | AIFootball.am`,

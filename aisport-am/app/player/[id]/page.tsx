@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return {
     title: `${profile.name} — Խաղացողի պրոֆիլ | AIFootball.am`,
     description,
-    alternates: { canonical: `https://aisport.am/player/${id}` },
+    alternates: { canonical: `https://aifootball.am/player/${id}` },
   };
 }
 

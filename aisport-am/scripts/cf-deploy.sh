@@ -4,6 +4,7 @@ set -euo pipefail
 DB_NAME="aisport-db"
 WORKER_NAME="aisport-am"
 DOMAIN="aisport.am"
+NEW_DOMAIN="aifootball.am"
 
 chmod +x scripts/*.sh 2>/dev/null || true
 
@@ -29,13 +30,33 @@ echo "== Building the site =="
 npm run build
 
 echo "== Patching generated wrangler config for production deploy =="
-DB_ID="$DB_ID" WORKER_NAME="$WORKER_NAME" DOMAIN="$DOMAIN" node -e '
+echo "== Checking whether $NEW_DOMAIN zone is active in Cloudflare =="
+NEW_DOMAIN_ACTIVE="false"
+if [ -n "${CLOUDFLARE_PURGE_TOKEN:-}" ]; then
+  ZONE_STATUS="$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=${NEW_DOMAIN}" \
+    -H "Authorization: Bearer ${CLOUDFLARE_PURGE_TOKEN}" \
+    -H "Content-Type: application/json" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{try{const j=JSON.parse(d);console.log(j.result?.[0]?.status||"none")}catch{console.log("none")}})')"
+  echo "$NEW_DOMAIN zone status: $ZONE_STATUS"
+  if [ "$ZONE_STATUS" = "active" ]; then
+    NEW_DOMAIN_ACTIVE="true"
+  fi
+else
+  echo "CLOUDFLARE_PURGE_TOKEN not set, cannot check - skipping $NEW_DOMAIN route to be safe"
+fi
+
+DB_ID="$DB_ID" WORKER_NAME="$WORKER_NAME" DOMAIN="$DOMAIN" NEW_DOMAIN="$NEW_DOMAIN" NEW_DOMAIN_ACTIVE="$NEW_DOMAIN_ACTIVE" node -e '
 const fs = require("fs");
 const path = "dist/server/wrangler.json";
 const cfg = JSON.parse(fs.readFileSync(path, "utf8"));
 cfg.name = process.env.WORKER_NAME;
 cfg.d1_databases = [{ binding: "DB", database_name: "aisport-db", database_id: process.env.DB_ID }];
 cfg.routes = [{ pattern: `${process.env.DOMAIN}/*`, zone_name: process.env.DOMAIN }];
+if (process.env.NEW_DOMAIN_ACTIVE === "true") {
+  cfg.routes.push({ pattern: `${process.env.NEW_DOMAIN}/*`, zone_name: process.env.NEW_DOMAIN });
+  console.log(`Adding route for ${process.env.NEW_DOMAIN} (zone confirmed active)`);
+} else {
+  console.log(`Skipping route for ${process.env.NEW_DOMAIN} (zone not yet active) - only ${process.env.DOMAIN} will be routed this deploy`);
+}
 cfg.triggers = { crons: ["*/5 * * * *"] };
 fs.writeFileSync(path, JSON.stringify(cfg, null, 2));
 console.log("Patched wrangler.json:", JSON.stringify(cfg, null, 2));
@@ -72,6 +93,18 @@ if [ -n "${CLOUDFLARE_PURGE_TOKEN:-}" ]; then
     -H "Authorization: Bearer ${CLOUDFLARE_PURGE_TOKEN}" \
     -H "Content-Type: application/json" \
     --data '{"purge_everything":true}' | grep -o '"success":[^,}]*'
+  if [ "$NEW_DOMAIN_ACTIVE" = "true" ]; then
+    NEW_ZONE_ID="$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=${NEW_DOMAIN}" \
+      -H "Authorization: Bearer ${CLOUDFLARE_PURGE_TOKEN}" \
+      -H "Content-Type: application/json" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{try{const j=JSON.parse(d);console.log(j.result?.[0]?.id||"")}catch{console.log("")}})')"
+    if [ -n "$NEW_ZONE_ID" ]; then
+      echo "== Purging $NEW_DOMAIN edge cache (zone $NEW_ZONE_ID) =="
+      curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${NEW_ZONE_ID}/purge_cache" \
+        -H "Authorization: Bearer ${CLOUDFLARE_PURGE_TOKEN}" \
+        -H "Content-Type: application/json" \
+        --data '{"purge_everything":true}' | grep -o '"success":[^,}]*'
+    fi
+  fi
 else
   echo "CLOUDFLARE_PURGE_TOKEN not set, skipping cache purge"
 fi

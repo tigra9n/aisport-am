@@ -17,7 +17,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return {
     title: `${title} | AIFootball.am`,
     description,
-    alternates: { canonical: `https://aisport.am/live/match/${id}` },
+    alternates: { canonical: `https://aifootball.am/live/match/${id}` },
   };
 }
 const available=(value:string)=>Boolean(value&&value!=="—"&&value!=="Տվյալ չկա");

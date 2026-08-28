@@ -3,7 +3,7 @@ import Script from "next/script";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://aisport.am"),
+  metadataBase: new URL("https://aifootball.am"),
   title: "AIFootball — սպորտային լուրեր հայերեն",
   description: "Միջազգային ֆուտբոլի և հայկական սպորտի թարմ լուրերը՝ արագ և հայերեն։",
   icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },

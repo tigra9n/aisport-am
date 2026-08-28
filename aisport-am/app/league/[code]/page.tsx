@@ -14,7 +14,7 @@ export async function generateMetadata({ params }: { params: Promise<{ code: str
   const { code } = await params;
   const league = LEAGUE_TAGS.find((item) => item.code === code.toUpperCase());
   if (!league) return {};
-  const url = `https://aisport.am/league/${code}`;
+  const url = `https://aifootball.am/league/${code}`;
   const description = `${league.label}-ի ամենաթարմ նորությունները, տրանսֆերները և վերլուծությունները։`;
   return {
     title: `${league.label} — Նորություններ | AIFootball.am`,

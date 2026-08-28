@@ -17,7 +17,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return {
     title: `${squad.teamName} — Կազմ | AIFootball.am`,
     description,
-    alternates: { canonical: `https://aisport.am/team/${id}` },
+    alternates: { canonical: `https://aifootball.am/team/${id}` },
   };
 }
 

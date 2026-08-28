@@ -100,21 +100,21 @@ export default async function Home() {
     "@graph": [
       {
         "@type": "Organization",
-        "@id": "https://aisport.am/#organization",
+        "@id": "https://aifootball.am/#organization",
         name: "AIFootball",
-        url: "https://aisport.am",
-        logo: { "@type": "ImageObject", url: "https://aisport.am/favicon.svg" },
+        url: "https://aifootball.am",
+        logo: { "@type": "ImageObject", url: "https://aifootball.am/favicon.svg" },
       },
       {
         "@type": "WebSite",
-        "@id": "https://aisport.am/#website",
+        "@id": "https://aifootball.am/#website",
         name: "AIFootball",
-        url: "https://aisport.am",
+        url: "https://aifootball.am",
         inLanguage: "hy",
-        publisher: { "@id": "https://aisport.am/#organization" },
+        publisher: { "@id": "https://aifootball.am/#organization" },
         potentialAction: {
           "@type": "SearchAction",
-          target: "https://aisport.am/search?q={search_term_string}",
+          target: "https://aifootball.am/search?q={search_term_string}",
           "query-input": "required name=search_term_string",
         },
       },

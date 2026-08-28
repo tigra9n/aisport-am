@@ -155,7 +155,7 @@ async function runRecaps(apiKey: string, log: string[], deadline: number): Promi
     for (const match of finished) {
       if (generated >= MAX_PER_TYPE || attempted >= MAX_ATTEMPTS) break;
       if (Date.now() > deadline) { log.push("recap: time budget exceeded, stopping early"); break; }
-      const sourceUrl = `https://aisport.am/live/match/${match.id}`;
+      const sourceUrl = `https://aifootball.am/live/match/${match.id}`;
       if (await articleExistsForSource(sourceUrl)) continue;
       const details = await getLiveMatchDetailsV2(match.id);
       if (!details) continue;
@@ -186,7 +186,7 @@ async function runPreviews(apiKey: string, log: string[], deadline: number): Pro
     for (const match of upcoming) {
       if (generated >= MAX_PER_TYPE || attempted >= MAX_ATTEMPTS) break;
       if (Date.now() > deadline) { log.push("preview: time budget exceeded, stopping early"); break; }
-      const sourceUrl = `https://aisport.am/live/match/${match.id}#preview`;
+      const sourceUrl = `https://aifootball.am/live/match/${match.id}#preview`;
       if (await articleExistsForSource(sourceUrl)) continue;
       const details = await getLiveMatchDetailsV2(match.id);
       const context: { h2h?: string; homeForm?: string; awayForm?: string; standings?: string; prediction?: string } = {};

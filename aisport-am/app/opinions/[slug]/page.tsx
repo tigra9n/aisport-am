@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const { title, category, imageUrl } = opinion;
   const description = opinion.content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160);
   const image = imageUrl ?? FALLBACK_IMAGE;
-  const url = `https://aisport.am/opinions/${slug}`;
+  const url = `https://aifootball.am/opinions/${slug}`;
 
   return {
     title,

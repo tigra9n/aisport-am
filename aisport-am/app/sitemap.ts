@@ -12,7 +12,7 @@ import { categories } from "../lib/content";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const BASE_URL = "https://aisport.am";
+const BASE_URL = "https://aifootball.am";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();

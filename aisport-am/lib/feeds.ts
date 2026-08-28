@@ -84,7 +84,7 @@ export async function fetchFeed(feedUrl: string, limit = 10): Promise<FeedItem[]
     return fetchApiTubeDirect(feedUrl, limit);
   }
   try {
-    const response = await fetch(feedUrl, { headers: { "User-Agent": "AIFootballBot/1.0 (+https://aisport.am)" } });
+    const response = await fetch(feedUrl, { headers: { "User-Agent": "AIFootballBot/1.0 (+https://aifootball.am)" } });
     if (!response.ok) return [];
     const xml = await decodeHttpResponse(response);
     const items = xml.match(/<item\b[\s\S]*?<\/item>/gi) ?? [];
@@ -407,7 +407,7 @@ export async function fetchArticlePage(articleUrl: string): Promise<{ image: str
     const timeoutId = setTimeout(() => controller.abort(), 8_000);
     const response = await fetch(articleUrl, {
       signal: controller.signal,
-      headers: { "User-Agent": "AIFootballBot/1.0 (+https://aisport.am)" },
+      headers: { "User-Agent": "AIFootballBot/1.0 (+https://aifootball.am)" },
     });
     clearTimeout(timeoutId);
     if (!response.ok) return { image: null, bodyText: null };

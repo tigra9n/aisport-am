@@ -16,7 +16,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return {
     title: `${coach.name} — Մարզիչ | AIFootball.am`,
     description,
-    alternates: { canonical: `https://aisport.am/coach/${id}` },
+    alternates: { canonical: `https://aifootball.am/coach/${id}` },
   };
 }
 

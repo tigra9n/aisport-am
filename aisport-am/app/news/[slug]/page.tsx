@@ -15,7 +15,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 
   const { title, excerpt, category } = stored;
   const image = stored.imageUrl ?? resolveArticleImage(category, slug);
-  const url = `https://aisport.am/news/${slug}`;
+  const url = `https://aifootball.am/news/${slug}`;
 
   return {
     title,
@@ -64,13 +64,13 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
     image: [image],
     datePublished: publishedIso,
     dateModified: publishedIso,
-    author: [{ "@type": "Organization", name: "AIFootball խմբագրություն", url: "https://aisport.am" }],
+    author: [{ "@type": "Organization", name: "AIFootball խմբագրություն", url: "https://aifootball.am" }],
     publisher: {
       "@type": "Organization",
       name: "AIFootball",
-      logo: { "@type": "ImageObject", url: "https://aisport.am/favicon.svg" },
+      logo: { "@type": "ImageObject", url: "https://aifootball.am/favicon.svg" },
     },
-    mainEntityOfPage: { "@type": "WebPage", "@id": `https://aisport.am/news/${slug}` },
+    mainEntityOfPage: { "@type": "WebPage", "@id": `https://aifootball.am/news/${slug}` },
     articleSection: category,
     inLanguage: "hy",
   };
