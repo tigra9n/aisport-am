@@ -9,12 +9,11 @@ import { HeadlineFeed } from "../components/headline-feed";
 import { AdSpaces } from "../components/ad-spaces";
 import { MatchModal } from "../components/match-modal";
 import { trendingTopics, type ArticlePreview } from "../lib/content";
-import { getOpinions } from "../lib/opinions";
 import { leagues } from "../lib/football";
 import { getStandings } from "../lib/football-server";
 import { getTopScorers } from "../lib/topscorers-server";
 import { getLiveMatches } from "../lib/live-football-server";
-import { getPublishedArticles, getArticlesByCategory, getArmenianArticles, toPreview } from "../lib/articles";
+import { getPublishedArticles, getArticlesByCategory, toPreview } from "../lib/articles";
 
 // The live-score request must run in the production Worker. Without this,
 // the page can be prerendered at deploy time and never reach the live API.
@@ -22,17 +21,12 @@ export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 export const revalidate = 0;
 
+// Only Football has an active AI content pipeline now - Armenia moved to
+// Tigran's own hand-written Opinions pieces (surfaced via the Armenian
+// Football/Sport nav items instead), and the other sports were never a
+// real focus for this site's football pivot.
 const homepageSports = [
-  { name: "Հայկական սպորտ", category: "Հայկական սպորտ", slug: "armenia", href: "/armenia" },
   { name: "Ֆուտբոլ", slug: "football" },
-  { name: "Բասկետբոլ", slug: "basketball" },
-  { name: "Թենիս", slug: "tennis" },
-  { name: "Ֆորմուլա 1", slug: "formula-1" },
-  { name: "MMA", slug: "mma" },
-  { name: "Բռնցքամարտ", slug: "boxing" },
-  { name: "Ծանրամարտ", slug: "weightlifting" },
-  { name: "Ըմբշամարտ", slug: "wrestling" },
-  { name: "Մարմնամարզություն", slug: "gymnastics" },
 ];
 
 async function homepageArticles(): Promise<ArticlePreview[]> {
@@ -41,7 +35,7 @@ async function homepageArticles(): Promise<ArticlePreview[]> {
 }
 
 export default async function Home() {
-  const [articles, standings, scorers, live, opinions] = await Promise.all([
+  const [articles, standings, scorers, live] = await Promise.all([
     homepageArticles(),
     Promise.all(leagues.map(async (league) => [league.code, await getStandings(league.code)] as const)),
     Promise.all(leagues.map(async (league) => [league.code, await getTopScorers(league.code)] as const)),
@@ -49,18 +43,15 @@ export default async function Home() {
     // and ordinary news-page traffic from spending the free API quota or
     // extending a provider rate-limit window.
     getLiveMatches(0),
-    getOpinions(3),
   ]);
   const tables = Object.fromEntries(standings);
   const scorerTables = Object.fromEntries(scorers);
   const headlineStream = articles.slice(0, 9);
   const heroArticles = articles.slice(0, 6);
   const sportSectionsData = await Promise.all(homepageSports.map(async (sport) => {
-    const rows = sport.slug === "armenia"
-      ? await getArmenianArticles(4)
-      : await getArticlesByCategory(sport.name, 4);
+    const rows = await getArticlesByCategory(sport.name, 4);
     const items = rows.map(toPreview);
-    return { ...sport, href: sport.href ?? `/category/${sport.slug}`, items };
+    return { ...sport, href: `/category/${sport.slug}`, items };
   }));
   const sportSections = sportSectionsData;
 
@@ -149,11 +140,6 @@ export default async function Home() {
             <section className="telegram-card"><span>➤</span><div><strong>AIFootball-ը Telegram-ում</strong><p>Թարմ լուրերը ստացեք առաջինը</p></div><button type="button">Միանալ</button></section>
           </aside>
         </div>
-
-        {opinions.length > 0 && <section className="opinions-section">
-          <div className="modern-section-head"><div><span>Խմբագրական տեսակետ</span><h2>Հեղինակային նյութեր</h2></div><Link href="/opinions">Բոլոր նյութերը →</Link></div>
-          <div className="opinion-grid">{opinions.map((opinion) => <article key={opinion.slug}>{opinion.imageUrl ? <img src={opinion.imageUrl} alt="" className="opinion-avatar" style={{ objectFit: "cover" }} /> : <div className="opinion-avatar">{opinion.initials}</div>}<div><span>{opinion.category}</span><h3><Link href={`/opinions/${opinion.slug}`}>{opinion.title}</Link></h3><p>{opinion.role} · {opinion.author}</p></div><b>↗</b></article>)}</div>
-        </section>}
 
         <section className="newsletter-panel"><div><span>Ամենակարևորն՝ առանց աղմուկի</span><h2>AIFootball շաբաթական</h2><p>Շաբաթվա լավագույն նյութերն ու գլխավոր պատմությունները՝ ձեր էլ․ հասցեին։</p></div><form><input type="email" aria-label="Էլեկտրոնային հասցե" placeholder="email@example.com" /><button type="submit">Բաժանորդագրվել</button></form></section>
       </div>
