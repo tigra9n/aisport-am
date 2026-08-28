@@ -18,7 +18,12 @@ jobs:
       - name: Check latest articles
         working-directory: aisport-am
         run: |
-          curl -s "https://aisport.am/api/cron/dispatch?token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" > ../add-source-result.txt
+          curl -s "https://v3.football.api-sports.io/teams?league=307&season=2026" -H "x-apisports-key: ${API_FOOTBALL_KEY}" > /tmp/saudi.json
+          echo "---SAUDI TEAMS---" > ../add-source-result.txt
+          jq -r '.response[].team.name' /tmp/saudi.json >> ../add-source-result.txt
+          curl -s "https://v3.football.api-sports.io/teams?league=253&season=2026" -H "x-apisports-key: ${API_FOOTBALL_KEY}" > /tmp/mls.json
+          echo "---MLS TEAMS---" >> ../add-source-result.txt
+          jq -r '.response[].team.name' /tmp/mls.json >> ../add-source-result.txt
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
