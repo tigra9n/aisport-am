@@ -9,6 +9,7 @@ export type ArticlePreview = {
   image: string;
   local?: boolean;
   featured?: boolean;
+  basePath?: string;
 };
 
 export const categories = [

@@ -47,17 +47,18 @@ function opinionToPreview(o: Opinion): ArticlePreview {
     image: o.imageUrl || "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=1200&q=85",
     local: true,
     featured: false,
+    basePath: "/opinions",
   };
 }
 
-async function homepageArticles(): Promise<ArticlePreview[]> {
-  const stored = await getPublishedArticles(20);
-  return stored.map(toPreview);
-}
-
 export default async function Home() {
-  const [articles, standings, scorers, live] = await Promise.all([
-    homepageArticles(),
+  const [articleRows, opinionRowsForFeed, standings, scorers, live] = await Promise.all([
+    getPublishedArticles(20),
+    // Fetched across all categories so Armenian Football/Sport opinions
+    // can be interleaved chronologically into the homepage headline feed
+    // alongside regular AI-generated articles, not just shown in their
+    // own separate "by sport" section.
+    getOpinions(10),
     Promise.all(leagues.map(async (league) => [league.code, await getStandings(league.code)] as const)),
     Promise.all(leagues.map(async (league) => [league.code, await getTopScorers(league.code)] as const)),
     // The home page only reads the shared live cache. This prevents crawlers
@@ -65,9 +66,24 @@ export default async function Home() {
     // extending a provider rate-limit window.
     getLiveMatches(0),
   ]);
+  const articles = articleRows.map(toPreview);
   const tables = Object.fromEntries(standings);
   const scorerTables = Object.fromEntries(scorers);
-  const headlineStream = articles.slice(0, 9);
+  // Merge articles and opinions chronologically (real timestamps, not the
+  // already-formatted HH:MM display strings) so Armenian Football/Sport
+  // pieces show up interleaved in the headline feed by actual recency,
+  // not bucketed separately.
+  const combinedFeed = [
+    ...articleRows.map((a) => ({ publishedAt: a.publishedAt, preview: toPreview(a) })),
+    ...opinionRowsForFeed.map((o) => ({ publishedAt: o.publishedAt, preview: opinionToPreview(o) })),
+  ].sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : a.publishedAt > b.publishedAt ? -1 : 0));
+  const headlineStream = combinedFeed.slice(0, 9).map((entry) => entry.preview);
+  // Infinite-scroll pagination (HeadlineFeed's "load more") only continues
+  // from the articles table via /api/articles?offset=N, so the starting
+  // offset must count only the actual articles among the first 9 shown -
+  // not the total including any opinions mixed in - or subsequent pages
+  // would skip or repeat articles.
+  const articlesInHeadline = headlineStream.filter((item) => item.basePath !== "/opinions").length;
   const heroArticles = articles.slice(0, 6);
   const sportSectionsData = await Promise.all(homepageSports.map(async (sport) => {
     if (sport.source === "opinions") {
@@ -129,7 +145,7 @@ export default async function Home() {
               <div><small>24/7 թարմացվող</small><h2>Լրահոս</h2></div>
               <Link href="/search">Բոլորը →</Link>
             </header>
-            <HeadlineFeed initialArticles={headlineStream} initialOffset={headlineStream.length} />
+            <HeadlineFeed initialArticles={headlineStream} initialOffset={articlesInHeadline} />
           </aside>
           <HeroCarousel articles={heroArticles} />
         </section>

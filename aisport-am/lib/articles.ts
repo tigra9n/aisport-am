@@ -21,6 +21,7 @@ export function toPreview(a: NewsArticle): ArticlePreview {
     image: a.imageUrl || resolveArticleImage(a.category, a.slug),
     local: a.category.includes("Հայաստան"),
     featured: false,
+    basePath: "/news",
   };
 }
 
