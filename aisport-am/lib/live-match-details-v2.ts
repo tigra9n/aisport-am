@@ -3,7 +3,7 @@ import type { LiveMatch, LiveMatchDetail, LineupPlayer } from "./live-football-s
 import { getStandings } from "./football-server";
 import { getTopScorers } from "./topscorers-server";
 
-const LEAGUE_CODE_BY_ID:Record<number,string>={39:"PL",140:"PD",135:"SA",78:"BL1",61:"FL1"};
+const LEAGUE_CODE_BY_ID:Record<number,string>={39:"PL",140:"PD",135:"SA",78:"BL1",61:"FL1",307:"SPL",253:"MLS"};
 
 type ApiFootballFixtureFull={fixture:{id:number;date:string;venue?:{name?:string|null};referee?:string|null;status:{short:string;elapsed?:number|null}};league:{id:number};teams:{home:{id:number;name:string;logo?:string|null};away:{id:number;name:string;logo?:string|null}};goals:{home:number|null;away:number|null}};
 type ApiFootballEvent={time:{elapsed:number;extra?:number|null};team:{name:string};player:{name?:string|null};assist:{name?:string|null};type:string;detail:string};
@@ -53,6 +53,8 @@ const TRACKED_LEAGUES:Record<number,string>={
   81:"Գերմանիայի գավաթ (DFB Pokal)",
   61:"Ֆրանսիայի Լիգա 1",
   66:"Ֆրանսիայի գավաթ (Coupe de France)",
+  253:"MLS",
+  307:"Սաուդյան Արաբիայի պրոֆեսիոնալ լիգա",
 };
 
 let cacheTableReady:Promise<unknown>|null=null;
