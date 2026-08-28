@@ -24,7 +24,6 @@ export function HeroCarousel({ articles }: { articles: ArticlePreview[] }) {
       <div className="lead-overlay">
         <span className="breaking-label"><i /> Գլխավոր լուր</span>
         <h1><Link href={`/news/${item.slug}`}>{item.title}</Link></h1>
-        <p>{item.excerpt}</p>
         <div><span>{item.author}</span><span>•</span><span>{item.time}</span><span>•</span><span>{item.readTime} ընթերցում</span></div>
       </div>
       <button className="hero-arrow previous" type="button" aria-label="Նախորդ գլխավոր լուրը" onClick={() => move(-1)}>‹</button>
