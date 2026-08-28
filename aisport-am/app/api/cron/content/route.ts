@@ -188,15 +188,29 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
             const cycle = Math.floor(Date.now() / (60 * 60 * 1000));
             const rotationSeed = Math.floor(Date.now() / (60 * 1000));
             for (const pick of pickCombinedChain(cycle, rotationSeed)) {
+              if (Date.now() > deadline) break;
               const found = pick.filterType === "title"
                 ? await fetchApiTubeTitle(apiTubeKey, pick.value, 30)
                 : await fetchApiTubePerson(apiTubeKey, pick.value, 30);
-              if (found.length) {
-                log.push(`rss debug: ${pick.filterType}=${pick.value} -> ${found.length} items`);
-                items = found;
+              if (!found.length) continue;
+              // Bug fixed: previously broke here on the first entity with
+              // ANY items, even if every single one turned out to already
+              // be published (checked later, per-item, in the loop
+              // below). If that entity's items were all duplicates, the
+              // whole attempt gave up instead of trying the next entity
+              // in the chain - wasted a window's only publish slot on
+              // nothing. Now check for at least one genuinely new item
+              // before committing to this entity's results.
+              const newItems: FeedItem[] = [];
+              for (const candidate of found) {
+                if (!(await articleExistsForSource(candidate.link))) newItems.push(candidate);
+              }
+              if (newItems.length) {
+                log.push(`rss debug: ${pick.filterType}=${pick.value} -> ${found.length} items, ${newItems.length} new`);
+                items = newItems;
                 break;
               }
-              if (Date.now() > deadline) break;
+              log.push(`rss debug: ${pick.filterType}=${pick.value} -> ${found.length} items, all duplicates, trying next`);
             }
           }
         }
