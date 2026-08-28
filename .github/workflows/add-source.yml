@@ -18,13 +18,15 @@ jobs:
       - name: Check latest articles
         working-directory: aisport-am
         run: |
-          echo "---aifootball.am zone status check---" > ../add-source-result.txt
+          echo "---aifootball.am zone status via CLOUDFLARE_API_TOKEN---" > ../add-source-result.txt
           curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=aifootball.am" \
-            -H "Authorization: Bearer ${CLOUDFLARE_PURGE_TOKEN}" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
             -H "Content-Type: application/json" >> ../add-source-result.txt
           echo "" >> ../add-source-result.txt
-          echo "---DNS propagation check (dig-like via curl)---" >> ../add-source-result.txt
-          curl -s "https://dns.google/resolve?name=aifootball.am&type=NS" >> ../add-source-result.txt
+          echo "---all zones visible to CLOUDFLARE_API_TOKEN---" >> ../add-source-result.txt
+          curl -s -X GET "https://api.cloudflare.com/client/v4/zones" \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" >> ../add-source-result.txt
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
