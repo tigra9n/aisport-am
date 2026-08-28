@@ -14,6 +14,7 @@ import { getStandings } from "../lib/football-server";
 import { getTopScorers } from "../lib/topscorers-server";
 import { getLiveMatches } from "../lib/live-football-server";
 import { getPublishedArticles, getArticlesByCategory, toPreview } from "../lib/articles";
+import { getOpinions, type Opinion } from "../lib/opinions";
 
 // The live-score request must run in the production Worker. Without this,
 // the page can be prerendered at deploy time and never reach the live API.
@@ -21,13 +22,33 @@ export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 export const revalidate = 0;
 
-// Only Football has an active AI content pipeline now - Armenia moved to
-// Tigran's own hand-written Opinions pieces (surfaced via the Armenian
-// Football/Sport nav items instead), and the other sports were never a
-// real focus for this site's football pivot.
+// International Football keeps its AI content pipeline. Armenian Football
+// and Armenian Sport now come from Tigran's own hand-written Opinions
+// pieces instead (filtered by category) - previously these were separate
+// from the homepage's "by sport" breakdown entirely, but showing them
+// here as their own sections makes the site's actual coverage visible at
+// a glance.
 const homepageSports = [
-  { name: "Ֆուտբոլ", slug: "football" },
+  { name: "Միջազգային ֆուտբոլ", slug: "football", source: "articles" as const, dbCategory: "Ֆուտբոլ" },
+  { name: "Հայկական ֆուտբոլ", slug: "armenian-football", source: "opinions" as const, opinionCategory: "Հայկական ֆուտբոլ" },
+  { name: "Հայկական սպորտ", slug: "armenian-sport", source: "opinions" as const, opinionCategory: "Հայկական սպորտ" },
 ];
+
+function opinionToPreview(o: Opinion): ArticlePreview {
+  const text = o.content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return {
+    slug: o.slug,
+    category: o.category,
+    title: o.title,
+    excerpt: text.slice(0, 160),
+    author: `${o.role} · ${o.author}`,
+    time: new Date(o.publishedAt + "Z").toLocaleString("hy-AM", { timeZone: "Asia/Yerevan", hour: "2-digit", minute: "2-digit", hour12: false }),
+    readTime: "3 րոպե",
+    image: o.imageUrl || "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=1200&q=85",
+    local: true,
+    featured: false,
+  };
+}
 
 async function homepageArticles(): Promise<ArticlePreview[]> {
   const stored = await getPublishedArticles(20);
@@ -49,9 +70,12 @@ export default async function Home() {
   const headlineStream = articles.slice(0, 9);
   const heroArticles = articles.slice(0, 6);
   const sportSectionsData = await Promise.all(homepageSports.map(async (sport) => {
-    const rows = await getArticlesByCategory(sport.name, 4);
-    const items = rows.map(toPreview);
-    return { ...sport, href: `/category/${sport.slug}`, items };
+    if (sport.source === "opinions") {
+      const rows = await getOpinions(4, sport.opinionCategory);
+      return { name: sport.name, slug: sport.slug, href: `/opinions?category=${encodeURIComponent(sport.opinionCategory)}`, basePath: "/opinions", items: rows.map(opinionToPreview) };
+    }
+    const rows = await getArticlesByCategory(sport.dbCategory, 4);
+    return { name: sport.name, slug: sport.slug, href: `/category/${sport.slug}`, basePath: "/news", items: rows.map(toPreview) };
   }));
   const sportSections = sportSectionsData;
 
@@ -118,8 +142,8 @@ export default async function Home() {
                 <div className="sport-news-head"><div><span /> <h3>{sport.name}</h3></div><Link href={sport.href}>Բոլոր լուրերը →</Link></div>
                 <div className="sport-news-grid">
                   {sport.items.map((article, index) => <article className={index === 0 ? "sport-news-card featured" : "sport-news-card"} key={article.slug}>
-                    <Link className="sport-news-image" href={`/news/${article.slug}`}><img src={article.image} alt="" referrerPolicy="no-referrer" /></Link>
-                    <div><span>{article.category}</span><h4><Link href={`/news/${article.slug}`}>{article.title}</Link></h4>{index === 0 ? <p>{article.excerpt}</p> : null}<time>{article.time} · {article.readTime}</time></div>
+                    <Link className="sport-news-image" href={`${sport.basePath}/${article.slug}`}><img src={article.image} alt="" referrerPolicy="no-referrer" /></Link>
+                    <div><span>{article.category}</span><h4><Link href={`${sport.basePath}/${article.slug}`}>{article.title}</Link></h4>{index === 0 ? <p>{article.excerpt}</p> : null}<time>{article.time} · {article.readTime}</time></div>
                   </article>)}
                 </div>
               </section>)}
