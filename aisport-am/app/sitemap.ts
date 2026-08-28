@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { getPublishedArticles } from "../lib/articles";
+import { getOpinions } from "../lib/opinions";
 import { categories } from "../lib/content";
 
 // force-dynamic alone has been observed to still let this metadata route
@@ -54,5 +55,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }));
 
-  return [...staticPages, ...categoryPages, ...articlePages];
+  // These are Tigran's own hand-written pieces - the site's most unique,
+  // highest-value content for search (not AI-rewritten wire content) -
+  // yet weren't proactively listed here at all before, only the generic
+  // /opinions list page was. Priority set slightly above regular news
+  // articles for that reason.
+  const opinions = await getOpinions(200);
+  const opinionPages: MetadataRoute.Sitemap = opinions.map((o) => ({
+    url: `${BASE_URL}/opinions/${o.slug}`,
+    lastModified: new Date(o.publishedAt + "Z"),
+    changeFrequency: "weekly",
+    priority: 0.85,
+  }));
+
+  return [...staticPages, ...categoryPages, ...articlePages, ...opinionPages];
 }
