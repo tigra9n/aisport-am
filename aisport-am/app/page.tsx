@@ -148,10 +148,10 @@ export default async function Home() {
           </aside>
         </div>
 
-        <section className="opinions-section">
+        {opinions.length > 0 && <section className="opinions-section">
           <div className="modern-section-head"><div><span>Խմբագրական տեսակետ</span><h2>Հեղինակային նյութեր</h2></div><Link href="/opinions">Բոլոր նյութերը →</Link></div>
           <div className="opinion-grid">{opinions.map((opinion) => <article key={opinion.title}><div className="opinion-avatar">{opinion.initials}</div><div><span>{opinion.role}</span><h3><Link href="/opinions">{opinion.title}</Link></h3><p>{opinion.author}</p></div><b>↗</b></article>)}</div>
-        </section>
+        </section>}
 
         <section className="newsletter-panel"><div><span>Ամենակարևորն՝ առանց աղմուկի</span><h2>AISport շաբաթական</h2><p>Շաբաթվա լավագույն նյութերն ու գլխավոր պատմությունները՝ ձեր էլ․ հասցեին։</p></div><form><input type="email" aria-label="Էլեկտրոնային հասցե" placeholder="email@example.com" /><button type="submit">Բաժանորդագրվել</button></form></section>
       </div>

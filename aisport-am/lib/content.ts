@@ -389,8 +389,8 @@ export const liveMatches = [
   { status: "21:45", competition: "Սերիե Ա", home: "Միլան", away: "Ռոմա", homeScore: null, awayScore: null },
 ];
 
-export const opinions = [
-  { author: "Արամ Սահակյան", role: "Ֆուտբոլային մեկնաբան", title: "Ինչու է պրեսինգը կրկին որոշում մեծ խաղերի ելքը", initials: "ԱՍ" },
-  { author: "Դավիթ Գրիգորյան", role: "Բասկետբոլի վերլուծաբան", title: "NBA-ի նոր սերունդը փոխում է դիրքերի դասական ընկալումը", initials: "ԴԳ" },
-  { author: "Մարիամ Հարությունյան", role: "Սպորտային լրագրող", title: "Հայկական սպորտին պետք է ոչ միայն հաղթանակ, այլ պատմություն", initials: "ՄՀ" },
-];
+// No real opinion-piece content pipeline exists yet - left empty rather
+// than filled with fake placeholder authors. The homepage section and
+// /opinions page both hide themselves entirely when this is empty (same
+// "no demo content" principle applied to demoArticles).
+export const opinions: { author: string; role: string; title: string; initials: string }[] = [];
