@@ -18,10 +18,11 @@ jobs:
       - name: Check latest articles
         working-directory: aisport-am
         run: |
-          echo "---aifootball.am zone status (post-active recheck)---" > ../add-source-result.txt
-          curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=aifootball.am" \
-            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-            -H "Content-Type: application/json" >> ../add-source-result.txt
+          echo "---aisport.am (should redirect 308 to aifootball.am)---" > ../add-source-result.txt
+          curl -s -I "https://aisport.am/" >> ../add-source-result.txt
+          echo "" >> ../add-source-result.txt
+          echo "---aifootball.am (should serve site directly)---" >> ../add-source-result.txt
+          curl -s -I "https://aifootball.am/" >> ../add-source-result.txt
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
