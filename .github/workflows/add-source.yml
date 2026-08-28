@@ -19,17 +19,16 @@ jobs:
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
-          cat > /tmp/backfill.sql << 'EOF'
-UPDATE articles SET league='PL' WHERE league IS NULL AND category='Ֆուտբոլ' AND (title LIKE '%Արսենալ%' OR title LIKE '%Աստոն Վիլ%' OR title LIKE '%Չելսի%' OR title LIKE '%Մանչեսթեր Յունայթեդ%' OR title LIKE '%Մանչեսթեր Սիթի%' OR title LIKE '%Լիվերպուլ%' OR title LIKE '%Տոտենհեմ%' OR title LIKE '%Նյուքասլ%' OR title LIKE '%Ֆուլհեմ%' OR title LIKE '%Բրայթոն%' OR title LIKE '%Իփսվիչ%' OR title LIKE '%Քրիսթալ Փելաս%');
-UPDATE articles SET league='PD' WHERE league IS NULL AND category='Ֆուտբոլ' AND (title LIKE '%Ռեալ Մադրիդ%' OR title LIKE '%Բարսելոն%' OR title LIKE '%Ատլետիկո Մադրիդ%' OR title LIKE '%Վիլյառեալ%' OR title LIKE '%Ալավես%' OR title LIKE '%Ռասինգ Սանտանդեր%' OR title LIKE '%Էլչե%');
-UPDATE articles SET league='SA' WHERE league IS NULL AND category='Ֆուտբոլ' AND (title LIKE '%Յուվենտուս%' OR title LIKE '%Ինտեր%' OR title LIKE '%Միլան%' OR title LIKE '%Ռոմա%' OR title LIKE '%Նապոլի%' OR title LIKE '%Կալիարի%');
-UPDATE articles SET league='BL1' WHERE league IS NULL AND category='Ֆուտբոլ' AND (title LIKE '%Բավարիա%' OR title LIKE '%Բորուսիա Դորտմունդ%' OR title LIKE '%Շտուտգարտ%');
-UPDATE articles SET league='FL1' WHERE league IS NULL AND category='Ֆուտբոլ' AND (title LIKE '%ՊՍԺ%' OR title LIKE '%Լիլ%' OR title LIKE '%Մարսել%');
-UPDATE articles SET league='SPL' WHERE league IS NULL AND category='Ֆուտբոլ' AND (title LIKE '%Ալ-%' OR title LIKE '%ՆԵՈՄ%');
-UPDATE articles SET league='CL' WHERE league IS NULL AND category='Ֆուտբոլ' AND title LIKE '%Չեմպիոնների լիգ%';
-UPDATE articles SET league='INTL' WHERE league IS NULL AND category='Ֆուտբոլ';
-EOF
-          npx wrangler d1 execute aisport-db --remote --file=/tmp/backfill.sql 2>&1 > ../add-source-result.txt || true
+          npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET league='PL' WHERE league IS NULL AND category='Ֆուտբոլ' AND (title LIKE '%Արսենալ%' OR title LIKE '%Աստոն Վիլ%' OR title LIKE '%Չելսի%' OR title LIKE '%Մանչեսթեր Յունայթեդ%' OR title LIKE '%Մանչեսթեր Սիթի%' OR title LIKE '%Լիվերպուլ%' OR title LIKE '%Տոտենհեմ%' OR title LIKE '%Նյուքասլ%' OR title LIKE '%Ֆուլհեմ%' OR title LIKE '%Բրայթոն%' OR title LIKE '%Իփսվիչ%' OR title LIKE '%Քրիսթալ Փելաս%');" 2>&1 > ../add-source-result.txt || true
+          npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET league='PD' WHERE league IS NULL AND category='Ֆուտբոլ' AND (title LIKE '%Ռեալ Մադրիդ%' OR title LIKE '%Բարսելոն%' OR title LIKE '%Ատլետիկո Մադրիդ%' OR title LIKE '%Վիլյառեալ%' OR title LIKE '%Ալավես%' OR title LIKE '%Ռասինգ Սանտանդեր%' OR title LIKE '%Էլչե%');" 2>&1 >> ../add-source-result.txt || true
+          npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET league='SA' WHERE league IS NULL AND category='Ֆուտբոլ' AND (title LIKE '%Յուվենտուս%' OR title LIKE '%Ինտեր%' OR title LIKE '%Միլան%' OR title LIKE '%Ռոմա%' OR title LIKE '%Նապոլի%' OR title LIKE '%Կալիարի%');" 2>&1 >> ../add-source-result.txt || true
+          npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET league='BL1' WHERE league IS NULL AND category='Ֆուտբոլ' AND (title LIKE '%Բավարիա%' OR title LIKE '%Բորուսիա Դորտմունդ%' OR title LIKE '%Շտուտգարտ%');" 2>&1 >> ../add-source-result.txt || true
+          npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET league='FL1' WHERE league IS NULL AND category='Ֆուտբոլ' AND (title LIKE '%ՊՍԺ%' OR title LIKE '%Լիլ%' OR title LIKE '%Մարսել%');" 2>&1 >> ../add-source-result.txt || true
+          npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET league='SPL' WHERE league IS NULL AND category='Ֆուտբոլ' AND (title LIKE '%Ալ-%' OR title LIKE '%ՆԵՈՄ%');" 2>&1 >> ../add-source-result.txt || true
+          npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET league='CL' WHERE league IS NULL AND category='Ֆուտբոլ' AND title LIKE '%Չեմպիոնների լիգ%';" 2>&1 >> ../add-source-result.txt || true
+          npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET league='INTL' WHERE league IS NULL AND category='Ֆուտբոլ';" 2>&1 >> ../add-source-result.txt || true
+          echo "---final counts---" >> ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT league, COUNT(*) as c FROM articles WHERE category='Ֆուտբոլ' GROUP BY league;" 2>&1 >> ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
