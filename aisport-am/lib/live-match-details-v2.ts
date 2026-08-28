@@ -347,52 +347,62 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
     isLive:isLiveStatus(fx.fixture.status.short),
   };
 
-  const events=await resolveSection<EventsSection>(
-    db,eventsCacheKey,finished,cachedEvents,
-    v=>v.length===0,
-    async()=>mapEvents(await fetchJson<{response?:ApiFootballEvent[]}>(`https://v3.football.api-sports.io/fixtures/events?fixture=${fixtureId}`,key)),
-  );
-  const ratings=await resolveSection<RatingsSection>(
-    db,ratingsCacheKey,finished,cachedRatings,
-    v=>Object.keys(v).length===0,
-    async()=>mapRatings(await fetchJson<{response?:ApiFootballPlayerStats[]}>(`https://v3.football.api-sports.io/fixtures/players?fixture=${fixtureId}`,key)),
-  );
+  // These sections are all independent of each other (only lineups needs
+  // the resolved ratings value) but were previously fetched one at a
+  // time with sequential awaits - on a cold cache (first time this match
+  // is opened, or after TTL expiry) that meant up to 7 sequential
+  // external API round-trips (200-600ms each) before the popup could
+  // render anything, which is what made it feel slow to open. Running
+  // them together cuts that to roughly the duration of the single
+  // slowest call instead of the sum of all of them.
+  const teamPairKey=[fx.teams.home.id,fx.teams.away.id].sort((a,b)=>a-b).join("-");
+  const h2hCacheKey=`apifootball:v9:h2h:${teamPairKey}`;
+  const [events,ratings,statistics,injuries,prediction,h2h]=await Promise.all([
+    resolveSection<EventsSection>(
+      db,eventsCacheKey,finished,cachedEvents,
+      v=>v.length===0,
+      async()=>mapEvents(await fetchJson<{response?:ApiFootballEvent[]}>(`https://v3.football.api-sports.io/fixtures/events?fixture=${fixtureId}`,key)),
+    ),
+    resolveSection<RatingsSection>(
+      db,ratingsCacheKey,finished,cachedRatings,
+      v=>Object.keys(v).length===0,
+      async()=>mapRatings(await fetchJson<{response?:ApiFootballPlayerStats[]}>(`https://v3.football.api-sports.io/fixtures/players?fixture=${fixtureId}`,key)),
+    ),
+    resolveSection<StatsSection>(
+      db,statsCacheKey,finished,cachedStats,
+      v=>v.length===0,
+      async()=>mapStatistics(await fetchJson<{response?:ApiFootballStatistics[]}>(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`,key)),
+    ),
+    // Injuries are pre-match info (who's ruled out) and barely change once
+    // set, so the standard section TTL policy works well here too.
+    resolveSection<InjuriesSection>(
+      db,injuriesCacheKey,finished,cachedInjuries,
+      v=>v.length===0,
+      async()=>mapInjuries(await fetchJson<{response?:ApiFootballInjury[]}>(`https://v3.football.api-sports.io/injuries?fixture=${fixtureId}`,key)),
+    ),
+    // Predictions are generated pre-match and don't meaningfully change once
+    // the match is underway, so cache them long-term regardless of status.
+    resolveSection<PredictionSection>(
+      db,predictionCacheKey,true,cachedPrediction,
+      v=>v===null,
+      async()=>mapPrediction(await fetchJson<ApiFootballPredictions>(`https://v3.football.api-sports.io/predictions?fixture=${fixtureId}`,key)),
+    ),
+    // Head-to-head history is keyed by the team pair (not the fixture), so
+    // it can be reused across every future meeting between these two teams.
+    (async()=>{
+      const cachedH2H=db?await readSection<H2HSection>(db,h2hCacheKey):null;
+      return resolveSection<H2HSection>(
+        db,h2hCacheKey,true,cachedH2H,
+        v=>v.length===0,
+        async()=>mapH2H(await fetchJson<{response?:ApiFootballH2HFixture[]}>(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${fx!.teams.home.id}-${fx!.teams.away.id}&last=5`,key)),
+      );
+    })(),
+  ]);
+
   const lineups=await resolveSection<LineupsSection>(
     db,lineupsCacheKey,finished,cachedLineups,
     v=>v.length<2,
     async()=>mapLineups(await fetchJson<{response?:ApiFootballLineup[]}>(`https://v3.football.api-sports.io/fixtures/lineups?fixture=${fixtureId}`,key),ratings),
-  );
-  const statistics=await resolveSection<StatsSection>(
-    db,statsCacheKey,finished,cachedStats,
-    v=>v.length===0,
-    async()=>mapStatistics(await fetchJson<{response?:ApiFootballStatistics[]}>(`https://v3.football.api-sports.io/fixtures/statistics?fixture=${fixtureId}`,key)),
-  );
-
-  // Injuries are pre-match info (who's ruled out) and barely change once
-  // set, so the standard section TTL policy works well here too.
-  const injuries=await resolveSection<InjuriesSection>(
-    db,injuriesCacheKey,finished,cachedInjuries,
-    v=>v.length===0,
-    async()=>mapInjuries(await fetchJson<{response?:ApiFootballInjury[]}>(`https://v3.football.api-sports.io/injuries?fixture=${fixtureId}`,key)),
-  );
-
-  // Predictions are generated pre-match and don't meaningfully change once
-  // the match is underway, so cache them long-term regardless of status.
-  const prediction=await resolveSection<PredictionSection>(
-    db,predictionCacheKey,true,cachedPrediction,
-    v=>v===null,
-    async()=>mapPrediction(await fetchJson<ApiFootballPredictions>(`https://v3.football.api-sports.io/predictions?fixture=${fixtureId}`,key)),
-  );
-
-  // Head-to-head history is keyed by the team pair (not the fixture), so
-  // it can be reused across every future meeting between these two teams.
-  const teamPairKey=[fx.teams.home.id,fx.teams.away.id].sort((a,b)=>a-b).join("-");
-  const h2hCacheKey=`apifootball:v9:h2h:${teamPairKey}`;
-  const cachedH2H=db?await readSection<H2HSection>(db,h2hCacheKey):null;
-  const h2h=await resolveSection<H2HSection>(
-    db,h2hCacheKey,true,cachedH2H,
-    v=>v.length===0,
-    async()=>mapH2H(await fetchJson<{response?:ApiFootballH2HFixture[]}>(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${fx.teams.home.id}-${fx.teams.away.id}&last=5`,key)),
   );
 
   // Standings and top scorers only make sense for the 5 domestic leagues
