@@ -18,13 +18,10 @@ jobs:
       - name: Check latest articles
         working-directory: aisport-am
         run: |
-          npm install --no-audit --no-fund
-          echo "---h2h cache (team pair 50-52, Man City-Crystal Palace)---" > ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT cache_key, LENGTH(payload) as bytes, saved_at, retry_after FROM api_cache WHERE cache_key LIKE '%h2h:50-52%';" 2>&1 >> ../add-source-result.txt || true
-          echo "---form guide cache (teams 50, 52, league 39)---" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT cache_key, LENGTH(payload) as bytes FROM api_cache WHERE cache_key LIKE '%form:39%' AND (cache_key LIKE '%:50' OR cache_key LIKE '%:52');" 2>&1 >> ../add-source-result.txt || true
-          echo "---all api_cache keys touching 50 or 52 as team---" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT cache_key, LENGTH(payload) as bytes FROM api_cache WHERE cache_key LIKE '%:50%' OR cache_key LIKE '%:52%' LIMIT 30;" 2>&1 >> ../add-source-result.txt || true
+          echo "---re-test after real fix: Crystal Palace-Man City, 4x---" > ../add-source-result.txt
+          for i in 1 2 3 4; do
+            curl -s -o /dev/null -w "attempt $i: %{time_total}s\n" "https://aisport.am/api/live/match/af-1557381" >> ../add-source-result.txt
+          done
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
