@@ -34,6 +34,11 @@ export function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [dark, setDark] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
+  // Explicit JS-controlled hover state instead of relying solely on CSS
+  // :hover matching against native <details> semantics, which wasn't
+  // reliably triggering the dropdown on plain mouse-over - opening now
+  // only requires moving the pointer onto the item, no click needed.
+  const [openLabel, setOpenLabel] = useState<string | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem("aisport-theme");
@@ -77,7 +82,20 @@ export function SiteHeader() {
         </div>
         <div className={`nav-wrap ${menuOpen ? "open" : ""}`}>
           <nav className="site-shell primary-nav" aria-label="Հիմնական բաժիններ">
-            {dropdownItems.map((item) => <details className="nav-section-menu" key={item.label}><summary>{item.href ? <Link prefetch={false} href={item.href} onClick={() => setMenuOpen(false)}>{item.label}</Link> : <span>{item.label}</span>}<span>⌄</span></summary><div>{item.children.map(([label, href]) => <Link href={href} key={href} onClick={() => setMenuOpen(false)}>{label}</Link>)}</div></details>)}
+            {dropdownItems.map((item) => <details
+              className="nav-section-menu"
+              key={item.label}
+              open={openLabel === item.label}
+              onMouseEnter={() => setOpenLabel(item.label)}
+              onMouseLeave={() => setOpenLabel((current) => (current === item.label ? null : current))}
+              onToggle={(event) => { if (!event.currentTarget.open && openLabel === item.label) setOpenLabel(null); }}
+            >
+              <summary onClick={(event) => { event.preventDefault(); setOpenLabel((current) => (current === item.label ? null : item.label)); }}>
+                {item.href ? <Link prefetch={false} href={item.href} onClick={(event) => { event.stopPropagation(); setMenuOpen(false); }}>{item.label}</Link> : <span>{item.label}</span>}
+                <span>⌄</span>
+              </summary>
+              <div>{item.children.map(([label, href]) => <Link href={href} key={href} onClick={() => setMenuOpen(false)}>{label}</Link>)}</div>
+            </details>)}
             {plainLinks.map((item) => <Link className="nav-plain-link" prefetch={false} href={item.href} key={item.href} onClick={() => setMenuOpen(false)}>{item.label}</Link>)}
             <Link className="podcast-nav-button" prefetch={false} href="/podcasts" onClick={() => setMenuOpen(false)}><span>◉</span> Փոդքաստ</Link>
           </nav>
