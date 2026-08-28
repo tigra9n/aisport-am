@@ -7,7 +7,7 @@ import { getArmenianArticles, toPreview } from "../../lib/articles";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Հայկական սպորտ — Հայաստանի ֆուտբոլ | AISport.am",
+  title: "Հայկական սպորտ — Հայաստանի ֆուտբոլ | AIFootball.am",
   description: "Հայաստանի ազգային հավաքականների, հայկական ակումբների և տեղական առաջնությունների նորություններ։",
   alternates: { canonical: "https://aisport.am/armenia" },
 };

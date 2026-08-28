@@ -7,7 +7,7 @@ import { leagues } from "../../lib/football";
 import { getTopScorers } from "../../lib/topscorers-server";
 
 export const metadata: Metadata = {
-  title: "Ռմբարկուներ — Թոփ 5 առաջնություններ | AISport.am",
+  title: "Ռմբարկուներ — Թոփ 5 առաջնություններ | AIFootball.am",
   description: "Անգլիայի, Իսպանիայի, Իտալիայի, Գերմանիայի և Ֆրանսիայի ֆուտբոլային առաջնությունների սեզոնի լավագույն ռմբարկուները՝ գոլերով և փոխանցումներով։",
   alternates: { canonical: "https://aisport.am/topscorers" },
 };

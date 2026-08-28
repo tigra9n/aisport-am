@@ -14,7 +14,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   if (!profile) return {};
   const description = `${profile.name}-ի պրոֆիլը, վիճակագրություն և կարիերայի պատմություն։`;
   return {
-    title: `${profile.name} — Խաղացողի պրոֆիլ | AISport.am`,
+    title: `${profile.name} — Խաղացողի պրոֆիլ | AIFootball.am`,
     description,
     alternates: { canonical: `https://aisport.am/player/${id}` },
   };

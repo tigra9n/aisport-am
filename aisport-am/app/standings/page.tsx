@@ -8,7 +8,7 @@ import { getStandings } from "../../lib/football-server";
 import { getTopScorers } from "../../lib/topscorers-server";
 
 export const metadata: Metadata = {
-  title: "Աղյուսակներ — Թոփ 5 առաջնություններ | AISport.am",
+  title: "Աղյուսակներ — Թոփ 5 առաջնություններ | AIFootball.am",
   description: "Անգլիայի, Իսպանիայի, Իտալիայի, Գերմանիայի և Ֆրանսիայի ֆուտբոլային առաջնությունների թարմ աղյուսակներն ու ռմբարկուների ցուցակները։",
   alternates: { canonical: "https://aisport.am/standings" },
 };

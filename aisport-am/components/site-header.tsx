@@ -5,20 +5,29 @@ import { FormEvent, useEffect, useState } from "react";
 
 const navigation = [
   { label: "Գլխավոր", href: "/", children: [["Վերջին լուրեր", "/#latest"], ["Live", "/live"], ["Փոդքաստներ", "/podcasts"]] },
-  { label: "Հայաստան", href: "/armenia", children: [["Հավաքականներ", "/search?q=Հայաստանի+հավաքական"], ["Ակումբներ", "/search?q=հայկական+ակումբներ"], ["Հայ մարզիկներ", "/search?q=հայ+մարզիկներ"]] },
-  { label: "Ֆուտբոլ", href: "/category/football", children: [["Չեմպիոնների լիգա", "/search?q=Չեմպիոնների+լիգա"], ["Թոփ 5 լիգաներ", "/standings"], ["Ռմբարկուներ", "/topscorers"], ["Տրանսֆերներ", "/search?q=տրանսֆերներ"]] },
-  { label: "Բասկետբոլ", href: "/category/basketball", children: [["NBA", "/search?q=NBA"], ["Եվրալիգա", "/search?q=Եվրալիգա"], ["Հայաստան", "/search?q=Հայաստանի+բասկետբոլ"]] },
-  { label: "Թենիս", href: "/category/tennis", children: [["ATP", "/search?q=ATP"], ["WTA", "/search?q=WTA"], ["Մեծ սաղավարտ", "/search?q=Մեծ+սաղավարտ"]] },
-  { label: "Ֆորմուլա 1", href: "/category/formula-1", children: [["Մրցարշավներ", "/search?q=Ֆորմուլա+1"], ["Վարկանիշ", "/search?q=Ֆորմուլա+1+վարկանիշ"], ["Թիմեր", "/search?q=Ֆորմուլա+1+թիմեր"]] },
-  { label: "MMA", href: "/category/mma", children: [["UFC", "/search?q=UFC"], ["Հայ մարտիկներ", "/search?q=հայ+MMA+մարտիկներ"], ["Մենամարտերի օրացույց", "/search?q=MMA+մենամարտեր"]] },
-  { label: "Բռնցքամարտ", href: "/category/boxing", children: [["Հայ բռնցքամարտիկներ", "/search?q=հայ+բռնցքամարտիկներ"], ["Պրոֆեսիոնալ ռինգ", "/search?q=պրոֆեսիոնալ+բռնցքամարտ"], ["Մենամարտեր", "/search?q=բռնցքամարտի+մենամարտեր"]] },
-  { label: "Ծանրամարտ", href: "/category/weightlifting", children: [["Հայաստանի հավաքական", "/search?q=Հայաստանի+ծանրամարտի+հավաքական"], ["Եվրոպայի առաջնություն", "/search?q=ծանրամարտի+Եվրոպայի+առաջնություն"], ["Աշխարհի առաջնություն", "/search?q=ծանրամարտի+Աշխարհի+առաջնություն"]] },
-  { label: "Ըմբշամարտ", href: "/category/wrestling", children: [["Ազատ ոճ", "/search?q=ազատ+ոճի+ըմբշամարտ"], ["Հունահռոմեական", "/search?q=հունահռոմեական+ըմբշամարտ"], ["Հայ ըմբիշներ", "/search?q=հայ+ըմբիշներ"]] },
-  { label: "Մարմնամարզություն", href: "/category/gymnastics", children: [["Հայ մարմնամարզիկներ", "/search?q=հայ+մարմնամարզիկներ"], ["Աշխարհի գավաթ", "/search?q=մարմնամարզության+Աշխարհի+գավաթ"], ["Առաջնություններ", "/search?q=մարմնամարզության+առաջնություն"]] },
+  { label: "Պրեմիեր լիգա", href: "/search?q=Պրեմիեր+լիգա", children: [["Աղյուսակ", "/standings"], ["Ռմբարկուներ", "/topscorers"], ["Լուրեր", "/search?q=Պրեմիեր+լիգա"]] },
+  { label: "Լա Լիգա", href: "/search?q=Լա+Լիգա", children: [["Աղյուսակ", "/standings"], ["Ռմբարկուներ", "/topscorers"], ["Լուրեր", "/search?q=Լա+Լիգա"]] },
+  { label: "Սերիե Ա", href: "/search?q=Սերիե+Ա", children: [["Աղյուսակ", "/standings"], ["Ռմբարկուներ", "/topscorers"], ["Լուրեր", "/search?q=Սերիե+Ա"]] },
+  { label: "Բունդեսլիգա", href: "/search?q=Բունդեսլիգա", children: [["Աղյուսակ", "/standings"], ["Ռմբարկուներ", "/topscorers"], ["Լուրեր", "/search?q=Բունդեսլիգա"]] },
+  { label: "Լիգա 1", href: "/search?q=Լիգա+1", children: [["Աղյուսակ", "/standings"], ["Ռմբարկուներ", "/topscorers"], ["Լուրեր", "/search?q=Լիգա+1"]] },
+  { label: "Չեմպիոնների լիգա", href: "/search?q=Չեմպիոնների+լիգա", children: [["Լուրեր", "/search?q=Չեմպիոնների+լիգա"], ["Աղյուսակներ", "/standings"]] },
+  { label: "Սաուդյան լիգա", href: "/search?q=Սաուդյան+Արաբիա", children: [["Աղյուսակ", "/standings"], ["Լուրեր", "/search?q=Սաուդյան+Արաբիա"]] },
+  { label: "MLS", href: "/search?q=MLS", children: [["Աղյուսակ", "/standings"], ["Լուրեր", "/search?q=MLS"]] },
+  { label: "Հայկական ֆուտբոլ", href: "/opinions?category=Հայկական+ֆուտբոլ", children: [["Հեղինակային նյութեր", "/opinions?category=Հայկական+ֆուտբոլ"], ["Հայաստանի Պրեմիեր լիգա", "/standings"], ["Լուրեր", "/search?q=Հայաստանի+ֆուտբոլ"]] },
+  { label: "Հայկական սպորտ", href: "/opinions?category=Հայկական+սպորտ", children: [["Հեղինակային նյութեր", "/opinions?category=Հայկական+սպորտ"], ["Հայ մարզիկներ", "/search?q=հայ+մարզիկներ"]] },
+  { label: "Շախմատ", href: "/category/chess", children: [["Լուրեր", "/category/chess"], ["Հայ շախմատիստներ", "/search?q=հայ+շախմատիստներ"]] },
+  { label: "Էսպորտ", href: "/search?q=Էսպորտ", children: [["Լուրեր", "/search?q=Էսպորտ"], ["Հայ խաղացողներ", "/search?q=հայ+էսպորտ"]] },
 ];
 
 const moreNavigation = [
-  ["Շախմատ", "/category/chess"],
+  ["Բասկետբոլ", "/category/basketball"],
+  ["Թենիս", "/category/tennis"],
+  ["Ֆորմուլա 1", "/category/formula-1"],
+  ["MMA", "/category/mma"],
+  ["Բռնցքամարտ", "/category/boxing"],
+  ["Ծանրամարտ", "/category/weightlifting"],
+  ["Ըմբշամարտ", "/category/wrestling"],
+  ["Մարմնամարզություն", "/category/gymnastics"],
   ["Հեղինակային նյութեր", "/opinions"],
 ];
 
@@ -58,10 +67,10 @@ export function SiteHeader() {
       <header className="main-header">
         <div className="site-shell brand-row">
           <button className="icon-button mobile-menu-button" type="button" aria-label="Բացել մենյուն" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>☰</button>
-          <Link prefetch={false} className="aisport-logo" href="/" aria-label="AISport գլխավոր էջ">
-            <span className="aisport-symbol">AI</span><strong>SPORT</strong><i>AM</i>
+          <Link prefetch={false} className="aisport-logo" href="/" aria-label="AIFootball գլխավոր էջ">
+            <span className="aisport-symbol">AI</span><strong>FOOTBALL</strong><i>AM</i>
           </Link>
-          <p className="brand-line">Սպորտը՝ արագ, խելացի, հայերեն</p>
+          <p className="brand-line">Ֆուտբոլը՝ արագ, խելացի, հայերեն</p>
           <div className="header-actions">
             <button className="icon-button" type="button" aria-label="Որոնում" onClick={() => setSearchOpen(!searchOpen)}>⌕</button>
             <button className="icon-button" type="button" aria-label="Փոխել գունային ռեժիմը" onClick={toggleTheme}>{dark ? "☀" : "◐"}</button>
@@ -82,7 +91,7 @@ export function SiteHeader() {
         {searchOpen ? (
           <div className="header-search-wrap">
             <form className="site-shell header-search" action="/search" onSubmit={submitSearch}>
-              <label htmlFor="header-q">Որոնել AISport-ում</label>
+              <label htmlFor="header-q">Որոնել AIFootball-ում</label>
               <input id="header-q" name="q" autoFocus placeholder="Թիմ, մարզիկ, մրցաշար…" />
               <button type="submit">Որոնել</button>
             </form>

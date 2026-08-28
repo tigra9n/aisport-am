@@ -70,15 +70,16 @@ function initialsOf(author: string): string {
   return parts.slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("") || "ԱՍ";
 }
 
-export async function getOpinions(limit = 20): Promise<Opinion[]> {
+export async function getOpinions(limit = 20, category?: string): Promise<Opinion[]> {
   try {
     const db = await getDB();
     if (!db) return [];
     await ensureTable(db);
-    const { results } = await db
-      .prepare("SELECT id, slug, author, role, title, content, initials, published_at AS publishedAt, category, image_url AS imageUrl, video_url AS videoUrl FROM opinions WHERE status = 'published' ORDER BY id DESC LIMIT ?")
-      .bind(limit)
-      .all<Opinion>();
+    const query = category
+      ? "SELECT id, slug, author, role, title, content, initials, published_at AS publishedAt, category, image_url AS imageUrl, video_url AS videoUrl FROM opinions WHERE status = 'published' AND category = ? ORDER BY id DESC LIMIT ?"
+      : "SELECT id, slug, author, role, title, content, initials, published_at AS publishedAt, category, image_url AS imageUrl, video_url AS videoUrl FROM opinions WHERE status = 'published' ORDER BY id DESC LIMIT ?";
+    const stmt = category ? db.prepare(query).bind(category, limit) : db.prepare(query).bind(limit);
+    const { results } = await stmt.all<Opinion>();
     return results ?? [];
   } catch {
     return [];

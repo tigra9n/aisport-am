@@ -70,14 +70,14 @@ export default async function Home() {
       {
         "@type": "Organization",
         "@id": "https://aisport.am/#organization",
-        name: "AISport",
+        name: "AIFootball",
         url: "https://aisport.am",
         logo: { "@type": "ImageObject", url: "https://aisport.am/favicon.svg" },
       },
       {
         "@type": "WebSite",
         "@id": "https://aisport.am/#website",
-        name: "AISport",
+        name: "AIFootball",
         url: "https://aisport.am",
         inLanguage: "hy",
         publisher: { "@id": "https://aisport.am/#organization" },
@@ -146,7 +146,7 @@ export default async function Home() {
               <div className="sidebar-title"><div>Թոփ 5 առաջնություններ</div><Link href="/standings">Լրիվ</Link></div>
               <LeagueTabs tables={tables} topScorerTables={scorerTables} compact />
             </section>
-            <section className="telegram-card"><span>➤</span><div><strong>AISport-ը Telegram-ում</strong><p>Թարմ լուրերը ստացեք առաջինը</p></div><button type="button">Միանալ</button></section>
+            <section className="telegram-card"><span>➤</span><div><strong>AIFootball-ը Telegram-ում</strong><p>Թարմ լուրերը ստացեք առաջինը</p></div><button type="button">Միանալ</button></section>
           </aside>
         </div>
 
@@ -155,7 +155,7 @@ export default async function Home() {
           <div className="opinion-grid">{opinions.map((opinion) => <article key={opinion.slug}>{opinion.imageUrl ? <img src={opinion.imageUrl} alt="" className="opinion-avatar" style={{ objectFit: "cover" }} /> : <div className="opinion-avatar">{opinion.initials}</div>}<div><span>{opinion.category}</span><h3><Link href={`/opinions/${opinion.slug}`}>{opinion.title}</Link></h3><p>{opinion.role} · {opinion.author}</p></div><b>↗</b></article>)}</div>
         </section>}
 
-        <section className="newsletter-panel"><div><span>Ամենակարևորն՝ առանց աղմուկի</span><h2>AISport շաբաթական</h2><p>Շաբաթվա լավագույն նյութերն ու գլխավոր պատմությունները՝ ձեր էլ․ հասցեին։</p></div><form><input type="email" aria-label="Էլեկտրոնային հասցե" placeholder="email@example.com" /><button type="submit">Բաժանորդագրվել</button></form></section>
+        <section className="newsletter-panel"><div><span>Ամենակարևորն՝ առանց աղմուկի</span><h2>AIFootball շաբաթական</h2><p>Շաբաթվա լավագույն նյութերն ու գլխավոր պատմությունները՝ ձեր էլ․ հասցեին։</p></div><form><input type="email" aria-label="Էլեկտրոնային հասցե" placeholder="email@example.com" /><button type="submit">Բաժանորդագրվել</button></form></section>
       </div>
       <AdSpaces bottom />
       <SiteFooter />

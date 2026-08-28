@@ -14,7 +14,7 @@ export function toPreview(a: NewsArticle): ArticlePreview {
     category: a.category,
     title: a.title,
     excerpt: a.excerpt,
-    author: "AISport խմբագրություն",
+    author: "AIFootball խմբագրություն",
     time: new Date(a.publishedAt + "Z").toLocaleString("hy-AM", { timeZone: "Asia/Yerevan", hour: "2-digit", minute: "2-digit", hour12: false }),
     readTime: "3 րոպե",
     image: a.imageUrl || resolveArticleImage(a.category, a.slug),

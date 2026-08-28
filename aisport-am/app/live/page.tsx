@@ -10,7 +10,7 @@ import { AdSpaces } from "../../components/ad-spaces";
 import { getLiveMatches } from "../../lib/live-football-server";
 
 export const metadata: Metadata = {
-  title: "Ուղիղ արդյունքներ — Live Scores | AISport.am",
+  title: "Ուղիղ արդյունքներ — Live Scores | AIFootball.am",
   description: "Ֆուտբոլային խաղերի ուղիղ արդյունքներ իրական ժամանակում՝ Հայաստանի Պրեմիեր լիգայից մինչև Champions League և թոփ 5 եվրոպական առաջնություններ։",
   alternates: { canonical: "https://aisport.am/live" },
 };

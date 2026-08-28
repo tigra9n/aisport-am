@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
     alternates: { canonical: url },
     openGraph: {
       type: "article",
-      siteName: "AISport",
+      siteName: "AIFootball",
       title,
       description: excerpt,
       url,
@@ -45,7 +45,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
   if (!stored) notFound();
 
   const { title, excerpt, category, sourceUrl } = stored;
-  const author = "AISport խմբագրություն";
+  const author = "AIFootball խմբագրություն";
   const image = stored.imageUrl ?? resolveArticleImage(category, slug);
   const published = new Date(stored.publishedAt + "Z").toLocaleString("hy-AM", { timeZone: "Asia/Yerevan", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
   const paragraphs = stored.content.split(/\n+/).filter(Boolean);
@@ -64,10 +64,10 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
     image: [image],
     datePublished: publishedIso,
     dateModified: publishedIso,
-    author: [{ "@type": "Organization", name: "AISport խմբագրություն", url: "https://aisport.am" }],
+    author: [{ "@type": "Organization", name: "AIFootball խմբագրություն", url: "https://aisport.am" }],
     publisher: {
       "@type": "Organization",
-      name: "AISport",
+      name: "AIFootball",
       logo: { "@type": "ImageObject", url: "https://aisport.am/favicon.svg" },
     },
     mainEntityOfPage: { "@type": "WebPage", "@id": `https://aisport.am/news/${slug}` },

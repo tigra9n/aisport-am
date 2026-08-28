@@ -15,7 +15,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   const title = `${match.home} ${match.homeScore ?? ""} - ${match.awayScore ?? ""} ${match.away}`.replace(/\s+/g, " ").trim();
   const description = `${match.home} - ${match.away}. ${match.competition}։ ${match.status}։`;
   return {
-    title: `${title} | AISport.am`,
+    title: `${title} | AIFootball.am`,
     description,
     alternates: { canonical: `https://aisport.am/live/match/${id}` },
   };

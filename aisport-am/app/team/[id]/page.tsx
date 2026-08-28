@@ -15,7 +15,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   if (!squad) return {};
   const description = `${squad.teamName}-ի կազմը, խաղացողները և մարզիչը։`;
   return {
-    title: `${squad.teamName} — Կազմ | AISport.am`,
+    title: `${squad.teamName} — Կազմ | AIFootball.am`,
     description,
     alternates: { canonical: `https://aisport.am/team/${id}` },
   };

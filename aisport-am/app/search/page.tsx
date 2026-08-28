@@ -8,8 +8,8 @@ import { searchArticles, toPreview } from "../../lib/articles";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Որոնում | AISport.am",
-  description: "Փնտրիր թիմ, մարզիկ կամ մրցաշար AISport.am-ի հրապարակած նյութերում։",
+  title: "Որոնում | AIFootball.am",
+  description: "Փնտրիր թիմ, մարզիկ կամ մրցաշար AIFootball.am-ի հրապարակած նյութերում։",
 };
 
 export default async function SearchPage({ searchParams }: { searchParams: Promise<{ q?: string; category?: string }> }) {

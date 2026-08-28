@@ -14,7 +14,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   if (!coach) return {};
   const description = `${coach.name}-ի մարզչական կարիերայի պատմությունը։`;
   return {
-    title: `${coach.name} — Մարզիչ | AISport.am`,
+    title: `${coach.name} — Մարզիչ | AIFootball.am`,
     description,
     alternates: { canonical: `https://aisport.am/coach/${id}` },
   };

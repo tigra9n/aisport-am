@@ -17,10 +17,10 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const url = `https://aisport.am/category/${slug}`;
   const description = `${category.name}-ի հայկական և միջազգային ամենաթարմ նորությունները, արդյունքները, վերլուծություններն ու պատմությունները։`;
   return {
-    title: `${category.name} — Նորություններ | AISport.am`,
+    title: `${category.name} — Նորություններ | AIFootball.am`,
     description,
     alternates: { canonical: url },
-    openGraph: { type: "website", siteName: "AISport", title: `${category.name} — Նորություններ`, description, url, locale: "hy_AM" },
+    openGraph: { type: "website", siteName: "AIFootball", title: `${category.name} — Նորություններ`, description, url, locale: "hy_AM" },
   };
 }
 
