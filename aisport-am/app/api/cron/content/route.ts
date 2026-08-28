@@ -90,6 +90,52 @@ async function markEntityUsed(value: string, title: string): Promise<void> {
   }
 }
 
+// Separate from the per-entity topic-similarity check above: one club
+// having an unusually active real news day (multiple genuinely distinct
+// transfer angles - e.g. Arsenal's Alvarez/Martinelli/Endrick saga each
+// worded differently enough to pass the 2-shared-word topic check) could
+// still end up dominating the feed, since each individual story looked
+// "new" in isolation. This tracks a rolling window of which entities got
+// generated recently and skips one that's already appeared often, so
+// coverage stays spread across clubs/players even during someone's
+// unusually busy news cycle.
+const BALANCE_WINDOW_MS = 3 * 60 * 60 * 1000; // 3 hours
+const BALANCE_MAX_REPEATS = 2; // allow at most 2 articles per entity within the window
+
+async function isEntityOverrepresented(value: string): Promise<boolean> {
+  try {
+    const { env } = await import("cloudflare:workers");
+    const db = (env as unknown as { DB?: D1Database }).DB;
+    if (!db) return false;
+    const row = await db.prepare("SELECT payload FROM api_cache WHERE cache_key='recent_entities_window'").first<{ payload: string }>();
+    if (!row) return false;
+    const list = JSON.parse(row.payload) as { value: string; ts: number }[];
+    const cutoff = Date.now() - BALANCE_WINDOW_MS;
+    const recentCount = list.filter((e) => e.ts >= cutoff && e.value === value).length;
+    return recentCount >= BALANCE_MAX_REPEATS;
+  } catch {
+    return false;
+  }
+}
+
+async function recordEntityInWindow(value: string): Promise<void> {
+  try {
+    const { env } = await import("cloudflare:workers");
+    const db = (env as unknown as { DB?: D1Database }).DB;
+    if (!db) return;
+    await db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();
+    const row = await db.prepare("SELECT payload FROM api_cache WHERE cache_key='recent_entities_window'").first<{ payload: string }>();
+    const cutoff = Date.now() - BALANCE_WINDOW_MS;
+    const list: { value: string; ts: number }[] = row ? JSON.parse(row.payload) : [];
+    const trimmed = list.filter((e) => e.ts >= cutoff);
+    trimmed.push({ value, ts: Date.now() });
+    await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES('recent_entities_window',?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`)
+      .bind(JSON.stringify(trimmed), Date.now()).run();
+  } catch {
+    // Non-fatal: worst case, balance tracking just doesn't apply this one time.
+  }
+}
+
 async function runRecaps(apiKey: string, log: string[], deadline: number): Promise<number> {
   let generated = 0;
   let attempted = 0;
@@ -254,6 +300,7 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
             const rotationSeed = Math.floor(Date.now() / (60 * 1000));
             for (const pick of pickCombinedChain(cycle, rotationSeed)) {
               if (Date.now() > deadline) break;
+              if (await isEntityOverrepresented(pick.value)) continue;
               const found = pick.filterType === "title"
                 ? await fetchApiTubeTitle(apiTubeKey, pick.value, 30)
                 : await fetchApiTubePerson(apiTubeKey, pick.value, 30);
@@ -282,6 +329,7 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
                 log.push(`rss debug: ${pick.filterType}=${pick.value} -> ${found.length} items, ${newItems.length} new`);
                 items = newItems;
                 await markEntityUsed(pick.value, newItems[0].title);
+                await recordEntityInWindow(pick.value);
                 break;
               }
               log.push(`rss debug: ${pick.filterType}=${pick.value} -> ${found.length} items, all duplicates/same-topic, trying next`);
