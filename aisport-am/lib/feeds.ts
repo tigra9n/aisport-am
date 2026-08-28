@@ -267,7 +267,17 @@ async function fetchApiTubeDirect(bridgeUrl: string, limit: number): Promise<Fee
     const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
     if (!res.ok) return [];
     const data = await res.json() as { results?: ApiTubeArticle[] };
-    const trusted = (data.results ?? []).filter((a) => isTrustedFootballDomain(a.href));
+    // Domain trust alone isn't enough here: si.com and a few other
+    // trusted domains cover many US sports (MLB, NBA, NFL), not just
+    // football. fetchApiTubeTitle (entity-specific search) already
+    // required football-context words in the text; the general category
+    // feed didn't, letting a baseball article (si.com/mlb/mets/...)
+    // through purely on domain trust. Apply the same check here.
+    const trusted = (data.results ?? []).filter((a) => {
+      if (!isTrustedFootballDomain(a.href)) return false;
+      const text = `${a.title ?? ""} ${a.description ?? ""}`.toLowerCase();
+      return FOOTBALL_CONTEXT_WORDS.some((w) => text.includes(w));
+    });
     return mapApiTubeResults(trusted, limit);
   } catch (err) {
     console.error(`[feeds] apitube direct fetch failed: ${String(err)}`);
