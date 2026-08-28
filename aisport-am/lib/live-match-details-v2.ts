@@ -357,17 +357,33 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
   // slowest call instead of the sum of all of them.
   const teamPairKey=[fx.teams.home.id,fx.teams.away.id].sort((a,b)=>a-b).join("-");
   const h2hCacheKey=`apifootball:v9:h2h:${teamPairKey}`;
-  const [events,ratings,statistics,injuries,prediction,h2h]=await Promise.all([
+  const leagueCode=LEAGUE_CODE_BY_ID[fx.league.id];
+  const seasonYear=(()=>{const d=new Date(fx.fixture.date);const m=d.getUTCMonth()+1;return m>=7?d.getUTCFullYear():d.getUTCFullYear()-1})();
+  const formGuideCacheKeyFor=(teamId:number)=>`apifootball:v1:form:${fx.league.id}:${seasonYear}:${teamId}`;
+  const apiKey:string=key;
+  async function resolveFormGuide(teamId:number,teamName:string):Promise<FormGuideSection[number]|null>{
+    if(!db)return mapFormGuide(teamName,await fetchJson<{response?:ApiFootballTeamStats}>(`https://v3.football.api-sports.io/teams/statistics?league=${fx!.league.id}&season=${seasonYear}&team=${teamId}`,apiKey));
+    const cacheKey=formGuideCacheKeyFor(teamId);
+    const cached=await readSection<FormGuideSection[number]>(db,cacheKey);
+    if(cached?.fresh)return cached.value;
+    const result=mapFormGuide(teamName,await fetchJson<{response?:ApiFootballTeamStats}>(`https://v3.football.api-sports.io/teams/statistics?league=${fx!.league.id}&season=${seasonYear}&team=${teamId}`,apiKey));
+    if(result)await writeSection(db,cacheKey,result,finished?60*60*6:60*30);
+    return result??cached?.value??null;
+  }
+
+  const ratingsPromise=resolveSection<RatingsSection>(
+    db,ratingsCacheKey,finished,cachedRatings,
+    v=>Object.keys(v).length===0,
+    async()=>mapRatings(await fetchJson<{response?:ApiFootballPlayerStats[]}>(`https://v3.football.api-sports.io/fixtures/players?fixture=${fixtureId}`,key)),
+  );
+
+  const [events,ratings,statistics,injuries,prediction,h2h,lineups,[standingsResult,topScorersResult],homeForm,awayForm]=await Promise.all([
     resolveSection<EventsSection>(
       db,eventsCacheKey,finished,cachedEvents,
       v=>v.length===0,
       async()=>mapEvents(await fetchJson<{response?:ApiFootballEvent[]}>(`https://v3.football.api-sports.io/fixtures/events?fixture=${fixtureId}`,key)),
     ),
-    resolveSection<RatingsSection>(
-      db,ratingsCacheKey,finished,cachedRatings,
-      v=>Object.keys(v).length===0,
-      async()=>mapRatings(await fetchJson<{response?:ApiFootballPlayerStats[]}>(`https://v3.football.api-sports.io/fixtures/players?fixture=${fixtureId}`,key)),
-    ),
+    ratingsPromise,
     resolveSection<StatsSection>(
       db,statsCacheKey,finished,cachedStats,
       v=>v.length===0,
@@ -397,43 +413,31 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
         async()=>mapH2H(await fetchJson<{response?:ApiFootballH2HFixture[]}>(`https://v3.football.api-sports.io/fixtures/headtohead?h2h=${fx!.teams.home.id}-${fx!.teams.away.id}&last=5`,key)),
       );
     })(),
-  ]);
-
-  const lineups=await resolveSection<LineupsSection>(
-    db,lineupsCacheKey,finished,cachedLineups,
-    v=>v.length<2,
-    async()=>mapLineups(await fetchJson<{response?:ApiFootballLineup[]}>(`https://v3.football.api-sports.io/fixtures/lineups?fixture=${fixtureId}`,key),ratings),
-  );
-
-  // Standings and top scorers only make sense for the 5 domestic leagues
-  // (cups/CL don't have a simple table). These functions already manage
-  // their own caching, so just call them directly.
-  const leagueCode=LEAGUE_CODE_BY_ID[fx.league.id];
-  const [standingsResult,topScorersResult]=leagueCode
-    ?await Promise.all([getStandings(leagueCode),getTopScorers(leagueCode)])
-    :[null,null];
-  const standings=standingsResult&&!standingsResult.demo?standingsResult.rows:null;
-  const topScorers=topScorersResult&&!topScorersResult.unavailable?topScorersResult.rows:null;
-
-  // Team form guide (last-5 results, W/D/L record, goal averages). Cached
-  // per team+league+season so it's reused across every match involving
-  // that team in that competition, not just this one fixture.
-  const seasonYear=(()=>{const d=new Date(fx.fixture.date);const m=d.getUTCMonth()+1;return m>=7?d.getUTCFullYear():d.getUTCFullYear()-1})();
-  const formGuideCacheKeyFor=(teamId:number)=>`apifootball:v1:form:${fx.league.id}:${seasonYear}:${teamId}`;
-  const apiKey:string=key;
-  async function resolveFormGuide(teamId:number,teamName:string):Promise<FormGuideSection[number]|null>{
-    if(!db)return mapFormGuide(teamName,await fetchJson<{response?:ApiFootballTeamStats}>(`https://v3.football.api-sports.io/teams/statistics?league=${fx!.league.id}&season=${seasonYear}&team=${teamId}`,apiKey));
-    const cacheKey=formGuideCacheKeyFor(teamId);
-    const cached=await readSection<FormGuideSection[number]>(db,cacheKey);
-    if(cached?.fresh)return cached.value;
-    const result=mapFormGuide(teamName,await fetchJson<{response?:ApiFootballTeamStats}>(`https://v3.football.api-sports.io/teams/statistics?league=${fx!.league.id}&season=${seasonYear}&team=${teamId}`,apiKey));
-    if(result)await writeSection(db,cacheKey,result,finished?60*60*6:60*30);
-    return result??cached?.value??null;
-  }
-  const [homeForm,awayForm]=await Promise.all([
+    // Lineups' own network fetch runs immediately in parallel with
+    // everything else here - it only needs ratings' resolved value for
+    // the final synchronous mapLineups() formatting step, not to start
+    // the request itself.
+    resolveSection<LineupsSection>(
+      db,lineupsCacheKey,finished,cachedLineups,
+      v=>v.length<2,
+      async()=>{
+        const [lineupsData,ratingsValue]=await Promise.all([
+          fetchJson<{response?:ApiFootballLineup[]}>(`https://v3.football.api-sports.io/fixtures/lineups?fixture=${fixtureId}`,key),
+          ratingsPromise,
+        ]);
+        return mapLineups(lineupsData,ratingsValue);
+      },
+    ),
+    // Standings and top scorers only make sense for the 5 domestic leagues
+    // (cups/CL don't have a simple table). These functions already manage
+    // their own caching, so just call them directly.
+    leagueCode?Promise.all([getStandings(leagueCode),getTopScorers(leagueCode)]):Promise.resolve([null,null] as const),
     resolveFormGuide(fx.teams.home.id,match.home),
     resolveFormGuide(fx.teams.away.id,match.away),
   ]);
+
+  const standings=standingsResult&&!standingsResult.demo?standingsResult.rows:null;
+  const topScorers=topScorersResult&&!topScorersResult.unavailable?topScorersResult.rows:null;
   const formGuide=[homeForm,awayForm].filter((f):f is FormGuideSection[number]=>f!==null);
 
   return{
