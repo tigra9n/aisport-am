@@ -18,12 +18,13 @@ jobs:
       - name: Check latest articles
         working-directory: aisport-am
         run: |
-          curl -s "https://v3.football.api-sports.io/fixtures?live=all" -H "x-apisports-key: ${API_FOOTBALL_KEY}" > /tmp/live.json
-          echo "---live fixture ids---" > ../add-source-result.txt
-          jq -r '.response[0:8][] | "\(.fixture.id) \(.teams.home.name) vs \(.teams.away.name) league=\(.league.id)"' /tmp/live.json >> ../add-source-result.txt
+          echo "---tracked-league live fixtures---" > ../add-source-result.txt
+          curl -s "https://v3.football.api-sports.io/fixtures?live=39-140-135-78-61-2-3-4-307-253-342" -H "x-apisports-key: ${API_FOOTBALL_KEY}" > /tmp/live2.json
+          jq -r '.response[] | "\(.fixture.id) \(.teams.home.name) vs \(.teams.away.name) league=\(.league.id) status=\(.fixture.status.short)"' /tmp/live2.json >> ../add-source-result.txt
           echo "---timing tests---" >> ../add-source-result.txt
-          for FID in $(jq -r '.response[0:5][].fixture.id' /tmp/live.json); do
-            curl -s -o /dev/null -w "af-$FID: %{time_total}s http_code:%{http_code}\n" "https://aisport.am/api/live/match/af-$FID" >> ../add-source-result.txt
+          for FID in $(jq -r '.response[0:6][].fixture.id' /tmp/live2.json); do
+            curl -s -o /dev/null -w "af-$FID (call1): %{time_total}s http_code:%{http_code}\n" "https://aisport.am/api/live/match/af-$FID" >> ../add-source-result.txt
+            curl -s -o /dev/null -w "af-$FID (call2): %{time_total}s http_code:%{http_code}\n" "https://aisport.am/api/live/match/af-$FID" >> ../add-source-result.txt
           done
           cat ../add-source-result.txt
         env:
