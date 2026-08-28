@@ -18,18 +18,14 @@ jobs:
       - name: Check latest articles
         working-directory: aisport-am
         run: |
-          TODAY=$(date -u +%Y-%m-%d)
-          YESTERDAY=$(date -u -d '1 day ago' +%Y-%m-%d)
-          echo "---today/yesterday fixtures, tracked leagues---" > ../add-source-result.txt
-          for LID in 39 140 135 78 61 2 3 4 307 253 342; do
-            curl -s "https://v3.football.api-sports.io/fixtures?league=$LID&season=2026&date=$TODAY" -H "x-apisports-key: ${API_FOOTBALL_KEY}" > /tmp/f_$LID.json
-            jq -r --arg lid "$LID" '.response[] | "\(.fixture.id) league=\($lid) \(.teams.home.name) vs \(.teams.away.name) status=\(.fixture.status.short)"' /tmp/f_$LID.json >> ../add-source-result.txt
-          done
-          echo "---timing tests on found fixtures---" >> ../add-source-result.txt
-          FIDS=$(grep -oP '^\d+' ../add-source-result.txt | head -6)
-          for FID in $FIDS; do
-            curl -s -o /dev/null -w "af-$FID (cold): %{time_total}s http_code:%{http_code}\n" "https://aisport.am/api/live/match/af-$FID" >> ../add-source-result.txt
-            curl -s -o /dev/null -w "af-$FID (warm): %{time_total}s http_code:%{http_code}\n" "https://aisport.am/api/live/match/af-$FID" >> ../add-source-result.txt
+          npm install --no-audit --no-fund
+          echo "---payload sizes: slow match (Crystal Palace-Man City, 1557381)---" > ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT cache_key, LENGTH(payload) as bytes FROM api_cache WHERE cache_key LIKE '%1557381%' ORDER BY bytes DESC;" 2>&1 >> ../add-source-result.txt || true
+          echo "---payload sizes: fast match (Alaves-Villarreal, 1570353)---" >> ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT cache_key, LENGTH(payload) as bytes FROM api_cache WHERE cache_key LIKE '%1570353%' ORDER BY bytes DESC;" 2>&1 >> ../add-source-result.txt || true
+          echo "---timing re-test slow match, 3x---" >> ../add-source-result.txt
+          for i in 1 2 3; do
+            curl -s -o /dev/null -w "attempt $i: %{time_total}s\n" "https://aisport.am/api/live/match/af-1557381" >> ../add-source-result.txt
           done
           cat ../add-source-result.txt
         env:
