@@ -18,13 +18,8 @@ jobs:
       - name: Check latest articles
         working-directory: aisport-am
         run: |
-          echo "---zones list---" > ../add-source-result.txt
+          echo "---aifootball.am zone status check---" > ../add-source-result.txt
           curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=aifootball.am" \
-            -H "Authorization: Bearer ${CLOUDFLARE_PURGE_TOKEN}" \
-            -H "Content-Type: application/json" >> ../add-source-result.txt
-          echo "" >> ../add-source-result.txt
-          echo "---aisport.am zone for comparison---" >> ../add-source-result.txt
-          curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=aisport.am" \
             -H "Authorization: Bearer ${CLOUDFLARE_PURGE_TOKEN}" \
             -H "Content-Type: application/json" >> ../add-source-result.txt
           cat ../add-source-result.txt
