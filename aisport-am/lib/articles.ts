@@ -3,6 +3,7 @@ import { getDb } from "../db";
 import { articles } from "../db/schema";
 import type { ArticlePreview } from "./content";
 import { resolveArticleImage } from "./article-image";
+import { detectLeague } from "./league-tags";
 
 export type NewsArticle = typeof articles.$inferSelect;
 
@@ -43,6 +44,19 @@ export async function getArticlesByCategory(category: string, limit = 20): Promi
       .select()
       .from(articles)
       .where(and(eq(articles.status, "published"), eq(articles.category, category)))
+      .orderBy(desc(articles.publishedAt))
+      .limit(limit);
+  } catch {
+    return [];
+  }
+}
+
+export async function getArticlesByLeague(league: string, limit = 30): Promise<NewsArticle[]> {
+  try {
+    return await (await getDb())
+      .select()
+      .from(articles)
+      .where(and(eq(articles.status, "published"), eq(articles.league, league)))
       .orderBy(desc(articles.publishedAt))
       .limit(limit);
   } catch {
@@ -165,6 +179,7 @@ export async function saveGeneratedArticle(input: {
 }): Promise<boolean> {
   try {
     const db = await getDb();
+    const league = detectLeague(input.title, input.content, input.category);
     const result = await db
       .insert(articles)
       .values({
@@ -177,6 +192,7 @@ export async function saveGeneratedArticle(input: {
         sourceName: input.sourceName,
         sourceUrl: input.sourceUrl,
         status: "published",
+        league,
       })
       .onConflictDoNothing({ target: articles.sourceUrl })
       .returning({ id: articles.id });

@@ -25,6 +25,7 @@ export const articles = sqliteTable("articles", {
   status: text("status").notNull().default("published"),
   importance: integer("importance").notNull().default(50),
   socialStatus: text("social_status").notNull().default("pending"),
+  league: text("league"),
 }, (table) => [
   uniqueIndex("articles_slug_unique").on(table.slug),
   uniqueIndex("articles_source_url_unique").on(table.sourceUrl),
