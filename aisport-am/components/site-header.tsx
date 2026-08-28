@@ -8,7 +8,7 @@ const dropdownItems = [
   { label: "Լիգաներ", href: null, children: [
     ["Պրեմիեր լիգա", "/league/PL"],
     ["Լա Լիգա", "/league/PD"],
-    ["Սերիե Ա", "/league/SA"],
+    ["Սերիա Ա", "/league/SA"],
     ["Բունդեսլիգա", "/league/BL1"],
     ["Լիգա 1", "/league/FL1"],
     ["Սաուդյան լիգա", "/league/SPL"],

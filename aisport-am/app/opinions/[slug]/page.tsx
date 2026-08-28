@@ -10,6 +10,20 @@ function youtubeEmbedUrl(url: string): string | null {
   return match ? `https://www.youtube.com/embed/${match[1]}` : null;
 }
 
+// Content is now trusted admin-authored HTML, not plain text - this is a
+// token-protected, single-author admin form (only Tigran can submit),
+// same trust boundary as any CMS where the logged-in author can write raw
+// HTML. Blank-line-separated paragraphs still get wrapped automatically so
+// he doesn't have to manually type <p> tags for ordinary text, while any
+// HTML he does write (a link, an <img>, an <iframe> embed) passes through
+// untouched wherever he places it, including mid-paragraph.
+function formatOpinionContent(raw: string): string {
+  return raw
+    .split(/\n{2,}/)
+    .map((block) => `<p>${block.replace(/\n/g, "<br>")}</p>`)
+    .join("");
+}
+
 export default async function OpinionPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const opinion = await getOpinionBySlug(slug);
@@ -43,7 +57,7 @@ export default async function OpinionPage({ params }: { params: Promise<{ slug: 
         {!embedUrl && opinion.videoUrl && (
           <p style={{ marginBottom: 24 }}><a href={opinion.videoUrl} target="_blank" rel="noreferrer">🎬 Video դիտել</a></p>
         )}
-        <div className="article-content" style={{ whiteSpace: "pre-wrap" }}>{opinion.content}</div>
+        <div className="article-content" dangerouslySetInnerHTML={{ __html: formatOpinionContent(opinion.content) }} />
       </article>
       <SiteFooter />
     </main>

@@ -386,7 +386,7 @@ export const trendingTopics = ["#ՀայաստանիՀավաքական", "#Չեմ
 export const liveMatches = [
   { status: "72′", competition: "Չեմպիոնների լիգա", home: "Բենֆիկա", away: "Ֆեներբահչե", homeScore: 1, awayScore: 1 },
   { status: "HT", competition: "Պրեմիեր լիգա", home: "Արսենալ", away: "Էվերթոն", homeScore: 2, awayScore: 0 },
-  { status: "21:45", competition: "Սերիե Ա", home: "Միլան", away: "Ռոմա", homeScore: null, awayScore: null },
+  { status: "21:45", competition: "Սերիա Ա", home: "Միլան", away: "Ռոմա", homeScore: null, awayScore: null },
 ];
 
 // No real opinion-piece content pipeline exists yet - left empty rather

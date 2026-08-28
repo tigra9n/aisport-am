@@ -14,7 +14,7 @@ export type StandingRow = {
 export const leagues = [
   { code: "PL", short: "ԱՊԼ", name: "Պրեմիեր լիգա", country: "Անգլիա" },
   { code: "PD", short: "Լա Լիգա", name: "Լա Լիգա", country: "Իսպանիա" },
-  { code: "SA", short: "Սերիե Ա", name: "Սերիե Ա", country: "Իտալիա" },
+  { code: "SA", short: "Սերիա Ա", name: "Սերիա Ա", country: "Իտալիա" },
   { code: "BL1", short: "Բունդեսլիգա", name: "Բունդեսլիգա", country: "Գերմանիա" },
   { code: "FL1", short: "Լիգա 1", name: "Լիգա 1", country: "Ֆրանսիա" },
   { code: "SPL", short: "Սաուդյան լիգա", name: "Սաուդյան Արաբիայի պրոֆեսիոնալ լիգա", country: "Սաուդյան Արաբիա" },

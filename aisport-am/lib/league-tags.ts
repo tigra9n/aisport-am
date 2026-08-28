@@ -15,7 +15,7 @@
 export const LEAGUE_TAGS = [
   { code: "PL", label: "Պրեմիեր լիգա" },
   { code: "PD", label: "Լա Լիգա" },
-  { code: "SA", label: "Սերիե Ա" },
+  { code: "SA", label: "Սերիա Ա" },
   { code: "BL1", label: "Բունդեսլիգա" },
   { code: "FL1", label: "Լիգա 1" },
   { code: "SPL", label: "Սաուդյան լիգա" },

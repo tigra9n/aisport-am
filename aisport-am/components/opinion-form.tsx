@@ -70,8 +70,8 @@ export function OpinionForm({ token }: { token: string }) {
         <input value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://youtube.com/watch?v=..." style={fieldStyle} />
       </label>
       <label style={{ display: "grid", gap: 6, fontSize: 13 }}>
-        Բովանդակություն
-        <textarea value={content} onChange={(e) => setContent(e.target.value)} required rows={10} style={fieldStyle} />
+        Բովանդակություն (HTML-ն ընդունվում է. կարող ես ուղղակի գրել <code>&lt;a href="..."&gt;հղում&lt;/a&gt;</code>, <code>&lt;img src="..."&gt;</code>, կամ <code>&lt;iframe src="..."&gt;&lt;/iframe&gt;</code> video-ի համար, ուղիղ տեքստի մեջտեղում)
+        <textarea value={content} onChange={(e) => setContent(e.target.value)} required rows={14} style={fieldStyle} />
       </label>
       <button type="submit" disabled={status === "saving"}
         style={{ padding: "12px 20px", borderRadius: 8, border: "none", background: "#2f7d3c", color: "#fff", fontWeight: 700, cursor: "pointer" }}>
