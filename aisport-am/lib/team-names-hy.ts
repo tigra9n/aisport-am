@@ -2,6 +2,7 @@ const teamNames: Record<string, string> = {
   // Armenia
   "ararat-armenia": "Արարատ-Արմենիա", ararat: "Արարատ", alashkert: "Ալաշկերտ",
   bkma: "ԲԿՄԱ", gandzasar: "Գանձասար", noah: "Նոա", pyunik: "Փյունիկ",
+  "pyunik yerevan": "Փյունիկ", sardarapat: "Սարդարապատ",
   shirak: "Շիրակ", syunik: "Սյունիք", urartu: "Ուրարտու", van: "Վան",
   "west armenia": "Վեստ Արմենիա",
 
