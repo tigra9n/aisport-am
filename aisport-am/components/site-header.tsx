@@ -6,18 +6,18 @@ import { FormEvent, useEffect, useState } from "react";
 const navigation = [
   { label: "Գլխավոր", href: "/", children: [["Վերջին լուրեր", "/#latest"], ["Live", "/live"], ["Փոդքաստներ", "/podcasts"]] },
   { label: "Լիգաներ", href: null, children: [
-    ["Պրեմիեր լիգա", "/search?q=Պրեմիեր+լիգա"],
-    ["Լա Լիգա", "/search?q=Լա+Լիգա"],
-    ["Սերիե Ա", "/search?q=Սերիե+Ա"],
-    ["Բունդեսլիգա", "/search?q=Բունդեսլիգա"],
-    ["Լիգա 1", "/search?q=Լիգա+1"],
-    ["Սաուդյան լիգա", "/search?q=Սաուդյան+Արաբիա"],
-    ["MLS", "/search?q=MLS"],
+    ["Պրեմիեր լիգա", "/league/PL"],
+    ["Լա Լիգա", "/league/PD"],
+    ["Սերիե Ա", "/league/SA"],
+    ["Բունդեսլիգա", "/league/BL1"],
+    ["Լիգա 1", "/league/FL1"],
+    ["Սաուդյան լիգա", "/league/SPL"],
+    ["MLS", "/league/MLS"],
     ["Աղյուսակներ", "/standings"],
   ] },
-  { label: "Չեմպիոնների լիգա", href: "/search?q=Չեմպիոնների+լիգա", children: [["Լուրեր", "/search?q=Չեմպիոնների+լիգա"], ["Աղյուսակներ", "/standings"]] },
-  { label: "Եվրոպա լիգա", href: "/search?q=Եվրոպա+լիգա", children: [["Լուրեր", "/search?q=Եվրոպա+լիգա"]] },
-  { label: "Կոնֆերենցիա լիգա", href: "/search?q=Կոնֆերենցիա+լիգա", children: [["Լուրեր", "/search?q=Կոնֆերենցիա+լիգա"]] },
+  { label: "Չեմպիոնների լիգա", href: "/league/CL", children: [["Լուրեր", "/league/CL"], ["Աղյուսակներ", "/standings"]] },
+  { label: "Եվրոպա լիգա", href: "/league/EL", children: [["Լուրեր", "/league/EL"]] },
+  { label: "Կոնֆերենցիա լիգա", href: "/league/ECL", children: [["Լուրեր", "/league/ECL"]] },
   { label: "Հայկական ֆուտբոլ", href: "/opinions?category=Հայկական+ֆուտբոլ", children: [["Հեղինակային նյութեր", "/opinions?category=Հայկական+ֆուտբոլ"], ["Հայաստանի Պրեմիեր լիգա", "/standings"], ["Լուրեր", "/search?q=Հայաստանի+ֆուտբոլ"]] },
   { label: "Հայկական սպորտ", href: "/opinions?category=Հայկական+սպորտ", children: [["Հեղինակային նյութեր", "/opinions?category=Հայկական+սպորտ"], ["Հայ մարզիկներ", "/search?q=հայ+մարզիկներ"]] },
   { label: "Շախմատ", href: "/category/chess", children: [["Լուրեր", "/category/chess"], ["Հայ շախմատիստներ", "/search?q=հայ+շախմատիստներ"]] },
@@ -71,7 +71,7 @@ export function SiteHeader() {
         </div>
         <div className={`nav-wrap ${menuOpen ? "open" : ""}`}>
           <nav className="site-shell primary-nav" aria-label="Հիմնական բաժիններ">
-            {navigation.map((item) => <details className="nav-section-menu" key={item.label}><summary>{item.href ? <Link prefetch={false} href={item.href} onClick={() => setMenuOpen(false)}>{item.label}</Link> : <span>{item.label}</span>}<span>⌄</span></summary><div>{item.children.map(([label, href]) => <Link prefetch={false} href={href} key={href} onClick={() => setMenuOpen(false)}>{label}</Link>)}</div></details>)}
+            {navigation.map((item) => <details className="nav-section-menu" key={item.label}><summary>{item.href ? <Link prefetch={false} href={item.href} onClick={() => setMenuOpen(false)}>{item.label}</Link> : <span>{item.label}</span>}<span>⌄</span></summary><div>{item.children.map(([label, href]) => <Link href={href} key={href} onClick={() => setMenuOpen(false)}>{label}</Link>)}</div></details>)}
             <Link className="podcast-nav-button" prefetch={false} href="/podcasts" onClick={() => setMenuOpen(false)}><span>◉</span> Փոդքաստ</Link>
           </nav>
         </div>
