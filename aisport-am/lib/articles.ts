@@ -23,14 +23,15 @@ export function toPreview(a: NewsArticle): ArticlePreview {
   };
 }
 
-export async function getPublishedArticles(limit = 20): Promise<NewsArticle[]> {
+export async function getPublishedArticles(limit = 20, offset = 0): Promise<NewsArticle[]> {
   try {
     return await (await getDb())
       .select()
       .from(articles)
       .where(eq(articles.status, "published"))
       .orderBy(desc(articles.importance), desc(articles.publishedAt))
-      .limit(limit);
+      .limit(limit)
+      .offset(offset);
   } catch {
     return [];
   }

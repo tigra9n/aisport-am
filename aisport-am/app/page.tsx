@@ -5,6 +5,7 @@ import { LeagueTabs } from "../components/league-tabs";
 import { SiteFooter } from "../components/site-footer";
 import { SiteHeader } from "../components/site-header";
 import { HeroCarousel } from "../components/hero-carousel";
+import { HeadlineFeed } from "../components/headline-feed";
 import { AdSpaces } from "../components/ad-spaces";
 import { MatchModal } from "../components/match-modal";
 import { opinions, trendingTopics, type ArticlePreview } from "../lib/content";
@@ -111,12 +112,7 @@ export default async function Home() {
               <div><small>24/7 թարմացվող</small><h2>Լրահոս</h2></div>
               <Link href="/search">Բոլորը →</Link>
             </header>
-            <div className="headline-feed-list">
-              {headlineStream.map((article) => <Link className="headline-feed-item" href={`/news/${article.slug}`} key={article.slug}>
-                <img src={article.image} alt="" referrerPolicy="no-referrer" />
-                <div><span>{article.category}</span><h3>{article.title}</h3><time>{article.time}</time></div>
-              </Link>)}
-            </div>
+            <HeadlineFeed initialArticles={headlineStream} initialOffset={headlineStream.length} />
           </aside>
           <HeroCarousel articles={heroArticles} />
         </section>
