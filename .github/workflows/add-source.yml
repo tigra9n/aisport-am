@@ -18,7 +18,7 @@ jobs:
       - name: Check latest articles
         working-directory: aisport-am
         run: |
-          echo "---aifootball.am zone status---" > ../add-source-result.txt
+          echo "---aifootball.am zone status (recheck)---" > ../add-source-result.txt
           curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=aifootball.am" \
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
             -H "Content-Type: application/json" >> ../add-source-result.txt
