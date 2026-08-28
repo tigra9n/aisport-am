@@ -5,30 +5,23 @@ import { FormEvent, useEffect, useState } from "react";
 
 const navigation = [
   { label: "Գլխավոր", href: "/", children: [["Վերջին լուրեր", "/#latest"], ["Live", "/live"], ["Փոդքաստներ", "/podcasts"]] },
-  { label: "Պրեմիեր լիգա", href: "/search?q=Պրեմիեր+լիգա", children: [["Աղյուսակ", "/standings"], ["Ռմբարկուներ", "/topscorers"], ["Լուրեր", "/search?q=Պրեմիեր+լիգա"]] },
-  { label: "Լա Լիգա", href: "/search?q=Լա+Լիգա", children: [["Աղյուսակ", "/standings"], ["Ռմբարկուներ", "/topscorers"], ["Լուրեր", "/search?q=Լա+Լիգա"]] },
-  { label: "Սերիե Ա", href: "/search?q=Սերիե+Ա", children: [["Աղյուսակ", "/standings"], ["Ռմբարկուներ", "/topscorers"], ["Լուրեր", "/search?q=Սերիե+Ա"]] },
-  { label: "Բունդեսլիգա", href: "/search?q=Բունդեսլիգա", children: [["Աղյուսակ", "/standings"], ["Ռմբարկուներ", "/topscorers"], ["Լուրեր", "/search?q=Բունդեսլիգա"]] },
-  { label: "Լիգա 1", href: "/search?q=Լիգա+1", children: [["Աղյուսակ", "/standings"], ["Ռմբարկուներ", "/topscorers"], ["Լուրեր", "/search?q=Լիգա+1"]] },
+  { label: "Լիգաներ", href: "/standings", children: [
+    ["Պրեմիեր լիգա", "/search?q=Պրեմիեր+լիգա"],
+    ["Լա Լիգա", "/search?q=Լա+Լիգա"],
+    ["Սերիե Ա", "/search?q=Սերիե+Ա"],
+    ["Բունդեսլիգա", "/search?q=Բունդեսլիգա"],
+    ["Լիգա 1", "/search?q=Լիգա+1"],
+    ["Սաուդյան լիգա", "/search?q=Սաուդյան+Արաբիա"],
+    ["MLS", "/search?q=MLS"],
+    ["Աղյուսակներ", "/standings"],
+  ] },
   { label: "Չեմպիոնների լիգա", href: "/search?q=Չեմպիոնների+լիգա", children: [["Լուրեր", "/search?q=Չեմպիոնների+լիգա"], ["Աղյուսակներ", "/standings"]] },
-  { label: "Սաուդյան լիգա", href: "/search?q=Սաուդյան+Արաբիա", children: [["Աղյուսակ", "/standings"], ["Լուրեր", "/search?q=Սաուդյան+Արաբիա"]] },
-  { label: "MLS", href: "/search?q=MLS", children: [["Աղյուսակ", "/standings"], ["Լուրեր", "/search?q=MLS"]] },
+  { label: "Եվրոպա լիգա", href: "/search?q=Եվրոպա+լիգա", children: [["Լուրեր", "/search?q=Եվրոպա+լիգա"]] },
+  { label: "Կոնֆերենցիա լիգա", href: "/search?q=Կոնֆերենցիա+լիգա", children: [["Լուրեր", "/search?q=Կոնֆերենցիա+լիգա"]] },
   { label: "Հայկական ֆուտբոլ", href: "/opinions?category=Հայկական+ֆուտբոլ", children: [["Հեղինակային նյութեր", "/opinions?category=Հայկական+ֆուտբոլ"], ["Հայաստանի Պրեմիեր լիգա", "/standings"], ["Լուրեր", "/search?q=Հայաստանի+ֆուտբոլ"]] },
   { label: "Հայկական սպորտ", href: "/opinions?category=Հայկական+սպորտ", children: [["Հեղինակային նյութեր", "/opinions?category=Հայկական+սպորտ"], ["Հայ մարզիկներ", "/search?q=հայ+մարզիկներ"]] },
   { label: "Շախմատ", href: "/category/chess", children: [["Լուրեր", "/category/chess"], ["Հայ շախմատիստներ", "/search?q=հայ+շախմատիստներ"]] },
   { label: "Էսպորտ", href: "/search?q=Էսպորտ", children: [["Լուրեր", "/search?q=Էսպորտ"], ["Հայ խաղացողներ", "/search?q=հայ+էսպորտ"]] },
-];
-
-const moreNavigation = [
-  ["Բասկետբոլ", "/category/basketball"],
-  ["Թենիս", "/category/tennis"],
-  ["Ֆորմուլա 1", "/category/formula-1"],
-  ["MMA", "/category/mma"],
-  ["Բռնցքամարտ", "/category/boxing"],
-  ["Ծանրամարտ", "/category/weightlifting"],
-  ["Ըմբշամարտ", "/category/wrestling"],
-  ["Մարմնամարզություն", "/category/gymnastics"],
-  ["Հեղինակային նյութեր", "/opinions"],
 ];
 
 export function SiteHeader() {
@@ -80,12 +73,6 @@ export function SiteHeader() {
           <nav className="site-shell primary-nav" aria-label="Հիմնական բաժիններ">
             {navigation.map((item) => <details className="nav-section-menu" key={item.href}><summary><Link prefetch={false} href={item.href} onClick={() => setMenuOpen(false)}>{item.label}</Link><span>⌄</span></summary><div>{item.children.map(([label, href]) => <Link prefetch={false} href={href} key={href} onClick={() => setMenuOpen(false)}>{label}</Link>)}</div></details>)}
             <Link className="podcast-nav-button" prefetch={false} href="/podcasts" onClick={() => setMenuOpen(false)}><span>◉</span> Փոդքաստ</Link>
-            <details className="nav-more-menu">
-              <summary>Ավելին <span aria-hidden="true">⌄</span></summary>
-              <div>
-                {moreNavigation.map(([label, href]) => <Link prefetch={false} href={href} key={href} onClick={() => setMenuOpen(false)}>{label}{href === "/live" ? <span className="nav-live-dot" /> : null}</Link>)}
-              </div>
-            </details>
           </nav>
         </div>
         {searchOpen ? (
