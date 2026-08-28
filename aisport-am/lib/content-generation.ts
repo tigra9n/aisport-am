@@ -175,6 +175,16 @@ function parseArticleJson(raw: string, fallbackCategory: string): { article: Gen
     if (degenerate.test(parsed.title) || degenerate.test(parsed.excerpt) || degenerate.test(parsed.content)) {
       return { article: null, reason: "degenerate repeated-character output detected, discarding" };
     }
+    // Found: a foreign proper noun (a stadium name, "Old Trafford") came
+    // out mixed-script - "Օլդ Траффорդում" - Armenian letters plus Russian
+    // Cyrillic instead of a proper Armenian transliteration. Cyrillic has
+    // no legitimate place in Armenian sports copy, so any Cyrillic
+    // character anywhere in the output is treated as corrupted and
+    // rejected outright rather than published half-broken.
+    const cyrillic = /[\u0400-\u04FF]/;
+    if (cyrillic.test(parsed.title) || cyrillic.test(parsed.excerpt) || cyrillic.test(parsed.content)) {
+      return { article: null, reason: "Cyrillic characters found in Armenian output, discarding" };
+    }
     // Validate the category against our canonical list before trusting
     // it. Found: a stray corrupted byte (invalid UTF-8 replacement
     // character) ended up prepended to a category value once, producing
