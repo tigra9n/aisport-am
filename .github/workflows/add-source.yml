@@ -19,7 +19,7 @@ jobs:
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
-          npx wrangler d1 execute aisport-db --remote --command "UPDATE opinions SET slug = 'ararat-armenian-imatsav-ir-mrtsakitsnerin-evropayi-ligayi-1a2b3c' WHERE id = 3;" 2>&1 > ../add-source-result.txt || true
+          npx wrangler d1 execute aisport-db --remote --command "ALTER TABLE articles ADD COLUMN league TEXT;" 2>&1 > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
