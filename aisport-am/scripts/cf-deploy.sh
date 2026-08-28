@@ -108,3 +108,4 @@ if [ -n "${CLOUDFLARE_PURGE_TOKEN:-}" ]; then
 else
   echo "CLOUDFLARE_PURGE_TOKEN not set, skipping cache purge"
 fi
+# redeploy trigger: aifootball.am zone confirmed active 2026-08-28T22:15:26Z
