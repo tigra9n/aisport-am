@@ -176,6 +176,33 @@ Object.assign(teamNames, {
   "troyes": "Տրուա", "le mans": "Լը Ման",
 });
 
+// Saudi Pro League (added 2026-08) — exact API-Football team.name strings as keys.
+Object.assign(teamNames, {
+  "al khaleej saihat": "Ալ-Խալիջ", "al-ahli jeddah": "Ալ-Ահլի", "al-faisaly fc": "Ալ-Ֆայսալի",
+  "al-fateh": "Ալ-Ֆաթեհ", "al-hilal saudi fc": "Ալ-Հիլալ", "al-qadisiyah fc": "Ալ-Կադիսիյա",
+  "al-ettifaq": "Ալ-Իթթիֆակ", "al taawon": "Ալ-Թաավուն", "al-ittihad fc": "Ալ-Իթթիհադ",
+  "al-nassr": "Ալ-Նասր", "al shabab": "Ալ-Շաբաբ", "al-fayha": "Ալ-Ֆայհա", "al-hazm": "Ալ-Հազմ",
+  "abha": "Աբհա", "al kholood": "Ալ-Խուլուդ", "al riyadh": "Ալ-Ռիյադ", "neom": "ՆԵՈՄ",
+  "al diriyah": "Ալ-Դիրիյա",
+});
+
+// MLS (added 2026-08) — exact API-Football team.name strings as keys.
+Object.assign(teamNames, {
+  "seattle sounders": "Սիեթլ Սաունդերս", "san jose earthquakes": "Սան Խոսե Երթքուեյքս",
+  "fc dallas": "Դալլաս", "orlando city sc": "Օռլանդո Սիթի", "philadelphia union": "Ֆիլադելֆիա Յունիոն",
+  "houston dynamo": "Հյուսթոն Դայնամո", "toronto fc": "Տորոնտո ՖԿ", "new york red bulls": "Նյու Յորք Ռեդ Բուլզ",
+  "vancouver whitecaps": "Վանկուվեր Ուայթքեփս", "new york city fc": "Նյու Յորք Սիթի",
+  "los angeles galaxy": "Լոս Անջելես Գալաքսի", "real salt lake": "Ռեալ Սոլթ Լեյք",
+  "chicago fire": "Չիկագո Ֆայր", "atlanta united fc": "Ատլանտա Յունայթեդ",
+  "new england revolution": "Նյու Ինգլենդ Ռեվոլյուշն", "colorado rapids": "Կոլորադո Ռափիդս",
+  "sporting kansas city": "Սփորթինգ Կանզաս Սիթի", "minnesota united fc": "Մինեսոտա Յունայթեդ",
+  "columbus crew": "Կոլումբուս Քրու", "cf montreal": "Մոնրեալ", "dc united": "Դի Սի Յունայթեդ",
+  "los angeles fc": "Լոս Անջելես ՖԿ", "portland timbers": "Փորթլենդ Թիմբերս",
+  "fc cincinnati": "Ցինցինատի", "inter miami": "Ինտեր Մայամի", "nashville sc": "Նեշվիլ",
+  "austin": "Օսթին", "charlotte": "Շառլոթ", "st. louis city": "Սենտ Լուիս Սիթի",
+  "san diego": "Սան Դիեգո",
+});
+
 function lookupKey(name: string) {
   return name
     .normalize("NFD")
