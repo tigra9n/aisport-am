@@ -225,6 +225,13 @@ const TRUSTED_FOOTBALL_DOMAINS = [
   "caughtoffside.com", "footballtransfers.com", "football-espana.net",
   "planetfootball.com", "calciomercato.com", "tuttomercatoweb.com",
   "kicker.de", "sportskeeda.com", "dailystar.co.uk", "get-french-football-news.com",
+  // Second expansion - more high-volume/football-focused outlets, added
+  // after observing occasional empty 20-minute windows (no fresh,
+  // distinct-topic article from the existing list at that moment).
+  "football.london", "talksport.com", "si.com", "metro.co.uk",
+  "express.co.uk", "telegraph.co.uk", "squawka.com", "sofoot.com",
+  "record.pt", "abola.pt", "laliga.com", "worldsoccertalk.com",
+  "vavel.com", "the-sun.com", "sportsillustrated.com",
 ];
 
 function isTrustedFootballDomain(href: string | undefined | null): boolean {
