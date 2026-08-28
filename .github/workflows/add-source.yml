@@ -18,9 +18,23 @@ jobs:
       - name: Check latest articles
         working-directory: aisport-am
         run: |
-          echo "---get live matches (raw)---" > ../add-source-result.txt
-          curl -s "https://aisport.am/api/live?date=2026-08-28" > /tmp/live.json 2>&1 || echo "curl failed" >> ../add-source-result.txt
-          head -c 2000 /tmp/live.json >> ../add-source-result.txt
+          echo "---fixtures today---" > ../add-source-result.txt
+          curl -s "https://v3.football.api-sports.io/fixtures?date=2026-08-28&league=39" -H "x-apisports-key: ${API_FOOTBALL_KEY}" > /tmp/fx.json
+          FIXTURE_ID=$(jq -r '.response[0].fixture.id // empty' /tmp/fx.json)
+          echo "fixture_id=$FIXTURE_ID" >> ../add-source-result.txt
+          if [ -z "$FIXTURE_ID" ]; then
+            curl -s "https://v3.football.api-sports.io/fixtures?date=2026-08-28" -H "x-apisports-key: ${API_FOOTBALL_KEY}" > /tmp/fx2.json
+            FIXTURE_ID=$(jq -r '.response[0].fixture.id // empty' /tmp/fx2.json)
+            echo "fallback fixture_id=$FIXTURE_ID" >> ../add-source-result.txt
+          fi
+          if [ -n "$FIXTURE_ID" ]; then
+            MATCH_ID="af-${FIXTURE_ID}"
+            echo "---cold call timing---" >> ../add-source-result.txt
+            curl -s -o /tmp/first.json -w "time_total:%{time_total}s http_code:%{http_code}\n" "https://aisport.am/api/live/match/${MATCH_ID}" >> ../add-source-result.txt
+            echo "---warm call timing---" >> ../add-source-result.txt
+            curl -s -o /dev/null -w "time_total:%{time_total}s http_code:%{http_code}\n" "https://aisport.am/api/live/match/${MATCH_ID}" >> ../add-source-result.txt
+            head -c 300 /tmp/first.json >> ../add-source-result.txt
+          fi
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
