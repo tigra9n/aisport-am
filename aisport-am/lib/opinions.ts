@@ -101,6 +101,59 @@ export async function getOpinionBySlug(slug: string): Promise<Opinion | null> {
   }
 }
 
+export async function getOpinionById(id: number): Promise<Opinion | null> {
+  try {
+    const db = await getDB();
+    if (!db) return null;
+    await ensureTable(db);
+    const row = await db
+      .prepare("SELECT id, slug, author, role, title, content, initials, published_at AS publishedAt, category, image_url AS imageUrl, video_url AS videoUrl FROM opinions WHERE id = ?")
+      .bind(id)
+      .first<Opinion>();
+    return row ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function updateOpinion(id: number, input: { author: string; role: string; title: string; content: string; category?: string; imageUrl?: string; videoUrl?: string }): Promise<{ ok: boolean; reason?: string }> {
+  const author = input.author.trim();
+  const role = input.role.trim();
+  const title = input.title.trim();
+  const content = input.content.trim();
+  if (!author || !role || !title || !content) return { ok: false, reason: "missing_fields" };
+  const category = OPINION_CATEGORIES.includes(input.category as typeof OPINION_CATEGORIES[number])
+    ? (input.category as string)
+    : OPINION_CATEGORIES[0];
+  const imageUrl = input.imageUrl?.trim() || null;
+  const videoUrl = input.videoUrl?.trim() || null;
+
+  try {
+    const db = await getDB();
+    if (!db) return { ok: false, reason: "no_db" };
+    await ensureTable(db);
+    await db
+      .prepare("UPDATE opinions SET author = ?, role = ?, title = ?, content = ?, initials = ?, category = ?, image_url = ?, video_url = ? WHERE id = ?")
+      .bind(author, role, title, content, initialsOf(author), category, imageUrl, videoUrl, id)
+      .run();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: String(err) };
+  }
+}
+
+export async function deleteOpinion(id: number): Promise<{ ok: boolean; reason?: string }> {
+  try {
+    const db = await getDB();
+    if (!db) return { ok: false, reason: "no_db" };
+    await ensureTable(db);
+    await db.prepare("DELETE FROM opinions WHERE id = ?").bind(id).run();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, reason: String(err) };
+  }
+}
+
 export async function createOpinion(input: { author: string; role: string; title: string; content: string; category?: string; imageUrl?: string; videoUrl?: string }): Promise<{ ok: boolean; slug?: string; reason?: string }> {
   const author = input.author.trim();
   const role = input.role.trim();
