@@ -293,7 +293,6 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
   const key=runtime.API_FOOTBALL_KEY;
   if(!key)return null;
   const db=(env as unknown as {DB?:D1Database}).DB;
-  if(db)await ensureCacheTable(db);
 
   const fixtureCacheKey=`apifootball:v9:fixture:${fixtureId}`;
   const eventsCacheKey=`apifootball:v9:events:${fixtureId}`;
@@ -303,9 +302,21 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
   const ratingsCacheKey=`apifootball:v9:ratings:${fixtureId}`;
   const injuriesCacheKey=`apifootball:v9:injuries:${fixtureId}`;
 
-  // One round trip for all cache entries, instead of separate awaited
-  // reads — this is what makes an already-warm popup feel instant.
-  const batch=db?await readSectionsBatch(db,[fixtureCacheKey,eventsCacheKey,lineupsCacheKey,statsCacheKey,predictionCacheKey,ratingsCacheKey,injuriesCacheKey]):new Map();
+  // Previously this was 3-4 fully sequential round-trips before any real
+  // work could start: ensureCacheTable -> batch cache read -> (if cache
+  // miss) fixture fetch -> fixture write. Measured 2-4 seconds just to
+  // reach a 404 (not-tracked-league) response, entirely from this chain -
+  // well before the parallelized section-fetching below ever ran. Now the
+  // table-ensure, the cache batch-read, and the external fixture fetch
+  // all start at once. The fixture fetch runs speculatively even when the
+  // cache might turn out fresh (occasionally wasting one API call on a
+  // cache-hit), trading a bit of API budget for real latency on the
+  // common cold-cache case, which is when speed actually matters.
+  const [batch,speculativeFixtureData]=await Promise.all([
+    db?readSectionsBatch(db,[fixtureCacheKey,eventsCacheKey,lineupsCacheKey,statsCacheKey,predictionCacheKey,ratingsCacheKey,injuriesCacheKey]):Promise.resolve(new Map<string,{payload:string;validUntil:number}>()),
+    fetchJson<{response?:ApiFootballFixtureFull[]}>(`https://v3.football.api-sports.io/fixtures?id=${fixtureId}`,key),
+    db?ensureCacheTable(db):Promise.resolve(),
+  ]);
   const cachedFixture=parseSection<ApiFootballFixtureFull>(batch.get(fixtureCacheKey));
   const cachedEvents=parseSection<EventsSection>(batch.get(eventsCacheKey));
   const cachedLineups=parseSection<LineupsSection>(batch.get(lineupsCacheKey));
@@ -318,8 +329,7 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
   if(cachedFixture?.fresh){
     fx=cachedFixture.value;
   }else{
-    const fixtureData=await fetchJson<{response?:ApiFootballFixtureFull[]}>(`https://v3.football.api-sports.io/fixtures?id=${fixtureId}`,key);
-    fx=fixtureData?.response?.[0]??null;
+    fx=speculativeFixtureData?.response?.[0]??null;
     if(fx){
       const finishedNow=isFinishedStatus(fx.fixture.status.short);
       if(db)await writeSection(db,fixtureCacheKey,fx,finishedNow?60*60*6:60);
