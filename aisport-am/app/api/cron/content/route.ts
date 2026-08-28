@@ -31,36 +31,62 @@ const TIME_BUDGET_MS = 115_000;
 // each independently reporting on Arsenal's Martinelli/Paixao situation,
 // both passing URL-based dedup since the URLs genuinely differ even
 // though the underlying story is the same. articleExistsForSource only
-// catches exact-URL repeats, not "same topic, different outlet". A
-// per-entity cooldown is a simple, cheap mitigation: skip an entity in
-// the rotation chain if it was already used recently, regardless of
-// which specific article/URL that use produced.
+// catches exact-URL repeats, not "same topic, different outlet".
+//
+// IMPORTANT: this must not block a genuinely different, important story
+// about the same entity (e.g. Arsenal signs someone unrelated, or a
+// manager is sacked, shortly after an unrelated Arsenal story). So this
+// isn't a blanket per-entity cooldown - it compares the new candidate's
+// title against the last title used for that entity and only treats it
+// as a repeat if they share enough distinctive words to plausibly be the
+// same underlying story. A different headline about the same entity
+// passes straight through regardless of timing.
 const ENTITY_COOLDOWN_MS = 5 * 60 * 60 * 1000; // 5 hours
+const STOPWORDS = new Set(["the","a","an","and","or","but","in","on","at","to","for","of","with","is","are","was","were","be","been","as","by","from","it","its","his","her","their","after","before","new","says","said","set","out","up","who","how","why","what","this","that","will","has","have","not","no"]);
 
-async function isEntityOnCooldown(value: string): Promise<boolean> {
+function significantWords(title: string): Set<string> {
+  return new Set(
+    title.toLowerCase().replace(/['’]/g, "").split(/[^a-z0-9]+/)
+      .filter((w) => w.length >= 4 && !STOPWORDS.has(w)),
+  );
+}
+
+function sharesTopicWith(a: string, b: string): boolean {
+  const wa = significantWords(a);
+  const wb = significantWords(b);
+  if (!wa.size || !wb.size) return false;
+  let shared = 0;
+  for (const w of wa) if (wb.has(w)) shared++;
+  // 2+ shared distinctive words (player/club/subject names) is a strong
+  // signal of the same underlying story, not just the same entity.
+  return shared >= 2;
+}
+
+async function isTopicRecentlyCovered(value: string, candidateTitle: string): Promise<boolean> {
   try {
     const { env } = await import("cloudflare:workers");
     const db = (env as unknown as { DB?: D1Database }).DB;
     if (!db) return false;
-    const row = await db.prepare("SELECT saved_at AS savedAt FROM api_cache WHERE cache_key=?")
-      .bind(`entity_cooldown:${value}`).first<{ savedAt: number }>();
+    const row = await db.prepare("SELECT payload, saved_at AS savedAt FROM api_cache WHERE cache_key=?")
+      .bind(`entity_cooldown:${value}`).first<{ payload: string; savedAt: number }>();
     if (!row) return false;
-    return Date.now() - row.savedAt < ENTITY_COOLDOWN_MS;
+    if (Date.now() - row.savedAt > ENTITY_COOLDOWN_MS) return false;
+    return sharesTopicWith(row.payload, candidateTitle);
   } catch {
     return false;
   }
 }
 
-async function markEntityUsed(value: string): Promise<void> {
+async function markEntityUsed(value: string, title: string): Promise<void> {
   try {
     const { env } = await import("cloudflare:workers");
     const db = (env as unknown as { DB?: D1Database }).DB;
     if (!db) return;
     await db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();
-    await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET saved_at=excluded.saved_at,retry_after=0`)
-      .bind(`entity_cooldown:${value}`, "1", Date.now()).run();
+    await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`)
+      .bind(`entity_cooldown:${value}`, title, Date.now()).run();
   } catch {
-    // Non-fatal: worst case, cooldown just doesn't apply this one time.
+    // Non-fatal: worst case, topic tracking just doesn't apply this one time.
   }
 }
 
@@ -228,7 +254,6 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
             const rotationSeed = Math.floor(Date.now() / (60 * 1000));
             for (const pick of pickCombinedChain(cycle, rotationSeed)) {
               if (Date.now() > deadline) break;
-              if (await isEntityOnCooldown(pick.value)) continue;
               const found = pick.filterType === "title"
                 ? await fetchApiTubeTitle(apiTubeKey, pick.value, 30)
                 : await fetchApiTubePerson(apiTubeKey, pick.value, 30);
@@ -240,18 +265,26 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
               // whole attempt gave up instead of trying the next entity
               // in the chain - wasted a window's only publish slot on
               // nothing. Now check for at least one genuinely new item
-              // before committing to this entity's results.
+              // before committing to this entity's results. Also skips
+              // candidates that look like the same underlying story as
+              // the last thing generated for this entity (see
+              // isTopicRecentlyCovered) - two different outlets covering
+              // one ongoing transfer saga, for example - while still
+              // allowing a genuinely different, important story about
+              // the same club/player through.
               const newItems: FeedItem[] = [];
               for (const candidate of found) {
-                if (!(await articleExistsForSource(candidate.link))) newItems.push(candidate);
+                if (await articleExistsForSource(candidate.link)) continue;
+                if (await isTopicRecentlyCovered(pick.value, candidate.title)) continue;
+                newItems.push(candidate);
               }
               if (newItems.length) {
                 log.push(`rss debug: ${pick.filterType}=${pick.value} -> ${found.length} items, ${newItems.length} new`);
                 items = newItems;
-                await markEntityUsed(pick.value);
+                await markEntityUsed(pick.value, newItems[0].title);
                 break;
               }
-              log.push(`rss debug: ${pick.filterType}=${pick.value} -> ${found.length} items, all duplicates, trying next`);
+              log.push(`rss debug: ${pick.filterType}=${pick.value} -> ${found.length} items, all duplicates/same-topic, trying next`);
             }
           }
         }
