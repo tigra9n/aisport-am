@@ -33,10 +33,33 @@ export async function GET(request: Request) {
   }
   candidates.sort((a, b) => a.priority - b.priority);
 
-  for (const candidate of candidates.slice(0, MAX_PER_RUN)) {
+  // BUG FIXED: Array.sort is stable, so on a day with more live/started
+  // candidates than MAX_PER_RUN (easily the case now that Champions/Europa/
+  // Conference League, Saudi Pro League, and MLS are all tracked alongside
+  // the top-5 domestic leagues), the exact same top-8 matches got warmed
+  // every single cron tick - anything beyond position 8 in the stable sort
+  // order NEVER got warmed at all, no matter how many times the cron ran.
+  // A persisted rotating offset spreads warming across every candidate
+  // over a few cycles instead of only ever covering the same fixed subset.
+  const { env: env2 } = await import("cloudflare:workers");
+  const db = (env2 as unknown as { DB?: D1Database }).DB;
+  let rotationOffset = 0;
+  if (db && candidates.length) {
+    await db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();
+    const row = await db.prepare("SELECT payload FROM api_cache WHERE cache_key='warm_rotation_offset'").first<{ payload: string }>();
+    rotationOffset = row ? (Number.parseInt(row.payload, 10) || 0) : 0;
+    const nextOffset = (rotationOffset + MAX_PER_RUN) % candidates.length;
+    await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES('warm_rotation_offset',?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`)
+      .bind(String(nextOffset), Date.now()).run();
+  }
+  const rotated = candidates.length
+    ? Array.from({ length: Math.min(MAX_PER_RUN, candidates.length) }, (_, i) => candidates[(rotationOffset + i) % candidates.length])
+    : [];
+
+  for (const candidate of rotated) {
     await getLiveMatchDetailsV2(candidate.id);
     warmed.push(candidate.id);
   }
 
-  return Response.json({ ok: true, results, candidateCount: candidates.length, warmedCount: warmed.length });
+  return Response.json({ ok: true, results, candidateCount: candidates.length, warmedCount: warmed.length, rotationOffset });
 }
