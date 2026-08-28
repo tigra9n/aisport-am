@@ -18,9 +18,8 @@ jobs:
       - name: Check latest articles
         working-directory: aisport-am
         run: |
-          curl -s "https://v3.football.api-sports.io/teams?league=342&season=2026" -H "x-apisports-key: ${API_FOOTBALL_KEY}" > /tmp/armenia.json
-          echo "---ARMENIA TEAMS---" > ../add-source-result.txt
-          jq -r '.response[].team.name' /tmp/armenia.json >> ../add-source-result.txt
+          npm install --no-audit --no-fund
+          npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, excerpt, source_url, published_at FROM articles ORDER BY id DESC LIMIT 1;" 2>&1 > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
