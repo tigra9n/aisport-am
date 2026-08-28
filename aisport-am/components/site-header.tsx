@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 
-const navigation = [
+const dropdownItems = [
   { label: "Գլխավոր", href: "/", children: [["Վերջին լուրեր", "/#latest"], ["Live", "/live"], ["Փոդքաստներ", "/podcasts"]] },
   { label: "Լիգաներ", href: null, children: [
     ["Պրեմիեր լիգա", "/league/PL"],
@@ -15,13 +15,19 @@ const navigation = [
     ["MLS", "/league/MLS"],
     ["Աղյուսակներ", "/standings"],
   ] },
-  { label: "Չեմպիոնների լիգա", href: "/league/CL", children: [["Լուրեր", "/league/CL"], ["Աղյուսակներ", "/standings"]] },
-  { label: "Եվրոպա լիգա", href: "/league/EL", children: [["Լուրեր", "/league/EL"]] },
-  { label: "Կոնֆերենցիա լիգա", href: "/league/ECL", children: [["Լուրեր", "/league/ECL"]] },
-  { label: "Հայկական ֆուտբոլ", href: "/opinions?category=Հայկական+ֆուտբոլ", children: [["Հեղինակային նյութեր", "/opinions?category=Հայկական+ֆուտբոլ"], ["Հայաստանի Պրեմիեր լիգա", "/standings"], ["Լուրեր", "/search?q=Հայաստանի+ֆուտբոլ"]] },
-  { label: "Հայկական սպորտ", href: "/opinions?category=Հայկական+սպորտ", children: [["Հեղինակային նյութեր", "/opinions?category=Հայկական+սպորտ"], ["Հայ մարզիկներ", "/search?q=հայ+մարզիկներ"]] },
-  { label: "Շախմատ", href: "/category/chess", children: [["Լուրեր", "/category/chess"], ["Հայ շախմատիստներ", "/search?q=հայ+շախմատիստներ"]] },
-  { label: "Էսպորտ", href: "/search?q=Էսպորտ", children: [["Լուրեր", "/search?q=Էսպորտ"], ["Հայ խաղացողներ", "/search?q=հայ+էսպորտ"]] },
+];
+
+// Simple top-level links, no dropdown - each already points to one clear
+// destination, so a whole dropdown arrow/menu per item was unnecessary
+// clutter (and extra surface area for hover-reliability issues).
+const plainLinks = [
+  { label: "Չեմպիոնների լիգա", href: "/league/CL" },
+  { label: "Եվրոպա լիգա", href: "/league/EL" },
+  { label: "Կոնֆերենցիա լիգա", href: "/league/ECL" },
+  { label: "Հայկական ֆուտբոլ", href: "/opinions?category=Հայկական+ֆուտբոլ" },
+  { label: "Հայկական սպորտ", href: "/opinions?category=Հայկական+սպորտ" },
+  { label: "Շախմատ", href: "/category/chess" },
+  { label: "Esport", href: "/search?q=Էսպորտ" },
 ];
 
 export function SiteHeader() {
@@ -71,7 +77,8 @@ export function SiteHeader() {
         </div>
         <div className={`nav-wrap ${menuOpen ? "open" : ""}`}>
           <nav className="site-shell primary-nav" aria-label="Հիմնական բաժիններ">
-            {navigation.map((item) => <details className="nav-section-menu" key={item.label}><summary>{item.href ? <Link prefetch={false} href={item.href} onClick={() => setMenuOpen(false)}>{item.label}</Link> : <span>{item.label}</span>}<span>⌄</span></summary><div>{item.children.map(([label, href]) => <Link href={href} key={href} onClick={() => setMenuOpen(false)}>{label}</Link>)}</div></details>)}
+            {dropdownItems.map((item) => <details className="nav-section-menu" key={item.label}><summary>{item.href ? <Link prefetch={false} href={item.href} onClick={() => setMenuOpen(false)}>{item.label}</Link> : <span>{item.label}</span>}<span>⌄</span></summary><div>{item.children.map(([label, href]) => <Link href={href} key={href} onClick={() => setMenuOpen(false)}>{label}</Link>)}</div></details>)}
+            {plainLinks.map((item) => <Link className="nav-plain-link" prefetch={false} href={item.href} key={item.href} onClick={() => setMenuOpen(false)}>{item.label}</Link>)}
             <Link className="podcast-nav-button" prefetch={false} href="/podcasts" onClick={() => setMenuOpen(false)}><span>◉</span> Փոդքաստ</Link>
           </nav>
         </div>
