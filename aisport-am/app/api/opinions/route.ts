@@ -12,7 +12,7 @@ export async function POST(request: Request) {
     return Response.json({ ok: false, reason: "unauthorized" }, { status: 401 });
   }
 
-  let body: { author?: string; role?: string; title?: string; content?: string };
+  let body: { author?: string; role?: string; title?: string; content?: string; category?: string; imageUrl?: string; videoUrl?: string };
   try {
     body = await request.json();
   } catch {
@@ -24,6 +24,9 @@ export async function POST(request: Request) {
     role: body.role ?? "",
     title: body.title ?? "",
     content: body.content ?? "",
+    category: body.category,
+    imageUrl: body.imageUrl,
+    videoUrl: body.videoUrl,
   });
 
   if (!result.ok) return Response.json(result, { status: 400 });
