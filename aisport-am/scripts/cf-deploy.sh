@@ -32,16 +32,16 @@ npm run build
 echo "== Patching generated wrangler config for production deploy =="
 echo "== Checking whether $NEW_DOMAIN zone is active in Cloudflare =="
 NEW_DOMAIN_ACTIVE="false"
-if [ -n "${CLOUDFLARE_PURGE_TOKEN:-}" ]; then
+if [ -n "${CLOUDFLARE_API_TOKEN:-}" ]; then
   ZONE_STATUS="$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=${NEW_DOMAIN}" \
-    -H "Authorization: Bearer ${CLOUDFLARE_PURGE_TOKEN}" \
+    -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
     -H "Content-Type: application/json" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{try{const j=JSON.parse(d);console.log(j.result?.[0]?.status||"none")}catch{console.log("none")}})')"
   echo "$NEW_DOMAIN zone status: $ZONE_STATUS"
   if [ "$ZONE_STATUS" = "active" ]; then
     NEW_DOMAIN_ACTIVE="true"
   fi
 else
-  echo "CLOUDFLARE_PURGE_TOKEN not set, cannot check - skipping $NEW_DOMAIN route to be safe"
+  echo "CLOUDFLARE_API_TOKEN not set, cannot check - skipping $NEW_DOMAIN route to be safe"
 fi
 
 DB_ID="$DB_ID" WORKER_NAME="$WORKER_NAME" DOMAIN="$DOMAIN" NEW_DOMAIN="$NEW_DOMAIN" NEW_DOMAIN_ACTIVE="$NEW_DOMAIN_ACTIVE" node -e '
@@ -95,7 +95,7 @@ if [ -n "${CLOUDFLARE_PURGE_TOKEN:-}" ]; then
     --data '{"purge_everything":true}' | grep -o '"success":[^,}]*'
   if [ "$NEW_DOMAIN_ACTIVE" = "true" ]; then
     NEW_ZONE_ID="$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=${NEW_DOMAIN}" \
-      -H "Authorization: Bearer ${CLOUDFLARE_PURGE_TOKEN}" \
+      -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
       -H "Content-Type: application/json" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{try{const j=JSON.parse(d);console.log(j.result?.[0]?.id||"")}catch{console.log("")}})')"
     if [ -n "$NEW_ZONE_ID" ]; then
       echo "== Purging $NEW_DOMAIN edge cache (zone $NEW_ZONE_ID) =="
