@@ -4,6 +4,8 @@
 // pattern as api_cache elsewhere in this codebase), so no separate
 // deploy-time migration step is needed.
 
+import { transliterateHy } from "./articles";
+
 export type Opinion = {
   id: number;
   slug: string;
@@ -57,10 +59,18 @@ async function ensureTable(db: D1Database) {
 }
 
 function slugify(title: string): string {
-  const base = title
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, "-")
-    .replace(/^-+|-+$/g, "")
+  // Bug found: the previous version used \p{L} (matches letters in ANY
+  // script, including Armenian) instead of transliterating - Armenian
+  // opinion titles ended up with raw Armenian Unicode characters in the
+  // URL (e.g. "/opinions/արարատ-արմենիան-...") instead of proper Latin
+  // slugs like the auto-generated news articles already have. Reuse the
+  // same transliteration used there for consistency.
+  const base = transliterateHy(title)
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 6)
+    .join("-")
     .slice(0, 60);
   return `${base || "notice"}-${Date.now().toString(36)}`;
 }

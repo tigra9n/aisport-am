@@ -125,7 +125,7 @@ const HY_TO_LATIN: Record<string, string> = {
   "և":"ev",
 };
 
-function transliterateHy(text: string): string {
+export function transliterateHy(text: string): string {
   // Bug found: the HY_TO_LATIN map only covers lowercase Armenian letters.
   // Titles always start with an uppercase Armenian letter (different
   // Unicode codepoints, Ա-Ֆ vs ա-ֆ), which silently failed to
