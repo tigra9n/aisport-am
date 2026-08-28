@@ -25,6 +25,45 @@ const MAX_PER_TYPE = 1;
 // comfortably fit one full attempt, not try to rush it.
 const TIME_BUDGET_MS = 115_000;
 
+// Same club/player getting picked again soon after was letting a single
+// hot story (e.g. an ongoing transfer saga) get covered twice within a
+// couple hours - two different outlets (caughtoffside.com, sportbible.com)
+// each independently reporting on Arsenal's Martinelli/Paixao situation,
+// both passing URL-based dedup since the URLs genuinely differ even
+// though the underlying story is the same. articleExistsForSource only
+// catches exact-URL repeats, not "same topic, different outlet". A
+// per-entity cooldown is a simple, cheap mitigation: skip an entity in
+// the rotation chain if it was already used recently, regardless of
+// which specific article/URL that use produced.
+const ENTITY_COOLDOWN_MS = 5 * 60 * 60 * 1000; // 5 hours
+
+async function isEntityOnCooldown(value: string): Promise<boolean> {
+  try {
+    const { env } = await import("cloudflare:workers");
+    const db = (env as unknown as { DB?: D1Database }).DB;
+    if (!db) return false;
+    const row = await db.prepare("SELECT saved_at AS savedAt FROM api_cache WHERE cache_key=?")
+      .bind(`entity_cooldown:${value}`).first<{ savedAt: number }>();
+    if (!row) return false;
+    return Date.now() - row.savedAt < ENTITY_COOLDOWN_MS;
+  } catch {
+    return false;
+  }
+}
+
+async function markEntityUsed(value: string): Promise<void> {
+  try {
+    const { env } = await import("cloudflare:workers");
+    const db = (env as unknown as { DB?: D1Database }).DB;
+    if (!db) return;
+    await db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();
+    await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET saved_at=excluded.saved_at,retry_after=0`)
+      .bind(`entity_cooldown:${value}`, "1", Date.now()).run();
+  } catch {
+    // Non-fatal: worst case, cooldown just doesn't apply this one time.
+  }
+}
+
 async function runRecaps(apiKey: string, log: string[], deadline: number): Promise<number> {
   let generated = 0;
   let attempted = 0;
@@ -189,6 +228,7 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
             const rotationSeed = Math.floor(Date.now() / (60 * 1000));
             for (const pick of pickCombinedChain(cycle, rotationSeed)) {
               if (Date.now() > deadline) break;
+              if (await isEntityOnCooldown(pick.value)) continue;
               const found = pick.filterType === "title"
                 ? await fetchApiTubeTitle(apiTubeKey, pick.value, 30)
                 : await fetchApiTubePerson(apiTubeKey, pick.value, 30);
@@ -208,6 +248,7 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
               if (newItems.length) {
                 log.push(`rss debug: ${pick.filterType}=${pick.value} -> ${found.length} items, ${newItems.length} new`);
                 items = newItems;
+                await markEntityUsed(pick.value);
                 break;
               }
               log.push(`rss debug: ${pick.filterType}=${pick.value} -> ${found.length} items, all duplicates, trying next`);
