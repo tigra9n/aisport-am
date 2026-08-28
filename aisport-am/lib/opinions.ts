@@ -1,0 +1,104 @@
+// Real, D1-backed opinion pieces, replacing the old hardcoded fake-author
+// placeholder array in lib/content.ts. No formal drizzle migration for
+// this yet - the table is created lazily on first use (same lightweight
+// pattern as api_cache elsewhere in this codebase), so no separate
+// deploy-time migration step is needed.
+
+export type Opinion = {
+  id: number;
+  slug: string;
+  author: string;
+  role: string;
+  title: string;
+  content: string;
+  initials: string;
+  publishedAt: string;
+};
+
+let tableReady: Promise<unknown> | null = null;
+
+async function getDB(): Promise<D1Database | null> {
+  const { env } = await import("cloudflare:workers");
+  return (env as unknown as { DB?: D1Database }).DB ?? null;
+}
+
+async function ensureTable(db: D1Database) {
+  tableReady ??= db.prepare(`CREATE TABLE IF NOT EXISTS opinions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    slug TEXT NOT NULL UNIQUE,
+    author TEXT NOT NULL,
+    role TEXT NOT NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    initials TEXT NOT NULL,
+    published_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status TEXT NOT NULL DEFAULT 'published'
+  )`).run();
+  await tableReady;
+}
+
+function slugify(title: string): string {
+  const base = title
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+  return `${base || "notice"}-${Date.now().toString(36)}`;
+}
+
+function initialsOf(author: string): string {
+  const parts = author.trim().split(/\s+/).filter(Boolean);
+  return parts.slice(0, 2).map((p) => p[0]?.toUpperCase() ?? "").join("") || "ԱՍ";
+}
+
+export async function getOpinions(limit = 20): Promise<Opinion[]> {
+  try {
+    const db = await getDB();
+    if (!db) return [];
+    await ensureTable(db);
+    const { results } = await db
+      .prepare("SELECT id, slug, author, role, title, content, initials, published_at AS publishedAt FROM opinions WHERE status = 'published' ORDER BY id DESC LIMIT ?")
+      .bind(limit)
+      .all<Opinion>();
+    return results ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getOpinionBySlug(slug: string): Promise<Opinion | null> {
+  try {
+    const db = await getDB();
+    if (!db) return null;
+    await ensureTable(db);
+    const row = await db
+      .prepare("SELECT id, slug, author, role, title, content, initials, published_at AS publishedAt FROM opinions WHERE slug = ? AND status = 'published'")
+      .bind(slug)
+      .first<Opinion>();
+    return row ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function createOpinion(input: { author: string; role: string; title: string; content: string }): Promise<{ ok: boolean; slug?: string; reason?: string }> {
+  const author = input.author.trim();
+  const role = input.role.trim();
+  const title = input.title.trim();
+  const content = input.content.trim();
+  if (!author || !role || !title || !content) return { ok: false, reason: "missing_fields" };
+
+  try {
+    const db = await getDB();
+    if (!db) return { ok: false, reason: "no_db" };
+    await ensureTable(db);
+    const slug = slugify(title);
+    await db
+      .prepare("INSERT INTO opinions (slug, author, role, title, content, initials) VALUES (?, ?, ?, ?, ?, ?)")
+      .bind(slug, author, role, title, content, initialsOf(author))
+      .run();
+    return { ok: true, slug };
+  } catch (err) {
+    return { ok: false, reason: String(err) };
+  }
+}

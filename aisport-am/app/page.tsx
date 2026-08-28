@@ -8,7 +8,8 @@ import { HeroCarousel } from "../components/hero-carousel";
 import { HeadlineFeed } from "../components/headline-feed";
 import { AdSpaces } from "../components/ad-spaces";
 import { MatchModal } from "../components/match-modal";
-import { opinions, trendingTopics, type ArticlePreview } from "../lib/content";
+import { trendingTopics, type ArticlePreview } from "../lib/content";
+import { getOpinions } from "../lib/opinions";
 import { leagues } from "../lib/football";
 import { getStandings } from "../lib/football-server";
 import { getTopScorers } from "../lib/topscorers-server";
@@ -40,7 +41,7 @@ async function homepageArticles(): Promise<ArticlePreview[]> {
 }
 
 export default async function Home() {
-  const [articles, standings, scorers, live] = await Promise.all([
+  const [articles, standings, scorers, live, opinions] = await Promise.all([
     homepageArticles(),
     Promise.all(leagues.map(async (league) => [league.code, await getStandings(league.code)] as const)),
     Promise.all(leagues.map(async (league) => [league.code, await getTopScorers(league.code)] as const)),
@@ -48,6 +49,7 @@ export default async function Home() {
     // and ordinary news-page traffic from spending the free API quota or
     // extending a provider rate-limit window.
     getLiveMatches(0),
+    getOpinions(3),
   ]);
   const tables = Object.fromEntries(standings);
   const scorerTables = Object.fromEntries(scorers);
@@ -150,7 +152,7 @@ export default async function Home() {
 
         {opinions.length > 0 && <section className="opinions-section">
           <div className="modern-section-head"><div><span>Խմբագրական տեսակետ</span><h2>Հեղինակային նյութեր</h2></div><Link href="/opinions">Բոլոր նյութերը →</Link></div>
-          <div className="opinion-grid">{opinions.map((opinion) => <article key={opinion.title}><div className="opinion-avatar">{opinion.initials}</div><div><span>{opinion.role}</span><h3><Link href="/opinions">{opinion.title}</Link></h3><p>{opinion.author}</p></div><b>↗</b></article>)}</div>
+          <div className="opinion-grid">{opinions.map((opinion) => <article key={opinion.slug}><div className="opinion-avatar">{opinion.initials}</div><div><span>{opinion.role}</span><h3><Link href={`/opinions/${opinion.slug}`}>{opinion.title}</Link></h3><p>{opinion.author}</p></div><b>↗</b></article>)}</div>
         </section>}
 
         <section className="newsletter-panel"><div><span>Ամենակարևորն՝ առանց աղմուկի</span><h2>AISport շաբաթական</h2><p>Շաբաթվա լավագույն նյութերն ու գլխավոր պատմությունները՝ ձեր էլ․ հասցեին։</p></div><form><input type="email" aria-label="Էլեկտրոնային հասցե" placeholder="email@example.com" /><button type="submit">Բաժանորդագրվել</button></form></section>
