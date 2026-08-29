@@ -18,9 +18,7 @@ jobs:
       - name: Check latest articles
         working-directory: aisport-am
         run: |
-          npm install --no-audit --no-fund
-          echo "gemini" | npx wrangler secret put CONTENT_MODEL_PROVIDER --name aisport-am 2>&1 > ../add-source-result.txt || true
-          echo "---triggering one Gemini-generated article---" >> ../add-source-result.txt
+          echo "---triggering Gemini-generated article, new window---" > ../add-source-result.txt
           curl -s --max-time 130 "https://aifootball.am/api/cron/content?token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" >> ../add-source-result.txt
           cat ../add-source-result.txt
         env:
