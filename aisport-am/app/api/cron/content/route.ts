@@ -402,14 +402,13 @@ export async function GET(request: Request) {
     }
   }
 
-  // 3 attempts per hour, spread across 20-minute windows (0-19, 20-39,
-  // 40-59) instead of 1 attempt per hour. Gate on "already published an
-  // article in this UTC hour AND this 20-minute window" rather than a
-  // fixed minute range - same reasoning as before: Cloudflare's native
-  // cron and the GitHub Actions backup cron both have their own jitter,
-  // so whichever tick actually fires first within a window does that
-  // window's attempt, landing close to (but not exactly on) :00/:20/:40
-  // once the ~1-2min generation time is added.
+  // TEMPORARY (tonight only, 2026-08-29/30): reduced from 20-minute windows
+  // to 5-minute windows, matching the dispatch cadence exactly, so Tigran
+  // can see the new prompt produce many articles in quick succession while
+  // testing. This roughly quadruples article volume/API cost for the
+  // remainder of tonight's 10:00-03:00 window - revert the /5 back to /20
+  // below (and the two "5-minute"/"20-minute" strings) once testing is
+  // done.
   if (!forcedMode) {
     try {
       const { getDb } = await import("../../../../db");
@@ -418,7 +417,7 @@ export async function GET(request: Request) {
       const db = await getDb();
       const recent = await db.select({ publishedAt: articles.publishedAt }).from(articles).orderBy(desc(articles.id)).limit(3);
       const now = new Date();
-      const currentWindow = Math.floor(now.getUTCMinutes() / 20);
+      const currentWindow = Math.floor(now.getUTCMinutes() / 5);
       const sameHourWindowCount = recent.filter((row) => {
         if (!row.publishedAt) return false;
         const d = new Date(row.publishedAt.replace(" ", "T") + "Z");
@@ -426,10 +425,10 @@ export async function GET(request: Request) {
           && d.getUTCMonth() === now.getUTCMonth()
           && d.getUTCDate() === now.getUTCDate()
           && d.getUTCHours() === now.getUTCHours()
-          && Math.floor(d.getUTCMinutes() / 20) === currentWindow;
+          && Math.floor(d.getUTCMinutes() / 5) === currentWindow;
       }).length;
       if (sameHourWindowCount > 0) {
-        return Response.json({ ok: true, mode: "skipped", reason: "already published an article in this 20-minute window", generated: 0, log: [] });
+        return Response.json({ ok: true, mode: "skipped", reason: "already published an article in this 5-minute window", generated: 0, log: [] });
       }
     } catch {
       // If the check itself fails for some reason, fall through and
