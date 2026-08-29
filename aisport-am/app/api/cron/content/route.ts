@@ -392,13 +392,13 @@ export async function GET(request: Request) {
 
   const forcedMode = url.searchParams.get("mode");
 
-  // Publishing window: 10:00–02:00 Yerevan time (UTC+4, no DST). Manual
+  // Publishing window: 10:00–03:00 Yerevan time (UTC+4, no DST). Manual
   // ?mode= calls bypass the window so testing works any time of day.
   if (!forcedMode) {
     const yerevanHour = (new Date().getUTCHours() + 4) % 24;
-    const inWindow = yerevanHour >= 10 || yerevanHour < 2;
+    const inWindow = yerevanHour >= 10 || yerevanHour < 3;
     if (!inWindow) {
-      return Response.json({ ok: true, mode: "skipped", reason: "outside 10:00-02:00 Yerevan publishing window", generated: 0, log: [] });
+      return Response.json({ ok: true, mode: "skipped", reason: "outside 10:00-03:00 Yerevan publishing window", generated: 0, log: [] });
     }
   }
 
