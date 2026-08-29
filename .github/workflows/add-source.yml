@@ -17,7 +17,10 @@ jobs:
           node-version: 22
       - name: Run regenerate test
         run: |
-          python3 regenerate_test.py > add-source-result.txt 2>&1
+          python3 regenerate_test.py
+          curl -s --max-time 60 -X POST "https://aifootball.am/api/debug/regenerate?token=GZfaXwSyo95ooQNDr714eMSv-G_0X2Vf" \
+            -H "Content-Type: application/json" \
+            --data @body.json > add-source-result.txt
           cat add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

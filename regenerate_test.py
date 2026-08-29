@@ -1,5 +1,4 @@
 import json
-import urllib.request
 
 title = "Էբնութալիբի հեթ-թրիքը չփրկեց «Այնթրախտին». «Ունիոնը» 90+2-ին հավասարեցրեց՝ 3:3"
 content = (
@@ -19,17 +18,7 @@ content = (
     "Այնթրախտինը՝ 1.45։ Լավագույն խաղացող ընտրվեց Էբնութալիբը 75 տոկոսով։"
 )
 
-payload = json.dumps({"title": title, "content": content}).encode("utf-8")
-req = urllib.request.Request(
-    "https://aifootball.am/api/debug/regenerate?token=GZfaXwSyo95ooQNDr714eMSv-G_0X2Vf",
-    data=payload,
-    headers={"Content-Type": "application/json"},
-    method="POST",
-)
-try:
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        print(resp.read().decode("utf-8"))
-except Exception as e:
-    print(f"ERROR: {e}")
-    if hasattr(e, "read"):
-        print(e.read().decode("utf-8"))
+payload = json.dumps({"title": title, "content": content}, ensure_ascii=False)
+with open("body.json", "w", encoding="utf-8") as f:
+    f.write(payload)
+print("wrote body.json")
