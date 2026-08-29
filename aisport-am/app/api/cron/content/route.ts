@@ -41,7 +41,7 @@ const TIME_BUDGET_MS = 115_000;
 // as a repeat if they share enough distinctive words to plausibly be the
 // same underlying story. A different headline about the same entity
 // passes straight through regardless of timing.
-const ENTITY_COOLDOWN_MS = 5 * 60 * 60 * 1000; // 5 hours
+const ENTITY_COOLDOWN_MS = 2 * 60 * 60 * 1000; // TEMPORARY (tonight only, 2026-08-29/30): reduced from 5h to 2h so more articles publish during tonight's prompt testing. Revert to 5 * 60 * 60 * 1000 tomorrow.
 const STOPWORDS = new Set(["the","a","an","and","or","but","in","on","at","to","for","of","with","is","are","was","were","be","been","as","by","from","it","its","his","her","their","after","before","new","says","said","set","out","up","who","how","why","what","this","that","will","has","have","not","no"]);
 
 function significantWords(title: string): Set<string> {
