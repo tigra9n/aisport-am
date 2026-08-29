@@ -64,7 +64,10 @@ async function callGemini(systemPrompt: string, userPrompt: string, apiKey: stri
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 100_000);
-    // gemini-2.5-flash: stable (non-preview) model, generous free tier
+    // gemini-2.5-flash was deprecated for new API keys (confirmed via a
+    // live 404 from Google's API on 2026-08-29, which pointed directly to
+    // this replacement) - gemini-3.6-flash is the current stable fast
+    // model with a generous free tier.
     // (10 RPM / 250 RPD as of mid-2026), comfortably covers this
     // pipeline's ~1 article/hour cadence. Deliberately not using a
     // "flash-lite" or preview model here - the Haiku 4.5 experiment above
@@ -72,7 +75,7 @@ async function callGemini(systemPrompt: string, userPrompt: string, apiKey: stri
     // completely off-topic content and broke JSON output. Same risk
     // applies to picking too aggressive a Gemini tier.
     const response = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" + encodeURIComponent(apiKey),
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" + encodeURIComponent(apiKey),
       {
         method: "POST",
         signal: controller.signal,
