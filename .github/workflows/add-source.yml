@@ -18,8 +18,11 @@ jobs:
       - name: Check latest articles
         working-directory: aisport-am
         run: |
-          echo "---triggering Gemini-generated article, retry with fixed model---" > ../add-source-result.txt
-          curl -s --max-time 130 "https://aifootball.am/api/cron/content?token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" >> ../add-source-result.txt
+          npm install --no-audit --no-fund
+          npx wrangler secret delete CONTENT_MODEL_PROVIDER --name aisport-am 2>&1 > ../add-source-result.txt || true
+          echo "---switched back to Claude (default)---" >> ../add-source-result.txt
+          echo "---fetching the Gemini-generated article for comparison---" >> ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, excerpt, content FROM articles ORDER BY id DESC LIMIT 1;" 2>&1 >> ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
