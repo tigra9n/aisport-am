@@ -19,8 +19,7 @@ jobs:
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
-          echo "---current Worker secrets (names only, values hidden by Cloudflare)---" > ../add-source-result.txt
-          npx wrangler secret list --name aisport-am 2>&1 >> ../add-source-result.txt || true
+          npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, excerpt, content, published_at FROM articles ORDER BY id DESC LIMIT 3;" 2>&1 > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
