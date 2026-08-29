@@ -19,10 +19,7 @@ jobs:
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
-          npx wrangler secret delete CONTENT_MODEL_PROVIDER --name aisport-am 2>&1 > ../add-source-result.txt || true
-          echo "---switched back to Claude (default)---" >> ../add-source-result.txt
-          echo "---fetching the Gemini-generated article for comparison---" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, excerpt, content FROM articles ORDER BY id DESC LIMIT 1;" 2>&1 >> ../add-source-result.txt || true
+          npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, excerpt, content FROM articles WHERE id = 167;" 2>&1 > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
