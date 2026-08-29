@@ -18,11 +18,13 @@ jobs:
       - name: Check latest articles
         working-directory: aisport-am
         run: |
-          echo "---aisport.am/api/cron/dispatch (should NOT redirect now)---" > ../add-source-result.txt
-          curl -s -I "https://aisport.am/api/cron/dispatch" >> ../add-source-result.txt
-          echo "" >> ../add-source-result.txt
-          echo "---manually triggering content generation to catch up---" >> ../add-source-result.txt
-          curl -s --max-time 130 "https://aifootball.am/api/cron/content?token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" >> ../add-source-result.txt
+          echo "---catching up on backlog: 3 manual triggers---" > ../add-source-result.txt
+          for i in 1 2 3; do
+            echo "--- trigger $i ---" >> ../add-source-result.txt
+            curl -s --max-time 130 "https://aifootball.am/api/cron/content?token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" >> ../add-source-result.txt
+            echo "" >> ../add-source-result.txt
+            sleep 5
+          done
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
