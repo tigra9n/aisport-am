@@ -29,11 +29,15 @@ jobs:
       - name: Warm cache
         run: curl -s --max-time 20 "https://aisport.am/api/cron/warm?token=${{ secrets.CRON_TOKEN }}" || true
       - name: Generate content
-        # Bumped 65s -> 100s -> 130s: the server's own TIME_BUDGET_MS is
-        # 115s, so a 100s client timeout could disconnect (and, per
-        # documented Cloudflare Workers behavior, kill in-progress
-        # generation server-side) before the server's own deadline ever
-        # had a chance to finish naturally. Client timeout must stay
-        # comfortably above the server deadline, not just above the
-        # typical/expected generation time.
-        run: curl -s --max-time 130 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}" || true
+        # Bumped 65s -> 100s -> 130s -> 150s: the server's own
+        # TIME_BUDGET_MS is 115s, so the client timeout must stay
+        # comfortably above that deadline, not just above the typical/
+        # expected generation time. A 130s client timeout (only 15s of
+        # margin) turned out to be too tight once the entity chain grew
+        # longer (see football-entities.ts) - worst-case searches now
+        # regularly take 115-127s server-side, and a too-tight client
+        # timeout can disconnect (killing in-progress generation
+        # server-side, per documented Cloudflare Workers behavior) right
+        # as the server is about to finish gracefully. 150s gives 35s of
+        # margin instead.
+        run: curl -s --max-time 150 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}" || true
