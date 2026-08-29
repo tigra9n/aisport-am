@@ -114,6 +114,9 @@ const PERSONS: Entity[] = [
   { name: "Harry Kane", priority: 90, section: "world" },
   { name: "Lionel Messi", priority: 90, section: "world" },
   { name: "Cristiano Ronaldo", priority: 90, section: "world" },
+  { name: "Julian Alvarez", priority: 90, section: "world" },
+  { name: "Kevin De Bruyne", priority: 90, section: "world" },
+  { name: "Neymar", priority: 90, section: "world" },
   { name: "Rodri", priority: 80, section: "world" },
   { name: "Pedri", priority: 80, section: "world" },
   { name: "Gavi", priority: 80, section: "world" },
@@ -134,6 +137,11 @@ const PERSONS: Entity[] = [
   { name: "Dani Olmo", priority: 80, section: "world" },
   { name: "Federico Valverde", priority: 80, section: "world" },
   { name: "Trent Alexander-Arnold", priority: 80, section: "world" },
+  { name: "Antoine Griezmann", priority: 80, section: "world" },
+  { name: "Martin Odegaard", priority: 80, section: "world" },
+  { name: "Bruno Fernandes", priority: 80, section: "world" },
+  { name: "Joshua Kimmich", priority: 80, section: "world" },
+  { name: "Karim Benzema", priority: 80, section: "world" },
   { name: "Alisson Becker", priority: 70, section: "world" },
   { name: "Thibaut Courtois", priority: 70, section: "world" },
   { name: "Virgil van Dijk", priority: 70, section: "world" },
@@ -148,6 +156,7 @@ const PERSONS: Entity[] = [
   { name: "Hansi Flick", priority: 80, section: "coaches" },
   { name: "Xabi Alonso", priority: 80, section: "coaches" },
   { name: "Arne Slot", priority: 80, section: "coaches" },
+  { name: "Roberto De Zerbi", priority: 80, section: "coaches" },
   { name: "Diego Simeone", priority: 70, section: "coaches" },
   { name: "Antonio Conte", priority: 70, section: "coaches" },
   { name: "Carlo Ancelotti", priority: 70, section: "coaches" },
@@ -155,6 +164,7 @@ const PERSONS: Entity[] = [
   { name: "Thomas Tuchel", priority: 70, section: "coaches" },
   { name: "Didier Deschamps", priority: 70, section: "coaches" },
   { name: "Lionel Scaloni", priority: 70, section: "coaches" },
+  { name: "Julian Nagelsmann", priority: 70, section: "coaches" },
 ];
 
 // Names/clubs that returned an "entity/value not found" error get pushed
