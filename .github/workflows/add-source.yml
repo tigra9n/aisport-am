@@ -18,7 +18,7 @@ jobs:
       - name: Check latest articles
         working-directory: aisport-am
         run: |
-          echo "---retry: triggering generation with refined prompt---" > ../add-source-result.txt
+          echo "---retry 2: triggering generation with refined prompt---" > ../add-source-result.txt
           curl -s --max-time 130 "https://aifootball.am/api/cron/content?token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" >> ../add-source-result.txt
           cat ../add-source-result.txt
         env:
