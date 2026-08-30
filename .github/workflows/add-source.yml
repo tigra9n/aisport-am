@@ -19,7 +19,15 @@ jobs:
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
-          npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, published_at FROM articles ORDER BY id DESC LIMIT 3;" 2>&1 > ../add-source-result.txt || true
+          npx wrangler d1 execute aisport-db --remote --command "ALTER TABLE articles ADD COLUMN seo_title TEXT;" 2>&1 > ../add-source-result.txt || true
+          npx wrangler d1 execute aisport-db --remote --command "ALTER TABLE articles ADD COLUMN meta_description TEXT;" 2>&1 >> ../add-source-result.txt || true
+          npx wrangler d1 execute aisport-db --remote --command "ALTER TABLE articles ADD COLUMN tags TEXT;" 2>&1 >> ../add-source-result.txt || true
+          npx wrangler d1 execute aisport-db --remote --command "ALTER TABLE articles ADD COLUMN facebook_text TEXT;" 2>&1 >> ../add-source-result.txt || true
+          npx wrangler d1 execute aisport-db --remote --command "ALTER TABLE articles ADD COLUMN telegram_text TEXT;" 2>&1 >> ../add-source-result.txt || true
+          npx wrangler d1 execute aisport-db --remote --command "ALTER TABLE articles ADD COLUMN alternative_titles TEXT;" 2>&1 >> ../add-source-result.txt || true
+          npx wrangler d1 execute aisport-db --remote --command "ALTER TABLE articles ADD COLUMN confidence INTEGER;" 2>&1 >> ../add-source-result.txt || true
+          echo "---verify columns exist---" >> ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "PRAGMA table_info(articles);" 2>&1 >> ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
