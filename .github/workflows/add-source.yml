@@ -18,7 +18,7 @@ jobs:
       - name: Check latest articles
         working-directory: aisport-am
         run: |
-          echo "---testing after trim---" > ../add-source-result.txt
+          echo "---testing search deadline fix---" > ../add-source-result.txt
           START=$(date +%s)
           curl -s --max-time 150 "https://aifootball.am/api/cron/content?token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" >> ../add-source-result.txt
           END=$(date +%s)
