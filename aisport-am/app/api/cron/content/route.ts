@@ -41,7 +41,7 @@ const TIME_BUDGET_MS = 115_000;
 // as a repeat if they share enough distinctive words to plausibly be the
 // same underlying story. A different headline about the same entity
 // passes straight through regardless of timing.
-const ENTITY_COOLDOWN_MS = 2 * 60 * 60 * 1000; // TEMPORARY (tonight only, 2026-08-29/30): reduced from 5h to 2h so more articles publish during tonight's prompt testing. Revert to 5 * 60 * 60 * 1000 tomorrow.
+const ENTITY_COOLDOWN_MS = 5 * 60 * 60 * 1000; // 5 hours
 const STOPWORDS = new Set(["the","a","an","and","or","but","in","on","at","to","for","of","with","is","are","was","were","be","been","as","by","from","it","its","his","her","their","after","before","new","says","said","set","out","up","who","how","why","what","this","that","will","has","have","not","no"]);
 
 function significantWords(title: string): Set<string> {
@@ -402,13 +402,12 @@ export async function GET(request: Request) {
     }
   }
 
-  // TEMPORARY (tonight only, 2026-08-29/30): reduced from 20-minute windows
-  // to 5-minute windows, matching the dispatch cadence exactly, so Tigran
-  // can see the new prompt produce many articles in quick succession while
-  // testing. This roughly quadruples article volume/API cost for the
-  // remainder of tonight's 10:00-03:00 window - revert the /5 back to /20
-  // below (and the two "5-minute"/"20-minute" strings) once testing is
-  // done.
+  // Publish at most 1 article per 30-minute window (0-29, 30-59), gated
+  // on "already published an article in this UTC hour AND this 30-minute
+  // window" rather than a fixed minute range - Cloudflare's native cron
+  // and the GitHub Actions backup cron both have their own jitter, so
+  // whichever tick actually fires first within a window does that
+  // window's attempt.
   if (!forcedMode) {
     try {
       const { getDb } = await import("../../../../db");
@@ -417,7 +416,7 @@ export async function GET(request: Request) {
       const db = await getDb();
       const recent = await db.select({ publishedAt: articles.publishedAt }).from(articles).orderBy(desc(articles.id)).limit(3);
       const now = new Date();
-      const currentWindow = Math.floor(now.getUTCMinutes() / 5);
+      const currentWindow = Math.floor(now.getUTCMinutes() / 30);
       const sameHourWindowCount = recent.filter((row) => {
         if (!row.publishedAt) return false;
         const d = new Date(row.publishedAt.replace(" ", "T") + "Z");
@@ -425,10 +424,10 @@ export async function GET(request: Request) {
           && d.getUTCMonth() === now.getUTCMonth()
           && d.getUTCDate() === now.getUTCDate()
           && d.getUTCHours() === now.getUTCHours()
-          && Math.floor(d.getUTCMinutes() / 5) === currentWindow;
+          && Math.floor(d.getUTCMinutes() / 30) === currentWindow;
       }).length;
       if (sameHourWindowCount > 0) {
-        return Response.json({ ok: true, mode: "skipped", reason: "already published an article in this 5-minute window", generated: 0, log: [] });
+        return Response.json({ ok: true, mode: "skipped", reason: "already published an article in this 30-minute window", generated: 0, log: [] });
       }
     } catch {
       // If the check itself fails for some reason, fall through and
