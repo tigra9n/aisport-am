@@ -18,7 +18,9 @@ jobs:
       - name: Check latest articles and live status
         working-directory: aisport-am
         run: |
-          echo "---testing production endpoint live (new hourly+recap logic)---" > ../add-source-result.txt
+          npm install --no-audit --no-fund
+          npx wrangler d1 execute aisport-db --remote --command "SELECT id, title FROM articles WHERE title LIKE '%Գանձասար%';" 2>&1 > ../add-source-result.txt || true
+          cat ../add-source-result.txt
           curl -s --max-time 150 "https://aifootball.am/api/cron/content?token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" >> ../add-source-result.txt
           cat ../add-source-result.txt
         env:
