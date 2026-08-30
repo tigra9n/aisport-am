@@ -23,7 +23,7 @@ const MAX_PER_TYPE = 1;
 // generation for a full article (max_tokens ~2048) genuinely takes
 // 30-40+ seconds - this isn't a bug, just how long it takes. Budget must
 // comfortably fit one full attempt, not try to rush it.
-const TIME_BUDGET_MS = 115_000;
+const TIME_BUDGET_MS = 135_000; // Bumped 115s -> 135s: the expanded entity list (football-entities.ts) means the sequential search loop sometimes needs more time to find fresh content before giving up. Client timeout is 150s (see backup-cron.yml), so this keeps a 15s margin.
 
 // Same club/player getting picked again soon after was letting a single
 // hot story (e.g. an ongoing transfer saga) get covered twice within a
