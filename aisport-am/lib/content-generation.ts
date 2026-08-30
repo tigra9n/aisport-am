@@ -1,6 +1,18 @@
 import { categories } from "./content";
 
-export type GeneratedArticle = { title: string; excerpt: string; content: string; category: string };
+export type GeneratedArticle = {
+  title: string;
+  excerpt: string;
+  content: string;
+  category: string;
+  seoTitle?: string | null;
+  metaDescription?: string | null;
+  tags?: string[];
+  facebookText?: string | null;
+  telegramText?: string | null;
+  alternativeTitles?: string[];
+  confidence?: number | null;
+};
 export let lastGenerationDebug = "";
 
 async function callClaude(systemPrompt: string, userPrompt: string, apiKey: string): Promise<{ text: string | null; debug: string }> {
@@ -170,6 +182,13 @@ function parseArticleJson(raw: string, fallbackCategory: string): { article: Gen
       duplicate?: boolean;
       needs_review?: boolean;
       review_reason?: string | null;
+      seo_title?: string | null;
+      meta_description?: string | null;
+      tags?: unknown;
+      facebook_text?: string | null;
+      telegram_text?: string | null;
+      alternative_titles?: unknown;
+      confidence?: number | null;
     };
     // The model can now explicitly self-assess and decline to publish
     // (genuine duplicate of something already covered, contradictory
@@ -212,12 +231,22 @@ function parseArticleJson(raw: string, fallbackCategory: string): { article: Gen
     // being trusted verbatim.
     const rawCategory = parsed.category?.trim();
     const category = rawCategory && categories.some((c) => c.name === rawCategory) ? rawCategory : fallbackCategory;
+    const tags = Array.isArray(parsed.tags) ? parsed.tags.filter((t): t is string => typeof t === "string" && t.trim().length > 0).slice(0, 8) : undefined;
+    const alternativeTitles = Array.isArray(parsed.alternative_titles) ? parsed.alternative_titles.filter((t): t is string => typeof t === "string" && t.trim().length > 0).slice(0, 2) : undefined;
+    const confidence = typeof parsed.confidence === "number" && parsed.confidence >= 0 && parsed.confidence <= 1 ? Math.round(parsed.confidence * 100) : undefined;
     return {
       article: {
         title: parsed.title.trim(),
         excerpt: parsed.excerpt.trim(),
         content: parsed.content.trim(),
         category,
+        seoTitle: parsed.seo_title?.trim() || undefined,
+        metaDescription: parsed.meta_description?.trim() || undefined,
+        tags,
+        facebookText: parsed.facebook_text?.trim() || undefined,
+        telegramText: parsed.telegram_text?.trim() || undefined,
+        alternativeTitles,
+        confidence,
       },
       reason: "ok",
     };
@@ -284,9 +313,9 @@ const SYSTEM_PROMPT = `Դու AIFootball.am հայկական ավտոմատաց�
 Պատասխանելուց առաջ լուռ ստուգիր. Գլխավոր փաստը ճի՞շտ է։ Անունները հայերեն ճի՞շտ են։ Հաշիվը/ամսաթիվը/թվերը պահպանվե՞լ են։ Լուրն իսկապե՞ս նոր է (ոչ արդեն հրապարակվածի կրկնություն)։ Հաստատված ու չհաստատված տեղեկությունը տարանջատվա՞ծ է։ Վերնագիրը չի՞ չափազանցնում։ Բնական հայերենո՞վ է, թե՞ մեքենայական թարգմանության զգացողություն կա։ Կրկնվո՞ւմ են աղբյուրի նախադասությունները։ Եթե որևէ կետում վստահ չես, վերադարձրու needs_review:true փոխարենը, քան հրապարակել ցածր վստահությամբ նյութ։
 
 Պատասխանիր ՄԻԱՅՆ վավեր JSON օբյեկտով, առանց markdown-ի կամ լրացուցիչ տեքստի, հետևյալ կառուցվածքով.
-{"title":"Կարճ, կոնկրետ վերնագիր","excerpt":"1-2 նախադասությամբ ամփոփում","content":"2-4 պարբերությամբ ամբողջական նյութ","category":"Ֆուտբոլ","publish":true,"duplicate":false,"needs_review":false,"review_reason":null}
+{"title":"Կարճ, կոնկրետ վերնագիր","excerpt":"1-2 նախադասությամբ ամփոփում","content":"2-4 պարբերությամբ ամբողջական նյութ","category":"Ֆուտբոլ","seo_title":"Մինչև 60 նիշանոց SEO-ի համար օպտիմիզացված վերնագիր (կարող է title-ից տարբեր լինել, եթե title-ը երկար է)","meta_description":"Մինչև 155 նիշանոց նկարագրություն՝ Google-ի search արդյունքների համար","tags":["Հիմնական ֆուտբոլիստի/ակումբի անուն","Մրցաշար","այլ առանցքային keyword, առավելագույնը 5-6"],"alternative_titles":["Երկրորդ վերնագրի տարբերակ","Երրորդ վերնագրի տարբերակ"],"facebook_text":"2-3 բնական նախադասություն Facebook-ի համար, առանց clickbait-ի","telegram_text":"Կարճ տարբերակ Telegram-ի համար","confidence":0.95,"publish":true,"duplicate":false,"needs_review":false,"review_reason":null}
 
-Եթե նյութը հուսալիորեն հրապարակելի չէ (կրկնություն է, հակասական տվյալներ, կամ ցածր վստահություն), վերադարձրու publish:false (կամ duplicate:true/needs_review:true, review_reason դաշտում կարճ բացատրությամբ) փոխարենը, քան հորինել բացակայող մանրամասներ։`;
+Եթե նյութը հուսալիորեն հրապարակելի չէ (կրկնություն է, հակասական տվյալներ, կամ ցածր վստահություն), վերադարձրու publish:false (կամ duplicate:true/needs_review:true, review_reason դաշտում կարճ բացատրությամբ) փոխարենը, քան հորինել բացակայող մանրամասներ։ confidence դաշտում գրիր քո իրական վստահության մակարդակը (0-1), ելնելով նրանից, թե որքան լիարժեք են մուտքային փաստերը։`;
 
 export async function generateMatchRecap(
   apiKey: string,

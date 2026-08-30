@@ -26,6 +26,19 @@ export const articles = sqliteTable("articles", {
   importance: integer("importance").notNull().default(50),
   socialStatus: text("social_status").notNull().default("pending"),
   league: text("league"),
+  // Added for the extended AI-generation schema: separate SEO title/
+  // description (falls back to title/excerpt if not set), a JSON array of
+  // keyword tags, pre-drafted Facebook/Telegram post text (stored for
+  // when auto-posting is eventually built - not published anywhere yet),
+  // up to 2 alternative headline options, and the model's own 0-100
+  // confidence self-assessment.
+  seoTitle: text("seo_title"),
+  metaDescription: text("meta_description"),
+  tags: text("tags"),
+  facebookText: text("facebook_text"),
+  telegramText: text("telegram_text"),
+  alternativeTitles: text("alternative_titles"),
+  confidence: integer("confidence"),
 }, (table) => [
   uniqueIndex("articles_slug_unique").on(table.slug),
   uniqueIndex("articles_source_url_unique").on(table.sourceUrl),

@@ -177,6 +177,13 @@ export async function saveGeneratedArticle(input: {
   sourceName: string;
   sourceUrl: string;
   uniquePart: string;
+  seoTitle?: string | null;
+  metaDescription?: string | null;
+  tags?: string[];
+  facebookText?: string | null;
+  telegramText?: string | null;
+  alternativeTitles?: string[];
+  confidence?: number | null;
 }): Promise<boolean> {
   try {
     const db = await getDb();
@@ -194,6 +201,13 @@ export async function saveGeneratedArticle(input: {
         sourceUrl: input.sourceUrl,
         status: "published",
         league,
+        seoTitle: input.seoTitle ?? null,
+        metaDescription: input.metaDescription ?? null,
+        tags: input.tags?.length ? JSON.stringify(input.tags) : null,
+        facebookText: input.facebookText ?? null,
+        telegramText: input.telegramText ?? null,
+        alternativeTitles: input.alternativeTitles?.length ? JSON.stringify(input.alternativeTitles) : null,
+        confidence: input.confidence ?? null,
       })
       .onConflictDoNothing({ target: articles.sourceUrl })
       .returning({ id: articles.id });
