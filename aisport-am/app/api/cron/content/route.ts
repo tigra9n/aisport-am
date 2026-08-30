@@ -157,6 +157,23 @@ async function runRecaps(apiKey: string, log: string[], deadline: number): Promi
     // this filter is needed here specifically to keep it out of
     // automated recap generation.
     const finished = matches.filter((m) => !m.isLive && m.homeScore !== null && m.status === "Ավարտված" && m.competition !== "Հայաստանի Պրեմիեր լիգա");
+    // Prefer the most important available match, not just whichever
+    // happens to come first in getLiveMatches' array order (which isn't
+    // ordered by significance) - top-5 European leagues and the
+    // Champions League rank highest, MLS/Saudi Pro League lowest.
+    const COMPETITION_PRIORITY: Record<string, number> = {
+      "Չեմպիոնների լիգա": 100,
+      "Անգլիայի Պրեմիեր լիգա": 90,
+      "Իսպանիայի Լա Լիգա": 90,
+      "Իտալիայի Սերիա Ա": 85,
+      "Գերմանիայի Բունդեսլիգա": 85,
+      "Ֆրանսիայի Լիգա 1": 80,
+      "Եվրոպա լիգա": 70,
+      "Կոնֆերենցիաների լիգա": 60,
+      "Սաուդյան Արաբիայի պրոֆեսիոնալ լիգա": 40,
+      "MLS": 40,
+    };
+    finished.sort((a, b) => (COMPETITION_PRIORITY[b.competition] ?? 30) - (COMPETITION_PRIORITY[a.competition] ?? 30));
     log.push(`recap debug: total=${matches.length}, finished=${finished.length} (${finished.map((m) => `${m.home}-${m.away}/${m.competition}`).join(", ")})`);
     for (const match of finished) {
       if (generated >= MAX_PER_TYPE || attempted >= MAX_ATTEMPTS) break;
@@ -477,16 +494,21 @@ export async function GET(request: Request) {
   let generated = 0;
   let mode = forcedMode ?? "rss";
   if (!forcedMode) {
-    // No explicit mode requested (the normal automated path): try a
-    // post-match recap for a finished top-league match first (Premier
-    // League, La Liga, Serie A, Bundesliga, Ligue 1, Champions/Europa/
-    // Conference League, Saudi Pro League, MLS - whatever's in
-    // getLiveMatches' tracked set), since that's higher-value, fact-rich
-    // content when available. Falls back to the general RSS/entity-search
-    // path if there's nothing new to recap this hour.
-    generated = await runRecaps(claudeApiKey, log, deadline);
-    if (generated > 0) {
-      mode = "recap";
+    // BUG FIXED: "always try recap first, only fall back to RSS if
+    // nothing to recap" sounded reasonable but backfired - given how many
+    // leagues we track (top-5 Europe + Champions/Europa/Conference +
+    // Saudi + MLS), there's almost ALWAYS a finished match somewhere at
+    // any given hour, so recap mode kept "succeeding" and RSS/general
+    // news never got a turn. Alternate by hour instead, so both content
+    // types get a genuinely fair share across the day - recap still only
+    // fires on its half of the hours, and within those, now picks the
+    // most important available match (see COMPETITION_PRIORITY above)
+    // rather than an arbitrary one.
+    const hourIsEven = new Date().getUTCHours() % 2 === 0;
+    if (hourIsEven) {
+      generated = await runRecaps(claudeApiKey, log, deadline);
+      mode = generated > 0 ? "recap" : "rss";
+      if (generated === 0) generated = await runRss(claudeApiKey, log, deadline, url.searchParams.get("source"), url.searchParams.get("titleQuery"));
     } else {
       mode = "rss";
       generated = await runRss(claudeApiKey, log, deadline, url.searchParams.get("source"), url.searchParams.get("titleQuery"));
