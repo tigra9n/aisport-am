@@ -235,6 +235,18 @@ async function runPreviews(apiKey: string, log: string[], deadline: number): Pro
 async function runRss(apiKey: string, log: string[], deadline: number, sourceFilter?: string | null, debugTitleQuery?: string | null): Promise<number> {
   let generated = 0;
   let attempted = 0;
+  // BUG FIXED: the entity-search loop (checking each club/player in the
+  // rotation chain for fresh content) used the same `deadline` as the
+  // final generation step, so a long chain could consume the entire
+  // budget just searching - finding genuinely new items but leaving zero
+  // time to actually call the model and save an article from them
+  // (observed: found 4 new items from an entity, but "time budget
+  // exceeded" fired before generation ever ran, wasting the find).
+  // Reserve the last 30s of the budget exclusively for the actual
+  // fetch-page + generate + save sequence, so search stops early enough
+  // to guarantee generation gets a real chance to run.
+  const GENERATION_RESERVE_MS = 30_000;
+  const searchDeadline = deadline - GENERATION_RESERVE_MS;
   // Cap total generation attempts, not just successes. Each attempt can
   // take up to the per-call timeout regardless of whether it succeeds, so
   // without this a string of parse failures could each eat a long time and
@@ -262,7 +274,7 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
     log.push(`rss debug: allSources=${allSources.length}, filter=${sourceFilter ?? "none"}, matched=${enabledSources.length} (${enabledSources.map((s) => s.name).join(", ")})`);
     for (const source of enabledSources) {
       if (generated >= MAX_PER_TYPE || attempted >= MAX_ATTEMPTS) break;
-      if (Date.now() > deadline) { log.push("rss: time budget exceeded, stopping early"); break; }
+      if (Date.now() > searchDeadline) { log.push("rss: search time budget exceeded, stopping early"); break; }
       // Consider more candidates per tick now that per_page is 50 (up
       // from 10), so a tick where the newest few items are already
       // published still has plenty of untried items to fall through to.
@@ -299,7 +311,7 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
             const cycle = Math.floor(Date.now() / (60 * 60 * 1000));
             const rotationSeed = Math.floor(Date.now() / (60 * 1000));
             for (const pick of pickCombinedChain(cycle, rotationSeed)) {
-              if (Date.now() > deadline) break;
+              if (Date.now() > searchDeadline) break;
               if (await isEntityOverrepresented(pick.value)) continue;
               const found = pick.filterType === "title"
                 ? await fetchApiTubeTitle(apiTubeKey, pick.value, 30)
