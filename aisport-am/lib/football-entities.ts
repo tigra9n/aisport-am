@@ -140,8 +140,6 @@ const PERSONS: Entity[] = [
   { name: "Antoine Griezmann", priority: 80, section: "world" },
   { name: "Martin Odegaard", priority: 80, section: "world" },
   { name: "Bruno Fernandes", priority: 80, section: "world" },
-  { name: "Joshua Kimmich", priority: 80, section: "world" },
-  { name: "Karim Benzema", priority: 80, section: "world" },
   { name: "Alisson Becker", priority: 70, section: "world" },
   { name: "Thibaut Courtois", priority: 70, section: "world" },
   { name: "Virgil van Dijk", priority: 70, section: "world" },
@@ -156,7 +154,6 @@ const PERSONS: Entity[] = [
   { name: "Hansi Flick", priority: 80, section: "coaches" },
   { name: "Xabi Alonso", priority: 80, section: "coaches" },
   { name: "Arne Slot", priority: 80, section: "coaches" },
-  { name: "Roberto De Zerbi", priority: 80, section: "coaches" },
   { name: "Diego Simeone", priority: 70, section: "coaches" },
   { name: "Antonio Conte", priority: 70, section: "coaches" },
   { name: "Carlo Ancelotti", priority: 70, section: "coaches" },
@@ -164,7 +161,6 @@ const PERSONS: Entity[] = [
   { name: "Thomas Tuchel", priority: 70, section: "coaches" },
   { name: "Didier Deschamps", priority: 70, section: "coaches" },
   { name: "Lionel Scaloni", priority: 70, section: "coaches" },
-  { name: "Julian Nagelsmann", priority: 70, section: "coaches" },
 ];
 
 // Names/clubs that returned an "entity/value not found" error get pushed
