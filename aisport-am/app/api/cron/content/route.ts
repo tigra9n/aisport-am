@@ -150,7 +150,13 @@ async function runRecaps(apiKey: string, log: string[], deadline: number): Promi
       getLiveMatches(-1, true),
     ]);
     const matches = [...todayResult.matches, ...yesterdayResult.matches];
-    const finished = matches.filter((m) => !m.isLive && m.homeScore !== null && m.status === "Ավարտված");
+    // Armenia is excluded from AI-driven content generation (same policy
+    // as the RSS entity-search path in football-entities.ts) - Tigran
+    // writes Armenian football/sports content himself via Opinions.
+    // getLiveMatches still tracks Armenia for live scores/standings, so
+    // this filter is needed here specifically to keep it out of
+    // automated recap generation.
+    const finished = matches.filter((m) => !m.isLive && m.homeScore !== null && m.status === "Ավարտված" && m.competition !== "Հայաստանի Պրեմիեր լիգա");
     log.push(`recap debug: total=${matches.length}, finished=${finished.length} (${finished.map((m) => `${m.home}-${m.away}/${m.competition}`).join(", ")})`);
     for (const match of finished) {
       if (generated >= MAX_PER_TYPE || attempted >= MAX_ATTEMPTS) break;
@@ -182,7 +188,8 @@ async function runPreviews(apiKey: string, log: string[], deadline: number): Pro
   const MAX_ATTEMPTS = 1;
   try {
     const { matches } = await getLiveMatches(0, true);
-    const upcoming = matches.filter((m) => !m.isLive && m.homeScore === null);
+    // Same Armenia exclusion as runRecaps above.
+    const upcoming = matches.filter((m) => !m.isLive && m.homeScore === null && m.competition !== "Հայաստանի Պրեմիեր լիգա");
     for (const match of upcoming) {
       if (generated >= MAX_PER_TYPE || attempted >= MAX_ATTEMPTS) break;
       if (Date.now() > deadline) { log.push("preview: time budget exceeded, stopping early"); break; }
