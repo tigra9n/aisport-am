@@ -402,8 +402,8 @@ export async function GET(request: Request) {
     }
   }
 
-  // Publish at most 1 article per 30-minute window (0-29, 30-59), gated
-  // on "already published an article in this UTC hour AND this 30-minute
+  // Publish at most 1 article per 20-minute window (0-19, 20-39, 40-59), gated
+  // on "already published an article in this UTC hour AND this 20-minute
   // window" rather than a fixed minute range - Cloudflare's native cron
   // and the GitHub Actions backup cron both have their own jitter, so
   // whichever tick actually fires first within a window does that
@@ -416,7 +416,7 @@ export async function GET(request: Request) {
       const db = await getDb();
       const recent = await db.select({ publishedAt: articles.publishedAt }).from(articles).orderBy(desc(articles.id)).limit(3);
       const now = new Date();
-      const currentWindow = Math.floor(now.getUTCMinutes() / 30);
+      const currentWindow = Math.floor(now.getUTCMinutes() / 20);
       const sameHourWindowCount = recent.filter((row) => {
         if (!row.publishedAt) return false;
         const d = new Date(row.publishedAt.replace(" ", "T") + "Z");
@@ -424,10 +424,10 @@ export async function GET(request: Request) {
           && d.getUTCMonth() === now.getUTCMonth()
           && d.getUTCDate() === now.getUTCDate()
           && d.getUTCHours() === now.getUTCHours()
-          && Math.floor(d.getUTCMinutes() / 30) === currentWindow;
+          && Math.floor(d.getUTCMinutes() / 20) === currentWindow;
       }).length;
       if (sameHourWindowCount > 0) {
-        return Response.json({ ok: true, mode: "skipped", reason: "already published an article in this 30-minute window", generated: 0, log: [] });
+        return Response.json({ ok: true, mode: "skipped", reason: "already published an article in this 20-minute window", generated: 0, log: [] });
       }
     } catch {
       // If the check itself fails for some reason, fall through and
