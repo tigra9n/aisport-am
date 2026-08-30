@@ -437,12 +437,10 @@ export async function GET(request: Request) {
     }
   }
 
-  // Publish at most 1 article per 20-minute window (0-19, 20-39, 40-59), gated
-  // on "already published an article in this UTC hour AND this 20-minute
-  // window" rather than a fixed minute range - Cloudflare's native cron
-  // and the GitHub Actions backup cron both have their own jitter, so
-  // whichever tick actually fires first within a window does that
-  // window's attempt.
+  // Publish at most 1 article per hour, gated on "already published an
+  // article in this UTC calendar hour" - Cloudflare's native cron and the
+  // GitHub Actions backup cron both have their own jitter, so whichever
+  // tick actually fires first within the hour does that hour's attempt.
   if (!forcedMode) {
     try {
       const { getDb } = await import("../../../../db");
@@ -451,29 +449,42 @@ export async function GET(request: Request) {
       const db = await getDb();
       const recent = await db.select({ publishedAt: articles.publishedAt }).from(articles).orderBy(desc(articles.id)).limit(3);
       const now = new Date();
-      const currentWindow = Math.floor(now.getUTCMinutes() / 20);
-      const sameHourWindowCount = recent.filter((row) => {
+      const sameHourCount = recent.filter((row) => {
         if (!row.publishedAt) return false;
         const d = new Date(row.publishedAt.replace(" ", "T") + "Z");
         return d.getUTCFullYear() === now.getUTCFullYear()
           && d.getUTCMonth() === now.getUTCMonth()
           && d.getUTCDate() === now.getUTCDate()
-          && d.getUTCHours() === now.getUTCHours()
-          && Math.floor(d.getUTCMinutes() / 20) === currentWindow;
+          && d.getUTCHours() === now.getUTCHours();
       }).length;
-      if (sameHourWindowCount > 0) {
-        return Response.json({ ok: true, mode: "skipped", reason: "already published an article in this 20-minute window", generated: 0, log: [] });
+      if (sameHourCount > 0) {
+        return Response.json({ ok: true, mode: "skipped", reason: "already published an article this hour", generated: 0, log: [] });
       }
     } catch {
       // If the check itself fails for some reason, fall through and
       // attempt generation anyway rather than silently skipping forever.
     }
   }
-  const mode = forcedMode ?? "rss";
   const deadline = Date.now() + TIME_BUDGET_MS;
   const log: string[] = [];
   let generated = 0;
-  if (mode === "recap") generated = await runRecaps(claudeApiKey, log, deadline);
+  let mode = forcedMode ?? "rss";
+  if (!forcedMode) {
+    // No explicit mode requested (the normal automated path): try a
+    // post-match recap for a finished top-league match first (Premier
+    // League, La Liga, Serie A, Bundesliga, Ligue 1, Champions/Europa/
+    // Conference League, Saudi Pro League, MLS - whatever's in
+    // getLiveMatches' tracked set), since that's higher-value, fact-rich
+    // content when available. Falls back to the general RSS/entity-search
+    // path if there's nothing new to recap this hour.
+    generated = await runRecaps(claudeApiKey, log, deadline);
+    if (generated > 0) {
+      mode = "recap";
+    } else {
+      mode = "rss";
+      generated = await runRss(claudeApiKey, log, deadline, url.searchParams.get("source"), url.searchParams.get("titleQuery"));
+    }
+  } else if (mode === "recap") generated = await runRecaps(claudeApiKey, log, deadline);
   else if (mode === "preview") generated = await runPreviews(claudeApiKey, log, deadline);
   else generated = await runRss(claudeApiKey, log, deadline, url.searchParams.get("source"), url.searchParams.get("titleQuery"));
 
