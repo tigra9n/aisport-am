@@ -39,7 +39,7 @@ async function callClaude(systemPrompt: string, userPrompt: string, apiKey: stri
         // with Sonnet 5; the cron reliability issue needs a different
         // fix (e.g. relying on GitHub Actions backup cron, which isn't
         // capped at 30s, rather than compromising content quality).
-        model: "claude-opus-5",
+        model: "claude-sonnet-5",
         // Bumped 900 -> 2048 -> 4096 -> 8192: even 4096 still produced an
         // occasional truncated/unparseable JSON response (Claude's own
         // stop_reason=max_tokens before finishing the JSON structure).
