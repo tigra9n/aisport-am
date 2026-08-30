@@ -316,6 +316,14 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
               const found = pick.filterType === "title"
                 ? await fetchApiTubeTitle(apiTubeKey, pick.value, 30)
                 : await fetchApiTubePerson(apiTubeKey, pick.value, 30);
+              // Small pause between successive entity searches - APITube's
+              // dashboard showed a 59% error rate, and this chain can make
+              // many rapid back-to-back calls with no spacing when
+              // exhausting a long entity list looking for fresh content.
+              // A modest delay costs little against our overall time
+              // budget but reduces the odds of tripping a per-second rate
+              // limit on their side.
+              await new Promise((resolve) => setTimeout(resolve, 300));
               if (!found.length) continue;
               // Bug fixed: previously broke here on the first entity with
               // ANY items, even if every single one turned out to already
