@@ -310,9 +310,24 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
           if (!items.length) {
             const cycle = Math.floor(Date.now() / (60 * 60 * 1000));
             const rotationSeed = Math.floor(Date.now() / (60 * 1000));
+            // BUG FIXED: previously this loop only stopped on time budget
+            // or finding content, meaning a bad-luck cycle could burn
+            // through dozens of entities in rapid sequential API calls -
+            // this burst request pattern is very likely what triggered
+            // APITube's 59% weekly error rate (their dashboard showed
+            // this after we started expanding the entity pool). Capping
+            // attempts per generation call keeps our request volume
+            // spread out over the day instead of bursty - the rotating
+            // starting point (rotationSeed changes every minute) still
+            // covers the whole entity pool over multiple attempts, just
+            // more gradually.
+            const MAX_ENTITIES_PER_ATTEMPT = 8;
+            let entitiesTried = 0;
             for (const pick of pickCombinedChain(cycle, rotationSeed)) {
+              if (entitiesTried >= MAX_ENTITIES_PER_ATTEMPT) { log.push(`rss: reached ${MAX_ENTITIES_PER_ATTEMPT}-entity cap for this attempt, stopping`); break; }
               if (Date.now() > searchDeadline) break;
               if (await isEntityOverrepresented(pick.value)) continue;
+              entitiesTried++;
               const found = pick.filterType === "title"
                 ? await fetchApiTubeTitle(apiTubeKey, pick.value, 30)
                 : await fetchApiTubePerson(apiTubeKey, pick.value, 30);
