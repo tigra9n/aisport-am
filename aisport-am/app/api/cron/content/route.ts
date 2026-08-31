@@ -51,9 +51,12 @@ function significantWords(title: string): Set<string> {
   );
 }
 
-function sharesTopicWith(a: string, b: string): boolean {
+function sharesTopicWith(a: string, b: string, excludeWords?: Set<string>): boolean {
   const wa = significantWords(a);
   const wb = significantWords(b);
+  if (excludeWords) {
+    for (const w of excludeWords) { wa.delete(w); wb.delete(w); }
+  }
   if (!wa.size || !wb.size) return false;
   let shared = 0;
   for (const w of wa) if (wb.has(w)) shared++;
@@ -71,7 +74,18 @@ async function isTopicRecentlyCovered(value: string, candidateTitle: string): Pr
       .bind(`entity_cooldown:${value}`).first<{ payload: string; savedAt: number }>();
     if (!row) return false;
     if (Date.now() - row.savedAt > ENTITY_COOLDOWN_MS) return false;
-    return sharesTopicWith(row.payload, candidateTitle);
+    // BUG FIXED: for multi-word entities (Real Madrid, Manchester United,
+    // Bayern Munich, etc.) the entity's own name alone could satisfy the
+    // 2-shared-word threshold, since both the old and new title
+    // necessarily mention the club by name - this caused completely
+    // unrelated stories about the same club (e.g. "signs new manager" vs
+    // "wins match") to be incorrectly flagged as duplicates, hurting our
+    // most common (2-word) top clubs hardest. Exclude the searched
+    // entity's own name words from the comparison - only genuinely
+    // distinguishing words (players mentioned, opponent, news type)
+    // should count toward "same story".
+    const entityWords = significantWords(value);
+    return sharesTopicWith(row.payload, candidateTitle, entityWords);
   } catch {
     return false;
   }
