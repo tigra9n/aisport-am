@@ -308,35 +308,59 @@ const BAD_VALUE_ERROR_CODES = ["ER0151", "ER0216", "ER0220", "ER0228"];
 // title= search - apply the same fix here for consistency and
 // reliability.
 export async function fetchApiTubePerson(apiKey: string, personName: string, limit: number): Promise<FeedItem[]> {
+  const surname = personName.trim().split(/\s+/).pop()?.toLowerCase() ?? "";
+  const verify = (results: ApiTubeArticle[]) => results.filter((a) => {
+    if (!isTrustedFootballDomain(a.href)) return false;
+    const text = `${a.title ?? ""} ${a.description ?? ""}`.toLowerCase();
+    if (isAmericanFootball(text)) return false;
+    if (!surname) return true;
+    return text.includes(surname);
+  });
+
+  // Hybrid: try the strict person.name entity lookup first - when it
+  // matches APITube's canonical registry entry, it's a BROADER match
+  // than a title= search (catches articles that mention the player
+  // prominently without necessarily naming them in the headline).
+  // Confirmed working for many top players (Messi, Bruno Fernandes,
+  // etc.) via direct testing. Only fall back to the narrower title=
+  // search (see fetchApiTubeTitle below) if person.name specifically
+  // errors with "entity not found" (ER0216) - confirmed happening for
+  // some well-known players too (Haaland, Mbappe), likely due to
+  // accent/formatting mismatches with their canonical registry name.
+  // An earlier version of this function switched entirely to title=
+  // search, which fixed the "not found" cases but regressed everyone
+  // else to a narrower match than they'd had before - this hybrid keeps
+  // the best of both.
   try {
-    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&title=${encodeURIComponent(personName)}&category.id=medtop:15000000&published_at.start=${recentSinceParam()}&per_page=50&sort.by=published_at&sort.order=desc`;
-    const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
-    if (!res.ok) {
-      const bodyText = await res.text().catch(() => "");
+    const entityUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&person.name=${encodeURIComponent(personName)}&published_at.start=${recentSinceParam()}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
+    const res = await fetch(entityUrl, { headers: { "Content-Type": "application/json" } });
+    if (res.ok) {
+      const data = await res.json() as { results?: ApiTubeArticle[] };
+      return mapApiTubeResults(verify(data.results ?? []), limit, true);
+    }
+    const bodyText = await res.text().catch(() => "");
+    if (!bodyText.includes("ER0216")) {
+      // A different error (rate limit, server issue, etc.) - don't mask
+      // it by silently falling through to a second call, just report no
+      // items this attempt like before.
       if (BAD_VALUE_ERROR_CODES.some((code) => bodyText.includes(code))) {
         const { quarantineValue } = await import("./football-entities");
         quarantineValue(personName);
       }
       return [];
     }
-    const data = await res.json() as { results?: ApiTubeArticle[] };
-    // APITube's tagging isn't always accurate - found a completely
-    // unrelated fast-food app launch article tagged as being about
-    // "Henrikh Mkhitaryan" (the name appeared nowhere in the title or
-    // description) back when this used person.name entity tagging. Don't
-    // trust it blindly: require at least the person's surname to
-    // actually appear in the text as a sanity check, same as before.
-    const surname = personName.trim().split(/\s+/).pop()?.toLowerCase() ?? "";
-    const verified = (data.results ?? []).filter((a) => {
-      if (!isTrustedFootballDomain(a.href)) return false;
-      const text = `${a.title ?? ""} ${a.description ?? ""}`.toLowerCase();
-      if (isAmericanFootball(text)) return false;
-      if (!surname) return true;
-      return text.includes(surname);
-    });
-    return mapApiTubeResults(verified, limit, true);
   } catch (err) {
-    console.error(`[feeds] apitube person fetch failed (${personName}): ${String(err)}`);
+    console.error(`[feeds] apitube person entity fetch failed (${personName}): ${String(err)}`);
+  }
+
+  try {
+    const titleUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&title=${encodeURIComponent(personName)}&category.id=medtop:15000000&published_at.start=${recentSinceParam()}&per_page=50&sort.by=published_at&sort.order=desc`;
+    const res = await fetch(titleUrl, { headers: { "Content-Type": "application/json" } });
+    if (!res.ok) return [];
+    const data = await res.json() as { results?: ApiTubeArticle[] };
+    return mapApiTubeResults(verify(data.results ?? []), limit, true);
+  } catch (err) {
+    console.error(`[feeds] apitube person title-fallback fetch failed (${personName}): ${String(err)}`);
     return [];
   }
 }
