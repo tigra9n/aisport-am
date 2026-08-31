@@ -18,8 +18,8 @@ jobs:
       - name: Check latest articles and live status
         working-directory: aisport-am
         run: |
-          npm install --no-audit --no-fund
-          npx wrangler d1 execute aisport-db --remote --command "DELETE FROM articles WHERE id = 214;" 2>&1 > ../add-source-result.txt || true
+          echo "---testing rss mode directly---" > ../add-source-result.txt
+          curl -s --max-time 150 "https://aifootball.am/api/cron/content?mode=rss&token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" >> ../add-source-result.txt
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
