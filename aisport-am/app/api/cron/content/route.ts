@@ -369,6 +369,7 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
               const found = pick.filterType === "title"
                 ? await fetchApiTubeTitle(apiTubeKey, pick.value, 30)
                 : await fetchApiTubePerson(apiTubeKey, pick.value, 30);
+              log.push(`rss debug: [${pick.filterType}] ${pick.value} -> ${found.length} items`);
               // Small pause between successive entity searches - APITube's
               // dashboard showed a 59% error rate, and this chain can make
               // many rapid back-to-back calls with no spacing when
