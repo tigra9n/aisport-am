@@ -18,7 +18,7 @@ jobs:
       - name: Check latest articles and live status
         working-directory: aisport-am
         run: |
-          echo "---retry rss mode---" > ../add-source-result.txt
+          echo "---retry rss mode again---" > ../add-source-result.txt
           curl -s --max-time 150 "https://aifootball.am/api/cron/content?mode=rss&token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" >> ../add-source-result.txt
           cat ../add-source-result.txt
         env:
