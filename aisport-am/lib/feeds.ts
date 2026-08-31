@@ -296,9 +296,20 @@ const BAD_VALUE_ERROR_CODES = ["ER0151", "ER0216", "ER0220", "ER0228"];
 // called with, and for why it's one name at a time rather than a
 // comma-separated OR list (a single unrecognized name fails the whole
 // request).
+// BUG FIXED: person.name is a strict entity-ID lookup against APITube's
+// internal registry, not a general text search - confirmed "entity
+// person name not found" (ER0216) errors for well-known players like
+// Erling Haaland and Kylian Mbappe (likely due to accents/middle-name
+// formatting mismatches with their canonical registry entry), while
+// others (Messi, Bruno Fernandes) happened to match. This silently
+// wasted a large fraction of our per-attempt entity budget on "not
+// found" errors. Clubs had the identical problem with organization.name
+// (see fetchApiTubeTitle below) and were already switched to a plain
+// title= search - apply the same fix here for consistency and
+// reliability.
 export async function fetchApiTubePerson(apiKey: string, personName: string, limit: number): Promise<FeedItem[]> {
   try {
-    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&person.name=${encodeURIComponent(personName)}&published_at.start=${recentSinceParam()}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
+    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&title=${encodeURIComponent(personName)}&category.id=medtop:15000000&published_at.start=${recentSinceParam()}&per_page=50&sort.by=published_at&sort.order=desc`;
     const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
     if (!res.ok) {
       const bodyText = await res.text().catch(() => "");
@@ -309,12 +320,12 @@ export async function fetchApiTubePerson(apiKey: string, personName: string, lim
       return [];
     }
     const data = await res.json() as { results?: ApiTubeArticle[] };
-    // APITube's person.name entity tagging isn't always accurate - found
-    // a completely unrelated fast-food app launch article tagged as
-    // being about "Henrikh Mkhitaryan" (the name appeared nowhere in the
-    // title or description). Don't trust the entity tag blindly: require
-    // at least the person's surname to actually appear in the text as an
-    // extra sanity check on top of APITube's own classification.
+    // APITube's tagging isn't always accurate - found a completely
+    // unrelated fast-food app launch article tagged as being about
+    // "Henrikh Mkhitaryan" (the name appeared nowhere in the title or
+    // description) back when this used person.name entity tagging. Don't
+    // trust it blindly: require at least the person's surname to
+    // actually appear in the text as a sanity check, same as before.
     const surname = personName.trim().split(/\s+/).pop()?.toLowerCase() ?? "";
     const verified = (data.results ?? []).filter((a) => {
       if (!isTrustedFootballDomain(a.href)) return false;
