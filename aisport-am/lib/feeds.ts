@@ -276,6 +276,7 @@ async function fetchApiTubeDirect(bridgeUrl: string, limit: number): Promise<Fee
     const trusted = (data.results ?? []).filter((a) => {
       if (!isTrustedFootballDomain(a.href)) return false;
       const text = `${a.title ?? ""} ${a.description ?? ""}`.toLowerCase();
+      if (isAmericanFootball(text)) return false;
       return FOOTBALL_CONTEXT_WORDS.some((w) => text.includes(w));
     });
     return mapApiTubeResults(trusted, limit);
@@ -317,8 +318,10 @@ export async function fetchApiTubePerson(apiKey: string, personName: string, lim
     const surname = personName.trim().split(/\s+/).pop()?.toLowerCase() ?? "";
     const verified = (data.results ?? []).filter((a) => {
       if (!isTrustedFootballDomain(a.href)) return false;
+      const text = `${a.title ?? ""} ${a.description ?? ""}`.toLowerCase();
+      if (isAmericanFootball(text)) return false;
       if (!surname) return true;
-      return `${a.title ?? ""} ${a.description ?? ""}`.toLowerCase().includes(surname);
+      return text.includes(surname);
     });
     return mapApiTubeResults(verified, limit, true);
   } catch (err) {
@@ -351,6 +354,23 @@ const FOOTBALL_CONTEXT_WORDS = [
   "premier league", "la liga", "serie a", "cup",
 ];
 
+// "football" alone is ambiguous - American sources use it for NFL, not
+// soccer, so an article about an NFL roster move can satisfy the
+// positive FOOTBALL_CONTEXT_WORDS check above purely by containing the
+// word "football" (confirmed leak: an NFL Tennessee Titans article got
+// generated and published, self-labeled "Ամերիկյան ֆուտբոլ" by the model
+// but written anyway). These American-football-specific terms disqualify
+// a match even if it otherwise passed the positive check.
+const AMERICAN_FOOTBALL_EXCLUDE_WORDS = [
+  "nfl", "quarterback", "touchdown", "american football", "super bowl",
+  "wide receiver", "running back", "linebacker", "field goal", "punt",
+  "gridiron", "afc", "nfc",
+];
+function isAmericanFootball(text: string): boolean {
+  const lower = text.toLowerCase();
+  return AMERICAN_FOOTBALL_EXCLUDE_WORDS.some((w) => lower.includes(w));
+}
+
 export async function fetchApiTubeTitle(apiKey: string, clubName: string, limit: number): Promise<FeedItem[]> {
   try {
     const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&title=${encodeURIComponent(clubName)}&category.id=medtop:15000000&published_at.start=${recentSinceParam()}&per_page=50&sort.by=published_at&sort.order=desc`;
@@ -360,6 +380,7 @@ export async function fetchApiTubeTitle(apiKey: string, clubName: string, limit:
     const verified = (data.results ?? []).filter((a) => {
       if (!isTrustedFootballDomain(a.href)) return false;
       const text = `${a.title ?? ""} ${a.description ?? ""}`.toLowerCase();
+      if (isAmericanFootball(text)) return false;
       return FOOTBALL_CONTEXT_WORDS.some((w) => text.includes(w));
     });
     return mapApiTubeResults(verified, limit, true);
