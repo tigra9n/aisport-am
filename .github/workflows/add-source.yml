@@ -18,8 +18,8 @@ jobs:
       - name: Check latest articles and live status
         working-directory: aisport-am
         run: |
-          echo "---retesting rss mode with 20-cap---" > ../add-source-result.txt
-          curl -s --max-time 150 "https://aifootball.am/api/cron/content?mode=rss&token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" >> ../add-source-result.txt
+          echo "---raw APITube test with known key---" > ../add-source-result.txt
+          curl -s "https://api.apitube.io/v1/news/everything?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&title=Real%20Madrid&category.id=medtop:15000000&per_page=5&sort.by=published_at&sort.order=desc" >> ../add-source-result.txt
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
