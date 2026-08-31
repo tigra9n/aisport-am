@@ -18,14 +18,8 @@ jobs:
       - name: Check latest articles and live status
         working-directory: aisport-am
         run: |
-          echo "---Messi---" > ../add-source-result.txt
-          curl -s "https://api.apitube.io/v1/news/everything?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&person.name=Lionel+Messi&published_at.start=2026-08-28&per_page=5&language.code=en" >> ../add-source-result.txt
-          echo "" >> ../add-source-result.txt
-          echo "---Mbappe---" >> ../add-source-result.txt
-          curl -s "https://api.apitube.io/v1/news/everything?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&person.name=Kylian+Mbappe&published_at.start=2026-08-28&per_page=5&language.code=en" >> ../add-source-result.txt
-          echo "" >> ../add-source-result.txt
-          echo "---Bruno Fernandes---" >> ../add-source-result.txt
-          curl -s "https://api.apitube.io/v1/news/everything?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&person.name=Bruno+Fernandes&published_at.start=2026-08-28&per_page=5&language.code=en" >> ../add-source-result.txt
+          echo "---testing rss mode after major person-search fix---" > ../add-source-result.txt
+          curl -s --max-time 150 "https://aifootball.am/api/cron/content?mode=rss&token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" >> ../add-source-result.txt
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
