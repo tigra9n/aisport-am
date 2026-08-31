@@ -345,7 +345,7 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
             // starting point (rotationSeed changes every minute) still
             // covers the whole entity pool over multiple attempts, just
             // more gradually.
-            const MAX_ENTITIES_PER_ATTEMPT = 8;
+            const MAX_ENTITIES_PER_ATTEMPT = 20;
             let entitiesTried = 0;
             for (const pick of pickCombinedChain(cycle, rotationSeed)) {
               if (entitiesTried >= MAX_ENTITIES_PER_ATTEMPT) { log.push(`rss: reached ${MAX_ENTITIES_PER_ATTEMPT}-entity cap for this attempt, stopping`); break; }
