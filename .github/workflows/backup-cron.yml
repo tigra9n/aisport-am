@@ -29,10 +29,9 @@ jobs:
       - name: Warm cache
         run: curl -s --max-time 20 "https://aisport.am/api/cron/warm?token=${{ secrets.CRON_TOKEN }}" || true
       - name: Generate content
-        # Bumped 65s -> 100s -> 130s -> 150s -> 230s -> 300s: server's
-        # TIME_BUDGET_MS raised to 280s (see app/api/cron/content/route.ts)
-        # per explicit request to check the whole ~99-entity pool per
-        # attempt instead of a 30-entity cap. Client timeout stays
-        # comfortably above the server deadline, same margin principle as
-        # every previous bump.
-        run: curl -s --max-time 300 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}" || true
+        # Server's TIME_BUDGET_MS is 210s (see
+        # app/api/cron/content/route.ts) - 95s search budget + 115s
+        # generation reserve (callClaude() has its own hardcoded 100s
+        # timeout on the Anthropic API call). Client timeout stays
+        # comfortably above the server deadline.
+        run: curl -s --max-time 230 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}" || true

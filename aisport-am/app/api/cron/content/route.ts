@@ -23,7 +23,7 @@ const MAX_PER_TYPE = 1;
 // generation for a full article (max_tokens ~2048) genuinely takes
 // 30-40+ seconds - this isn't a bug, just how long it takes. Budget must
 // comfortably fit one full attempt, not try to rush it.
-const TIME_BUDGET_MS = 280_000; // Bumped 210s -> 280s per explicit request to check the whole ~99-entity pool per attempt (was capped at 30/attempt). Search budget = 280s - 115s generation reserve = 165s; at 1.3s/entity pacing (see MAX_ENTITIES_PER_ATTEMPT below) that's room for ~127 entities, comfortably covering the full pool. Client timeout must be bumped accordingly (see backup-cron.yml).
+const TIME_BUDGET_MS = 210_000; // 95s search budget + 115s generation reserve (100s Claude timeout + margin). Client timeout must be bumped accordingly (see backup-cron.yml).
 
 // Same club/player getting picked again soon after was letting a single
 // hot story (e.g. an ongoing transfer saga) get covered twice within a
@@ -359,7 +359,7 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
             // starting point (rotationSeed changes every minute) still
             // covers the whole entity pool over multiple attempts, just
             // more gradually.
-            const MAX_ENTITIES_PER_ATTEMPT = 150; // effectively uncapped - total pool is ~99 usable entities (see football-entities.ts), so this never actually triggers; the search time budget is the real limiting factor now
+            const MAX_ENTITIES_PER_ATTEMPT = 15;
             let entitiesTried = 0;
             for (const pick of pickCombinedChain(cycle, rotationSeed)) {
               if (entitiesTried >= MAX_ENTITIES_PER_ATTEMPT) { log.push(`rss: reached ${MAX_ENTITIES_PER_ATTEMPT}-entity cap for this attempt, stopping`); break; }
@@ -383,14 +383,7 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
               // that pacing at the real limit would actually take. This
               // was very likely causing near-total rate-limit failures on
               // every multi-entity search attempt.
-              //
-              // UPDATED: account unexpectedly upgraded to Basic plan (50
-              // req/min, real-time access, no 12h delay, 200 results/req -
-              // confirmed via dashboard). 1.3s comfortably respects the
-              // higher 50/min limit while letting many more entities fit
-              // in the search time budget - per explicit request to check
-              // the whole ~99-entity pool per attempt.
-              await new Promise((resolve) => setTimeout(resolve, 1300));
+              await new Promise((resolve) => setTimeout(resolve, 6500));
               if (!found.length) continue;
               // Bug fixed: previously broke here on the first entity with
               // ANY items, even if every single one turned out to already
@@ -479,29 +472,25 @@ export async function GET(request: Request) {
 
   const forcedMode = url.searchParams.get("mode");
 
-  // Publishing window: 09:00-02:00 Yerevan time (UTC+4, no DST) - 17
-  // hours. Manual ?mode= calls bypass the window so testing works any
-  // time of day.
+  // Publishing window: 09:00-23:00 Yerevan time (UTC+4, no DST) - 14
+  // hours (9 through 22 inclusive), giving exactly 7 odd + 7 even hours
+  // to match the 7+7 daily caps below with no leftover mismatched hours.
+  // Manual ?mode= calls bypass the window so testing works any time of
+  // day.
   const yerevanHour = (new Date().getUTCHours() + 4) % 24;
   if (!forcedMode) {
-    const inWindow = yerevanHour >= 9 || yerevanHour < 2;
+    const inWindow = yerevanHour >= 9 && yerevanHour < 23;
     if (!inWindow) {
-      return Response.json({ ok: true, mode: "skipped", reason: "outside 09:00-02:00 Yerevan publishing window", generated: 0, log: [] });
+      return Response.json({ ok: true, mode: "skipped", reason: "outside 09:00-23:00 Yerevan publishing window", generated: 0, log: [] });
     }
   }
 
-  // Per-hour pattern, per explicit request: 5 twelve-minute slots per
-  // hour (minutes 0-11, 12-23, 24-35, 36-47, 48-59) - slot 0 = recap,
-  // slots 1-4 = RSS, giving exactly 4 RSS + 1 recap every hour. Dispatch
-  // still checks every 5 minutes (unchanged - see backup-cron.yml), but
-  // gating on "already published this type in this 12-minute slot"
-  // means only the first tick to succeed within each slot actually
-  // produces an article, naturally landing close to the intended
-  // 12-minute cadence without needing to change the external trigger
-  // schedule.
+  // Strict hourly alternation by Yerevan-time hour parity: odd hour =
+  // RSS only, even hour = recap only, no cross-fallback between the two.
+  // Each type gets its own independent daily cap of 7 articles, gated on
+  // "already published this type this hour".
   const nowForSlot = new Date();
-  const slotIndex = Math.floor(nowForSlot.getUTCMinutes() / 12); // 0-4
-  const wantRecap = slotIndex === 0;
+  const wantRecap = yerevanHour % 2 === 0;
   let slotClaimKey: string | null = null;
   let claimDb: Awaited<ReturnType<typeof import("../../../../db")["getDb"]>> | null = null;
   if (!forcedMode) {
@@ -511,7 +500,7 @@ export async function GET(request: Request) {
       const { desc } = await import("drizzle-orm");
       const db = await getDb();
       const recent = await db.select({ publishedAt: articles.publishedAt, sourceName: articles.sourceName }).from(articles).orderBy(desc(articles.id)).limit(10);
-      const sameSlotSameType = recent.some((row) => {
+      const sameHourSameType = recent.some((row) => {
         if (!row.publishedAt) return false;
         const isRecapRow = row.sourceName === "AIFootball";
         if (isRecapRow !== wantRecap) return false;
@@ -519,31 +508,38 @@ export async function GET(request: Request) {
         return d.getUTCFullYear() === nowForSlot.getUTCFullYear()
           && d.getUTCMonth() === nowForSlot.getUTCMonth()
           && d.getUTCDate() === nowForSlot.getUTCDate()
-          && d.getUTCHours() === nowForSlot.getUTCHours()
-          && Math.floor(d.getUTCMinutes() / 12) === slotIndex;
+          && d.getUTCHours() === nowForSlot.getUTCHours();
       });
-      if (sameSlotSameType) {
-        return Response.json({ ok: true, mode: "skipped", reason: `already published ${wantRecap ? "a recap" : "an RSS article"} in this 12-minute slot`, generated: 0, log: [] });
+      if (sameHourSameType) {
+        return Response.json({ ok: true, mode: "skipped", reason: `already published ${wantRecap ? "a recap" : "an RSS article"} this hour`, generated: 0, log: [] });
       }
-      // BUG FIXED: the check above (read recent articles, decide) isn't
-      // atomic on its own - two concurrent requests (e.g. dispatch's own
-      // 5-min tick overlapping with a manual test call) can both read
-      // "not yet published" before either one finishes the ~30-60s
-      // generation+save cycle, so both proceed and both eventually
-      // publish. Confirmed live: two articles landed 41 seconds apart in
-      // the same 12-minute slot. Fix: atomically CLAIM the slot with a
-      // plain INSERT (no ON CONFLICT) against api_cache's cache_key
-      // PRIMARY KEY - only one concurrent request can win this insert,
-      // the other gets a constraint-violation exception and skips
-      // immediately instead of also generating.
-      const key = `slot_claim:${nowForSlot.getUTCFullYear()}-${nowForSlot.getUTCMonth()}-${nowForSlot.getUTCDate()}-${nowForSlot.getUTCHours()}-${slotIndex}-${wantRecap ? "recap" : "rss"}`;
+      // Daily caps: 7 RSS + 7 recap, matching the 14-hour window's 7 odd
+      // + 7 even hours.
+      const today = await db.select({ publishedAt: articles.publishedAt, sourceName: articles.sourceName }).from(articles).orderBy(desc(articles.id)).limit(30);
+      const publishedTodayOfType = today.filter((row) => {
+        if (!row.publishedAt) return false;
+        const isRecapRow = row.sourceName === "AIFootball";
+        if (isRecapRow !== wantRecap) return false;
+        const d = new Date(row.publishedAt.replace(" ", "T") + "Z");
+        return d.getUTCFullYear() === nowForSlot.getUTCFullYear() && d.getUTCMonth() === nowForSlot.getUTCMonth() && d.getUTCDate() === nowForSlot.getUTCDate();
+      }).length;
+      if (publishedTodayOfType >= 7) {
+        return Response.json({ ok: true, mode: "skipped", reason: `daily ${wantRecap ? "recap" : "RSS"} article cap (7) reached`, generated: 0, log: [] });
+      }
+      // Atomic claim (kept from the later redesign - fixes a genuine,
+      // plan-independent race condition where two concurrent requests
+      // could both pass the read-based check above before either
+      // finished generating, confirmed live as two articles landing 41s
+      // apart). Adapted to hourly granularity to match this simpler
+      // schedule.
+      const key = `hour_claim:${nowForSlot.getUTCFullYear()}-${nowForSlot.getUTCMonth()}-${nowForSlot.getUTCDate()}-${nowForSlot.getUTCHours()}-${wantRecap ? "recap" : "rss"}`;
       slotClaimKey = key;
       claimDb = db;
       try {
         await db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();
         await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,'claimed',?,0)`).bind(key, Date.now()).run();
       } catch {
-        return Response.json({ ok: true, mode: "skipped", reason: "slot already claimed by a concurrent request", generated: 0, log: [] });
+        return Response.json({ ok: true, mode: "skipped", reason: "hour already claimed by a concurrent request", generated: 0, log: [] });
       }
     } catch {
       // If the check itself fails for some reason, fall through and
