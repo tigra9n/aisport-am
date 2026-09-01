@@ -359,7 +359,7 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
             // starting point (rotationSeed changes every minute) still
             // covers the whole entity pool over multiple attempts, just
             // more gradually.
-            const MAX_ENTITIES_PER_ATTEMPT = 15;
+            const MAX_ENTITIES_PER_ATTEMPT = 20;
             let entitiesTried = 0;
             for (const pick of pickCombinedChain(cycle, rotationSeed)) {
               if (entitiesTried >= MAX_ENTITIES_PER_ATTEMPT) { log.push(`rss: reached ${MAX_ENTITIES_PER_ATTEMPT}-entity cap for this attempt, stopping`); break; }
@@ -383,7 +383,6 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
               // that pacing at the real limit would actually take. This
               // was very likely causing near-total rate-limit failures on
               // every multi-entity search attempt.
-              await new Promise((resolve) => setTimeout(resolve, 6500));
               if (!found.length) continue;
               // Bug fixed: previously broke here on the first entity with
               // ANY items, even if every single one turned out to already
@@ -472,25 +471,20 @@ export async function GET(request: Request) {
 
   const forcedMode = url.searchParams.get("mode");
 
-  // Publishing window: 09:00-23:00 Yerevan time (UTC+4, no DST) - 14
-  // hours (9 through 22 inclusive), giving exactly 7 odd + 7 even hours
-  // to match the 7+7 daily caps below with no leftover mismatched hours.
-  // Manual ?mode= calls bypass the window so testing works any time of
-  // day.
+  // Publishing window: 10:00-03:00 Yerevan time (UTC+4, no DST). Manual
+  // ?mode= calls bypass the window so testing works any time of day.
   const yerevanHour = (new Date().getUTCHours() + 4) % 24;
   if (!forcedMode) {
-    const inWindow = yerevanHour >= 9 && yerevanHour < 23;
+    const inWindow = yerevanHour >= 10 || yerevanHour < 3;
     if (!inWindow) {
-      return Response.json({ ok: true, mode: "skipped", reason: "outside 09:00-23:00 Yerevan publishing window", generated: 0, log: [] });
+      return Response.json({ ok: true, mode: "skipped", reason: "outside 10:00-03:00 Yerevan publishing window", generated: 0, log: [] });
     }
   }
 
-  // Strict hourly alternation by Yerevan-time hour parity: odd hour =
-  // RSS only, even hour = recap only, no cross-fallback between the two.
-  // Each type gets its own independent daily cap of 7 articles, gated on
-  // "already published this type this hour".
+  // Publish at most 1 article per 20-minute window (0-19, 20-39, 40-59),
+  // gated on "already published an article in this UTC hour AND this
+  // 20-minute window". RSS only - no automatic recap.
   const nowForSlot = new Date();
-  const wantRecap = yerevanHour % 2 === 0;
   let slotClaimKey: string | null = null;
   let claimDb: Awaited<ReturnType<typeof import("../../../../db")["getDb"]>> | null = null;
   if (!forcedMode) {
@@ -499,47 +493,32 @@ export async function GET(request: Request) {
       const { articles } = await import("../../../../db/schema");
       const { desc } = await import("drizzle-orm");
       const db = await getDb();
-      const recent = await db.select({ publishedAt: articles.publishedAt, sourceName: articles.sourceName }).from(articles).orderBy(desc(articles.id)).limit(10);
-      const sameHourSameType = recent.some((row) => {
+      const recent = await db.select({ publishedAt: articles.publishedAt }).from(articles).orderBy(desc(articles.id)).limit(3);
+      const currentWindow = Math.floor(nowForSlot.getUTCMinutes() / 20);
+      const sameHourWindowCount = recent.filter((row) => {
         if (!row.publishedAt) return false;
-        const isRecapRow = row.sourceName === "AIFootball";
-        if (isRecapRow !== wantRecap) return false;
         const d = new Date(row.publishedAt.replace(" ", "T") + "Z");
         return d.getUTCFullYear() === nowForSlot.getUTCFullYear()
           && d.getUTCMonth() === nowForSlot.getUTCMonth()
           && d.getUTCDate() === nowForSlot.getUTCDate()
-          && d.getUTCHours() === nowForSlot.getUTCHours();
-      });
-      if (sameHourSameType) {
-        return Response.json({ ok: true, mode: "skipped", reason: `already published ${wantRecap ? "a recap" : "an RSS article"} this hour`, generated: 0, log: [] });
-      }
-      // Daily caps: 7 RSS + 7 recap, matching the 14-hour window's 7 odd
-      // + 7 even hours.
-      const today = await db.select({ publishedAt: articles.publishedAt, sourceName: articles.sourceName }).from(articles).orderBy(desc(articles.id)).limit(30);
-      const publishedTodayOfType = today.filter((row) => {
-        if (!row.publishedAt) return false;
-        const isRecapRow = row.sourceName === "AIFootball";
-        if (isRecapRow !== wantRecap) return false;
-        const d = new Date(row.publishedAt.replace(" ", "T") + "Z");
-        return d.getUTCFullYear() === nowForSlot.getUTCFullYear() && d.getUTCMonth() === nowForSlot.getUTCMonth() && d.getUTCDate() === nowForSlot.getUTCDate();
+          && d.getUTCHours() === nowForSlot.getUTCHours()
+          && Math.floor(d.getUTCMinutes() / 20) === currentWindow;
       }).length;
-      if (publishedTodayOfType >= 7) {
-        return Response.json({ ok: true, mode: "skipped", reason: `daily ${wantRecap ? "recap" : "RSS"} article cap (7) reached`, generated: 0, log: [] });
+      if (sameHourWindowCount > 0) {
+        return Response.json({ ok: true, mode: "skipped", reason: "already published an article in this 20-minute window", generated: 0, log: [] });
       }
-      // Atomic claim (kept from the later redesign - fixes a genuine,
-      // plan-independent race condition where two concurrent requests
-      // could both pass the read-based check above before either
-      // finished generating, confirmed live as two articles landing 41s
-      // apart). Adapted to hourly granularity to match this simpler
-      // schedule.
-      const key = `hour_claim:${nowForSlot.getUTCFullYear()}-${nowForSlot.getUTCMonth()}-${nowForSlot.getUTCDate()}-${nowForSlot.getUTCHours()}-${wantRecap ? "recap" : "rss"}`;
+      // Atomic claim (kept from a later fix - prevents two concurrent
+      // requests both passing the read-based check above before either
+      // finishes generating, confirmed live as a real race condition).
+      // Adapted to 20-minute granularity to match this schedule.
+      const key = `window_claim:${nowForSlot.getUTCFullYear()}-${nowForSlot.getUTCMonth()}-${nowForSlot.getUTCDate()}-${nowForSlot.getUTCHours()}-${currentWindow}`;
       slotClaimKey = key;
       claimDb = db;
       try {
         await db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();
         await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,'claimed',?,0)`).bind(key, Date.now()).run();
       } catch {
-        return Response.json({ ok: true, mode: "skipped", reason: "hour already claimed by a concurrent request", generated: 0, log: [] });
+        return Response.json({ ok: true, mode: "skipped", reason: "window already claimed by a concurrent request", generated: 0, log: [] });
       }
     } catch {
       // If the check itself fails for some reason, fall through and
@@ -549,7 +528,7 @@ export async function GET(request: Request) {
   const deadline = Date.now() + TIME_BUDGET_MS;
   const log: string[] = [];
   let generated = 0;
-  let mode = forcedMode ?? (wantRecap ? "recap" : "rss");
+  let mode = forcedMode ?? "rss";
   if (mode === "recap") generated = await runRecaps(claudeApiKey, log, deadline);
   else if (mode === "preview") generated = await runPreviews(claudeApiKey, log, deadline);
   else generated = await runRss(claudeApiKey, log, deadline, url.searchParams.get("source"), url.searchParams.get("titleQuery"));
