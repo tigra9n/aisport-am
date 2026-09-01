@@ -15,7 +15,21 @@ export type GeneratedArticle = {
 };
 export let lastGenerationDebug = "";
 
-async function callClaude(systemPrompt: string, userPrompt: string, apiKey: string): Promise<{ text: string | null; debug: string }> {
+// Anthropic reports an exhausted prepaid balance as an ordinary HTTP
+// error whose body explains the real cause ("Your credit balance is too
+// low to access the Anthropic API"). Without singling that case out, a
+// drained balance is indistinguishable from a transient outage, and the
+// site would simply go quiet with no signal anywhere. Matching on the
+// message rather than the status code alone keeps the Gemini fallback
+// reserved for "we are out of money" and away from overloads and rate
+// limits, which the next cron tick retries against Claude anyway.
+function isBillingFailure(status: number, body: string): boolean {
+  if (status !== 400 && status !== 401 && status !== 402 && status !== 403) return false;
+  const text = body.toLowerCase();
+  return text.includes("credit balance") || text.includes("billing") || text.includes("insufficient");
+}
+
+async function callClaude(systemPrompt: string, userPrompt: string, apiKey: string): Promise<{ text: string | null; debug: string; billingFailure?: boolean }> {
   const started = Date.now();
   try {
     const controller = new AbortController();
@@ -69,7 +83,11 @@ async function callClaude(systemPrompt: string, userPrompt: string, apiKey: stri
     const ms = Date.now() - started;
     if (!response.ok) {
       const bodyText = await response.text().catch(() => "");
-      return { text: null, debug: `[${ms}ms] http ${response.status}: ${bodyText.slice(0, 300)}` };
+      return {
+        text: null,
+        debug: `[${ms}ms] http ${response.status}: ${bodyText.slice(0, 300)}`,
+        billingFailure: isBillingFailure(response.status, bodyText),
+      };
     }
     const data = await response.json() as { content?: { type: string; text?: string }[]; stop_reason?: string };
     const textBlock = data.content?.find((block) => block.type === "text");
@@ -129,16 +147,50 @@ async function callGemini(systemPrompt: string, userPrompt: string, apiKey: stri
 // the Claude Console balance runs out and the plan is to move to Gemini's
 // free tier. Falls back to Claude on any unrecognized/missing value.
 async function callModel(systemPrompt: string, userPrompt: string, claudeApiKey: string): Promise<{ text: string | null; debug: string }> {
+  let provider: string | undefined;
+  let geminiKey: string | undefined;
   try {
     const { env } = await import("cloudflare:workers");
     const runtime = env as unknown as Record<string, string | undefined>;
-    if (runtime.CONTENT_MODEL_PROVIDER === "gemini" && runtime.GEMINI_API_KEY) {
-      return callGemini(systemPrompt, userPrompt, runtime.GEMINI_API_KEY);
-    }
+    provider = runtime.CONTENT_MODEL_PROVIDER;
+    geminiKey = runtime.GEMINI_API_KEY;
   } catch {
-    // cloudflare:workers unavailable (e.g. local test run) - fall through to Claude
+    // cloudflare:workers unavailable (e.g. local test run) - stay on Claude
   }
-  return callClaude(systemPrompt, userPrompt, claudeApiKey);
+
+  if (provider === "gemini" && geminiKey) {
+    return callGemini(systemPrompt, userPrompt, geminiKey);
+  }
+
+  const claude = await callClaude(systemPrompt, userPrompt, claudeApiKey);
+
+  // Rescue only the "prepaid balance is gone" case. Until now that failure
+  // simply lost the article and the site went silent with nothing but an
+  // empty publish log to show for it - the balance had already run down to
+  // $0.18 once. A billing rejection comes back in well under a second, so
+  // there is ample room inside the 115s generation reserve to write the
+  // same article with Gemini instead of losing it.
+  //
+  // Deliberately narrow: Claude stays the primary model on every healthy
+  // call, and overloads, rate limits and timeouts are NOT rescued, since
+  // the next tick retries those against Claude. Gemini is a cheaper model
+  // and therefore carries the same hazard Haiku already demonstrated here
+  // (an opera review in place of a footballer) - parseArticleJson checks
+  // that the JSON is well formed, never that the content is on topic. So
+  // treat any run of fallback articles as a prompt to top the balance up,
+  // not as a working steady state. The reason is written into the debug
+  // log, which cron_invocations records, so the switch is visible.
+  if (claude.billingFailure && geminiKey) {
+    const gemini = await callGemini(systemPrompt, userPrompt, geminiKey);
+    return {
+      text: gemini.text,
+      debug: `CLAUDE BILLING FAILURE (${claude.debug}) -> gemini fallback: ${gemini.debug}`,
+    };
+  }
+  if (claude.billingFailure && !geminiKey) {
+    return { text: null, debug: `CLAUDE BILLING FAILURE and no GEMINI_API_KEY on the worker: ${claude.debug}` };
+  }
+  return claude;
 }
 
 // Sports keyword detection for fallback categorization, used when the

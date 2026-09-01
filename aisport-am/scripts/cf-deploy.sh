@@ -85,6 +85,20 @@ if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
   echo "$ANTHROPIC_API_KEY" | npx wrangler secret put ANTHROPIC_API_KEY --name "$WORKER_NAME"
 fi
 
+if [ -n "${GEMINI_API_KEY:-}" ]; then
+  echo "== Setting GEMINI_API_KEY secret on the worker =="
+  echo "$GEMINI_API_KEY" | npx wrangler secret put GEMINI_API_KEY --name "$WORKER_NAME"
+fi
+
+# Pinned explicitly rather than left unset. A worker secret survives being
+# removed from this script, so if CONTENT_MODEL_PROVIDER is ever set to
+# "gemini" to move generation off Claude wholesale, deleting that line
+# later would NOT undo it - the stored secret would keep saying "gemini".
+# Writing "claude" on every deploy makes the primary provider a property
+# of this file, so reverting really is a one-line change here.
+echo "== Pinning CONTENT_MODEL_PROVIDER=claude on the worker =="
+echo "claude" | npx wrangler secret put CONTENT_MODEL_PROVIDER --name "$WORKER_NAME"
+
 echo "== Deploy complete =="
 
 echo "== Purging Cloudflare edge cache =="

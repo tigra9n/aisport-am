@@ -445,6 +445,11 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
         const page = await fetchArticlePage(item.link);
         const article = await generateFromSourceSnippet(apiKey, { title: item.title, snippet: item.snippet, sourceName: source.name, fullText: page.bodyText });
         if (!article) { log.push(`rss generation failed: ${item.title.slice(0, 40)} | ${lastGenerationDebug}`); continue; }
+        // lastGenerationDebug is otherwise only recorded on failure, which
+        // would make a SUCCESSFUL Gemini rescue invisible - exactly the
+        // case worth seeing, since it means the Anthropic balance is gone
+        // and articles are being written by the cheaper fallback model.
+        if (lastGenerationDebug.startsWith("CLAUDE BILLING FAILURE")) log.push(`!! ${lastGenerationDebug.slice(0, 300)}`);
         // item.imageUrl (from APITube/RSS directly) can itself be a dead
         // link on the source's end (found: cappertek.com's own listed
         // image 404'd) - validate before trusting it, same as page.image.

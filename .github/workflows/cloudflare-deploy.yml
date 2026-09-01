@@ -38,6 +38,12 @@ jobs:
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
           CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Passed so callModel() can rescue an article when Anthropic
+          # rejects the call for an exhausted balance. Note this only makes
+          # the key available - it does NOT switch providers; without
+          # CONTENT_MODEL_PROVIDER=gemini, Claude stays primary and Gemini
+          # is used solely for that billing-failure fallback.
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           CLOUDFLARE_PURGE_TOKEN: ${{ secrets.CLOUDFLARE_PURGE_TOKEN }}
         shell: bash
         run: |
