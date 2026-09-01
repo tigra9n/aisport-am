@@ -253,7 +253,20 @@ function recentSinceParam(days = 3): string {
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   return cutoff.toISOString().slice(0, 10);
 }
-const APITUBE_TIMEOUT_MS = 8_000;
+// MEASURED, not guessed: the same title= queries the worker makes were
+// timed straight from a GitHub runner and came back 200 with full result
+// sets in 10.3s, 11.6s, 12.3s, 12.8s and 13.3s, with rate-limit headers
+// showing 48 of 50 requests still available. APITube is simply slow on
+// this endpoint - nothing is hanging, and nothing is being throttled.
+//
+// So the original 8s value was below APITube's normal response time and
+// aborted every single healthy call: cron_invocations showed 12
+// consecutive entities all logging "0 items (8000ms)" and the attempt
+// ending with "search budget exhausted", i.e. the timeout guaranteed
+// zero results instead of preventing a stall. 20s sits comfortably above
+// the observed worst case while still capping a genuinely stuck request
+// at about a fifth of the 95s search budget.
+const APITUBE_TIMEOUT_MS = 20_000;
 
 async function fetchApiTube(url: string): Promise<Response> {
   const controller = new AbortController();
