@@ -29,15 +29,14 @@ jobs:
       - name: Warm cache
         run: curl -s --max-time 20 "https://aisport.am/api/cron/warm?token=${{ secrets.CRON_TOKEN }}" || true
       - name: Generate content
-        # Bumped 65s -> 100s -> 130s -> 150s: the server's own
-        # TIME_BUDGET_MS is 115s, so the client timeout must stay
-        # comfortably above that deadline, not just above the typical/
-        # expected generation time. A 130s client timeout (only 15s of
-        # margin) turned out to be too tight once the entity chain grew
-        # longer (see football-entities.ts) - worst-case searches now
-        # regularly take 115-127s server-side, and a too-tight client
-        # timeout can disconnect (killing in-progress generation
-        # server-side, per documented Cloudflare Workers behavior) right
-        # as the server is about to finish gracefully. 150s gives 35s of
-        # margin instead.
-        run: curl -s --max-time 150 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}" || true
+        # Bumped 65s -> 100s -> 130s -> 150s -> 230s: BUG FOUND - the
+        # server's TIME_BUDGET_MS was raised to 210s (see
+        # app/api/cron/content/route.ts) after discovering callClaude()
+        # has its own hardcoded 100s timeout on the actual Anthropic API
+        # call, and the previous 30s generation-reserve was nowhere near
+        # enough to let that complete (confirmed live: search found
+        # genuinely new content, but generation got AbortError'd mid-call
+        # because the reserve ran out first). Client timeout must stay
+        # comfortably above the new 210s server deadline, same margin
+        # principle as before.
+        run: curl -s --max-time 230 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}" || true

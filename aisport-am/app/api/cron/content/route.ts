@@ -23,7 +23,7 @@ const MAX_PER_TYPE = 1;
 // generation for a full article (max_tokens ~2048) genuinely takes
 // 30-40+ seconds - this isn't a bug, just how long it takes. Budget must
 // comfortably fit one full attempt, not try to rush it.
-const TIME_BUDGET_MS = 135_000; // Bumped 115s -> 135s: the expanded entity list (football-entities.ts) means the sequential search loop sometimes needs more time to find fresh content before giving up. Client timeout is 150s (see backup-cron.yml), so this keeps a 15s margin.
+const TIME_BUDGET_MS = 210_000; // BUG FIXED: was 135s with only a 30s generation reserve, but callClaude() has its own hardcoded 100s timeout on the actual Anthropic API call (confirmed via a live AbortError: search found genuinely new content, but generation was killed mid-call because only 30s remained). 210s = ~95s search budget + 115s generation reserve (100s Claude timeout + margin). Client timeout must be bumped accordingly (see backup-cron.yml).
 
 // Same club/player getting picked again soon after was letting a single
 // hot story (e.g. an ongoing transfer saga) get covered twice within a
@@ -283,7 +283,7 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
   // Reserve the last 30s of the budget exclusively for the actual
   // fetch-page + generate + save sequence, so search stops early enough
   // to guarantee generation gets a real chance to run.
-  const GENERATION_RESERVE_MS = 30_000;
+  const GENERATION_RESERVE_MS = 115_000;
   const searchDeadline = deadline - GENERATION_RESERVE_MS;
   // Cap total generation attempts, not just successes. Each attempt can
   // take up to the per-call timeout regardless of whether it succeeds, so
