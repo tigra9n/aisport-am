@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Read cron_invocations (verify the 20s timeout restored publishing)
+      - name: Read cron_invocations (verify two consecutive 20-minute windows published)
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
