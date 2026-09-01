@@ -23,7 +23,7 @@ const MAX_PER_TYPE = 1;
 // generation for a full article (max_tokens ~2048) genuinely takes
 // 30-40+ seconds - this isn't a bug, just how long it takes. Budget must
 // comfortably fit one full attempt, not try to rush it.
-const TIME_BUDGET_MS = 210_000; // BUG FIXED: was 135s with only a 30s generation reserve, but callClaude() has its own hardcoded 100s timeout on the actual Anthropic API call (confirmed via a live AbortError: search found genuinely new content, but generation was killed mid-call because only 30s remained). 210s = ~95s search budget + 115s generation reserve (100s Claude timeout + margin). Client timeout must be bumped accordingly (see backup-cron.yml).
+const TIME_BUDGET_MS = 280_000; // Bumped 210s -> 280s per explicit request to check the whole ~99-entity pool per attempt (was capped at 30/attempt). Search budget = 280s - 115s generation reserve = 165s; at 1.3s/entity pacing (see MAX_ENTITIES_PER_ATTEMPT below) that's room for ~127 entities, comfortably covering the full pool. Client timeout must be bumped accordingly (see backup-cron.yml).
 
 // Same club/player getting picked again soon after was letting a single
 // hot story (e.g. an ongoing transfer saga) get covered twice within a
@@ -359,7 +359,7 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
             // starting point (rotationSeed changes every minute) still
             // covers the whole entity pool over multiple attempts, just
             // more gradually.
-            const MAX_ENTITIES_PER_ATTEMPT = 30;
+            const MAX_ENTITIES_PER_ATTEMPT = 150; // effectively uncapped - total pool is ~99 usable entities (see football-entities.ts), so this never actually triggers; the search time budget is the real limiting factor now
             let entitiesTried = 0;
             for (const pick of pickCombinedChain(cycle, rotationSeed)) {
               if (entitiesTried >= MAX_ENTITIES_PER_ATTEMPT) { log.push(`rss: reached ${MAX_ENTITIES_PER_ATTEMPT}-entity cap for this attempt, stopping`); break; }
@@ -386,10 +386,11 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
               //
               // UPDATED: account unexpectedly upgraded to Basic plan (50
               // req/min, real-time access, no 12h delay, 200 results/req -
-              // confirmed via dashboard). 1.5s comfortably respects the
-              // higher 50/min limit (40/min effective pace) while letting
-              // many more entities fit in the search time budget.
-              await new Promise((resolve) => setTimeout(resolve, 1500));
+              // confirmed via dashboard). 1.3s comfortably respects the
+              // higher 50/min limit while letting many more entities fit
+              // in the search time budget - per explicit request to check
+              // the whole ~99-entity pool per attempt.
+              await new Promise((resolve) => setTimeout(resolve, 1300));
               if (!found.length) continue;
               // Bug fixed: previously broke here on the first entity with
               // ANY items, even if every single one turned out to already

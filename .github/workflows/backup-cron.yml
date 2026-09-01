@@ -29,14 +29,10 @@ jobs:
       - name: Warm cache
         run: curl -s --max-time 20 "https://aisport.am/api/cron/warm?token=${{ secrets.CRON_TOKEN }}" || true
       - name: Generate content
-        # Bumped 65s -> 100s -> 130s -> 150s -> 230s: BUG FOUND - the
-        # server's TIME_BUDGET_MS was raised to 210s (see
-        # app/api/cron/content/route.ts) after discovering callClaude()
-        # has its own hardcoded 100s timeout on the actual Anthropic API
-        # call, and the previous 30s generation-reserve was nowhere near
-        # enough to let that complete (confirmed live: search found
-        # genuinely new content, but generation got AbortError'd mid-call
-        # because the reserve ran out first). Client timeout must stay
-        # comfortably above the new 210s server deadline, same margin
-        # principle as before.
-        run: curl -s --max-time 230 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}" || true
+        # Bumped 65s -> 100s -> 130s -> 150s -> 230s -> 300s: server's
+        # TIME_BUDGET_MS raised to 280s (see app/api/cron/content/route.ts)
+        # per explicit request to check the whole ~99-entity pool per
+        # attempt instead of a 30-entity cap. Client timeout stays
+        # comfortably above the server deadline, same margin principle as
+        # every previous bump.
+        run: curl -s --max-time 300 "https://aisport.am/api/cron/content?token=${{ secrets.CRON_TOKEN }}" || true
