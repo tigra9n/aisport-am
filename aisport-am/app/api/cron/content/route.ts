@@ -517,7 +517,7 @@ export async function GET(request: Request) {
   // 20-minute window". RSS only - no automatic recap.
   const nowForSlot = new Date();
   let slotClaimKey: string | null = null;
-  let claimDb: Awaited<ReturnType<typeof import("../../../../db")["getDb"]>> | null = null;
+  let claimDb: D1Database | null = null;
   if (!forcedMode) {
     try {
       const { getDb } = await import("../../../../db");
@@ -539,19 +539,28 @@ export async function GET(request: Request) {
         await logInvocation({ forced: forcedMode, mode: "skipped", generated: 0, reason: "already published this window" });
         return Response.json({ ok: true, mode: "skipped", reason: "already published an article in this 20-minute window", generated: 0, log: [] });
       }
-      // Atomic claim (kept from a later fix - prevents two concurrent
-      // requests both passing the read-based check above before either
-      // finishes generating, confirmed live as a real race condition).
-      // Adapted to 20-minute granularity to match this schedule.
+      // BUG FIXED: this used `db` (a Drizzle instance from getDb()),
+      // calling .prepare() on it - but .prepare() is raw D1's API, not
+      // Drizzle's, so it threw every single time. The catch below then
+      // misreported that as "already claimed by a concurrent request"
+      // and skipped. Net effect: EVERY natural cron tick silently bailed
+      // out here before ever attempting generation, while forced ?mode=
+      // calls skipped this whole block and worked fine - exactly the
+      // "manual works, automatic never does" pattern seen all day.
+      // Use the raw D1 binding, like every other helper in this file.
       const key = `window_claim:${nowForSlot.getUTCFullYear()}-${nowForSlot.getUTCMonth()}-${nowForSlot.getUTCDate()}-${nowForSlot.getUTCHours()}-${currentWindow}`;
-      slotClaimKey = key;
-      claimDb = db;
-      try {
-        await db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();
-        await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,'claimed',?,0)`).bind(key, Date.now()).run();
-      } catch {
-        await logInvocation({ forced: forcedMode, mode: "skipped", generated: 0, reason: "window already claimed" });
-        return Response.json({ ok: true, mode: "skipped", reason: "window already claimed by a concurrent request", generated: 0, log: [] });
+      const { env: claimEnv } = await import("cloudflare:workers");
+      const rawDb = (claimEnv as unknown as { DB?: D1Database }).DB;
+      if (rawDb) {
+        slotClaimKey = key;
+        claimDb = rawDb;
+        try {
+          await rawDb.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();
+          await rawDb.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,'claimed',?,0)`).bind(key, Date.now()).run();
+        } catch {
+          await logInvocation({ forced: forcedMode, mode: "skipped", generated: 0, reason: "window already claimed" });
+          return Response.json({ ok: true, mode: "skipped", reason: "window already claimed by a concurrent request", generated: 0, log: [] });
+        }
       }
     } catch {
       // If the check itself fails for some reason, fall through and
