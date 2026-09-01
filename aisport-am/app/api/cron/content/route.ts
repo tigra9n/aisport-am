@@ -359,7 +359,7 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
             // starting point (rotationSeed changes every minute) still
             // covers the whole entity pool over multiple attempts, just
             // more gradually.
-            const MAX_ENTITIES_PER_ATTEMPT = 20;
+            const MAX_ENTITIES_PER_ATTEMPT = 15;
             let entitiesTried = 0;
             for (const pick of pickCombinedChain(cycle, rotationSeed)) {
               if (entitiesTried >= MAX_ENTITIES_PER_ATTEMPT) { log.push(`rss: reached ${MAX_ENTITIES_PER_ATTEMPT}-entity cap for this attempt, stopping`); break; }
@@ -374,10 +374,16 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
               // dashboard showed a 59% error rate, and this chain can make
               // many rapid back-to-back calls with no spacing when
               // exhausting a long entity list looking for fresh content.
-              // A modest delay costs little against our overall time
-              // budget but reduces the odds of tripping a per-second rate
-              // limit on their side.
-              await new Promise((resolve) => setTimeout(resolve, 300));
+              // BUG FIXED: this 300ms delay was a guess and turned out to
+              // be wildly insufficient - confirmed via APITube's own
+              // dashboard plan comparison table that the free tier's rate
+              // limit is 10 requests/min (1 every 6s on average), not
+              // something a 300ms gap comes anywhere close to respecting.
+              // 20 entities at 300ms apart = 6s total, versus the ~120s
+              // that pacing at the real limit would actually take. This
+              // was very likely causing near-total rate-limit failures on
+              // every multi-entity search attempt.
+              await new Promise((resolve) => setTimeout(resolve, 6500));
               if (!found.length) continue;
               // Bug fixed: previously broke here on the first entity with
               // ANY items, even if every single one turned out to already
