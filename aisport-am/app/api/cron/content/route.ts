@@ -501,6 +501,8 @@ export async function GET(request: Request) {
   const nowForSlot = new Date();
   const slotIndex = Math.floor(nowForSlot.getUTCMinutes() / 12); // 0-4
   const wantRecap = slotIndex === 0;
+  let slotClaimKey: string | null = null;
+  let claimDb: Awaited<ReturnType<typeof import("../../../../db")["getDb"]>> | null = null;
   if (!forcedMode) {
     try {
       const { getDb } = await import("../../../../db");
@@ -533,10 +535,12 @@ export async function GET(request: Request) {
       // PRIMARY KEY - only one concurrent request can win this insert,
       // the other gets a constraint-violation exception and skips
       // immediately instead of also generating.
-      const slotClaimKey = `slot_claim:${nowForSlot.getUTCFullYear()}-${nowForSlot.getUTCMonth()}-${nowForSlot.getUTCDate()}-${nowForSlot.getUTCHours()}-${slotIndex}-${wantRecap ? "recap" : "rss"}`;
+      const key = `slot_claim:${nowForSlot.getUTCFullYear()}-${nowForSlot.getUTCMonth()}-${nowForSlot.getUTCDate()}-${nowForSlot.getUTCHours()}-${slotIndex}-${wantRecap ? "recap" : "rss"}`;
+      slotClaimKey = key;
+      claimDb = db;
       try {
         await db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();
-        await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,'claimed',?,0)`).bind(slotClaimKey, Date.now()).run();
+        await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,'claimed',?,0)`).bind(key, Date.now()).run();
       } catch {
         return Response.json({ ok: true, mode: "skipped", reason: "slot already claimed by a concurrent request", generated: 0, log: [] });
       }
@@ -552,6 +556,24 @@ export async function GET(request: Request) {
   if (mode === "recap") generated = await runRecaps(claudeApiKey, log, deadline);
   else if (mode === "preview") generated = await runPreviews(claudeApiKey, log, deadline);
   else generated = await runRss(claudeApiKey, log, deadline, url.searchParams.get("source"), url.searchParams.get("titleQuery"));
+
+  // BUG FIXED: the slot claim above was inserted unconditionally before
+  // generation ran, but was never released if generation found nothing -
+  // so the FIRST attempt in a slot (even a failed, empty one) would
+  // permanently block every subsequent attempt in that same slot from
+  // even trying with different entities, drastically cutting real
+  // attempts per slot despite having 60+ tracked names. Delete the claim
+  // when generation produced nothing, so the next dispatch tick within
+  // the same slot can retry with a fresh entity rotation instead of
+  // being blocked by a claim that never actually produced an article.
+  if (generated === 0 && slotClaimKey && claimDb) {
+    try {
+      await claimDb.prepare(`DELETE FROM api_cache WHERE cache_key=?`).bind(slotClaimKey).run();
+    } catch {
+      // Non-critical if this cleanup fails - worst case the slot stays
+      // claimed until the next slot boundary.
+    }
+  }
 
   return Response.json({ ok: true, mode, generated, log });
 }
