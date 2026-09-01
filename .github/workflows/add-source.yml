@@ -18,8 +18,8 @@ jobs:
       - name: Check latest articles and live status
         working-directory: aisport-am
         run: |
-          echo "---testing rss mode, quota may have refreshed---" > ../add-source-result.txt
-          curl -s --max-time 150 "https://aifootball.am/api/cron/content?mode=rss&token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" >> ../add-source-result.txt
+          npm install --no-audit --no-fund
+          npx wrangler d1 execute aisport-db --remote --command "SELECT id, name, feed_url FROM sources WHERE feed_url LIKE '%apitube%';" 2>&1 > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
