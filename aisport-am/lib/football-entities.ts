@@ -65,8 +65,6 @@ const CLUBS: Entity[] = [
   { name: "FC Porto", priority: 80, section: "europe" },
   { name: "Sporting CP", priority: 80, section: "europe" },
   { name: "AFC Ajax", priority: 80, section: "europe" },
-  { name: "Galatasaray SK", priority: 80, section: "europe" },
-  { name: "Fenerbahce SK", priority: 80, section: "europe" },
 
   { name: "Olympique Lyonnais", priority: 70, section: "europe" },
   { name: "Eintracht Frankfurt", priority: 70, section: "europe" },
@@ -112,8 +110,6 @@ const CLUBS: Entity[] = [
   { name: "FC Twente", priority: 70, section: "europe" },
   { name: "Club Brugge", priority: 70, section: "europe" },
   { name: "Anderlecht", priority: 70, section: "europe" },
-  { name: "Besiktas JK", priority: 70, section: "europe" },
-  { name: "Trabzonspor", priority: 70, section: "europe" },
   { name: "FC Basel", priority: 70, section: "europe" },
   { name: "Red Bull Salzburg", priority: 70, section: "europe" },
   { name: "Slavia Prague", priority: 70, section: "europe" },
