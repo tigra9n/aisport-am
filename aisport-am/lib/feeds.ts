@@ -263,7 +263,7 @@ async function fetchApiTubeDirect(bridgeUrl: string, limit: number): Promise<Fee
     // Starter plan allows up to 50 results per page (was capped at 10 on
     // free tier). More candidates per tick means fewer "everything in the
     // window is already published, nothing new to pick" empty ticks.
-    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&category.id=${encodeURIComponent(categoryId)}&published_at.start=${recentSinceParam()}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
+    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&category.id=${encodeURIComponent(categoryId)}&published_at.start=${recentSinceParam()}&per_page=10&language.code=en&sort.by=published_at&sort.order=desc`;
     const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
     if (!res.ok) return [];
     const data = await res.json() as { results?: ApiTubeArticle[] };
@@ -332,7 +332,7 @@ export async function fetchApiTubePerson(apiKey: string, personName: string, lim
   // else to a narrower match than they'd had before - this hybrid keeps
   // the best of both.
   try {
-    const entityUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&person.name=${encodeURIComponent(personName)}&published_at.start=${recentSinceParam()}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
+    const entityUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&person.name=${encodeURIComponent(personName)}&published_at.start=${recentSinceParam()}&per_page=10&language.code=en&sort.by=published_at&sort.order=desc`;
     const res = await fetch(entityUrl, { headers: { "Content-Type": "application/json" } });
     if (res.ok) {
       const data = await res.json() as { results?: ApiTubeArticle[] };
@@ -354,7 +354,7 @@ export async function fetchApiTubePerson(apiKey: string, personName: string, lim
   }
 
   try {
-    const titleUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&title=${encodeURIComponent(personName)}&category.id=medtop:15000000&published_at.start=${recentSinceParam()}&per_page=50&sort.by=published_at&sort.order=desc`;
+    const titleUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&title=${encodeURIComponent(personName)}&category.id=medtop:15000000&published_at.start=${recentSinceParam()}&per_page=10&sort.by=published_at&sort.order=desc`;
     const res = await fetch(titleUrl, { headers: { "Content-Type": "application/json" } });
     if (!res.ok) return [];
     const data = await res.json() as { results?: ApiTubeArticle[] };
@@ -408,7 +408,7 @@ function isAmericanFootball(text: string): boolean {
 
 export async function fetchApiTubeTitle(apiKey: string, clubName: string, limit: number): Promise<FeedItem[]> {
   try {
-    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&title=${encodeURIComponent(clubName)}&category.id=medtop:15000000&published_at.start=${recentSinceParam()}&per_page=50&sort.by=published_at&sort.order=desc`;
+    const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&title=${encodeURIComponent(clubName)}&category.id=medtop:15000000&published_at.start=${recentSinceParam()}&per_page=10&sort.by=published_at&sort.order=desc`;
     const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
     if (!res.ok) return [];
     const data = await res.json() as { results?: ApiTubeArticle[] };
