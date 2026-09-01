@@ -41,7 +41,7 @@ const TIME_BUDGET_MS = 210_000; // 95s search budget + 115s generation reserve (
 // as a repeat if they share enough distinctive words to plausibly be the
 // same underlying story. A different headline about the same entity
 // passes straight through regardless of timing.
-const ENTITY_COOLDOWN_MS = 5 * 60 * 60 * 1000; // 5 hours
+const ENTITY_COOLDOWN_MS = 1 * 60 * 60 * 1000; // 1 hour (was 5h) - with ~99 tracked entities and 20 tried per 20-min attempt, a 5h cooldown could exhaust most of the pool within a few hours, leaving few "fresh" entities available later. 1h recycles much faster while still preventing rapid repetitive coverage of the same entity.
 const STOPWORDS = new Set(["the","a","an","and","or","but","in","on","at","to","for","of","with","is","are","was","were","be","been","as","by","from","it","its","his","her","their","after","before","new","says","said","set","out","up","who","how","why","what","this","that","will","has","have","not","no"]);
 
 function significantWords(title: string): Set<string> {
@@ -62,7 +62,12 @@ function sharesTopicWith(a: string, b: string, excludeWords?: Set<string>): bool
   for (const w of wa) if (wb.has(w)) shared++;
   // 2+ shared distinctive words (player/club/subject names) is a strong
   // signal of the same underlying story, not just the same entity.
-  return shared >= 2;
+  // Relaxed from 2 to 3 shared words per explicit request - 2 was
+  // sometimes flagging genuinely different stories about the same
+  // entity as duplicates (even after excluding the entity's own name
+  // words), being overly conservative about what counts as "the same
+  // story" and suppressing publishable content.
+  return shared >= 3;
 }
 
 async function isTopicRecentlyCovered(value: string, candidateTitle: string): Promise<boolean> {
