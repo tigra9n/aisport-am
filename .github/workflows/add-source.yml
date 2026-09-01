@@ -18,7 +18,7 @@ jobs:
       - name: Check latest articles and live status
         working-directory: aisport-am
         run: |
-          echo "---retry with generation timeout fix---" > ../add-source-result.txt
+          echo "---retry once more---" > ../add-source-result.txt
           curl -s --max-time 230 "https://aifootball.am/api/cron/content?mode=rss&token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" >> ../add-source-result.txt
           cat ../add-source-result.txt
         env:
