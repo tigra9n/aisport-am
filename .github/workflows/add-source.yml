@@ -15,50 +15,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Read cron_invocations (timeout-fix verification)
+      - name: Read cron_invocations (verify the 20s timeout restored publishing)
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
-          echo "=== A) COMPACT: last 40 invocations ===" > ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT ts, mode, generated, reason, length(log) as loglen FROM cron_invocations ORDER BY id DESC LIMIT 40;" >> ../add-source-result.txt 2>&1 || true
-          echo "=== B) DETAILED: last 8 invocations with full log ===" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT ts, mode, generated, reason, substr(log,1,2500) as log FROM cron_invocations ORDER BY id DESC LIMIT 8;" >> ../add-source-result.txt 2>&1 || true
+          echo "=== A) COMPACT: last 30 invocations ===" > ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT ts, mode, generated, reason, length(log) as loglen FROM cron_invocations ORDER BY id DESC LIMIT 30;" >> ../add-source-result.txt 2>&1 || true
+          echo "=== B) DETAILED: last 6 invocations with full log ===" >> ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT ts, mode, generated, reason, substr(log,1,2500) as log FROM cron_invocations ORDER BY id DESC LIMIT 6;" >> ../add-source-result.txt 2>&1 || true
           echo "=== C) latest articles ===" >> ../add-source-result.txt
           npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, published_at FROM articles ORDER BY id DESC LIMIT 5;" >> ../add-source-result.txt 2>&1 || true
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      - name: Measure real APITube latency (same queries the worker makes)
-        working-directory: aisport-am
-        run: |
-          # The APITube key is not a GitHub secret - it lives inside the
-          # sources.feed_url row in D1, which is exactly where route.ts
-          # reads it from. Pull it from there so this test exercises the
-          # same credential the worker actually uses.
-          npx wrangler d1 execute aisport-db --remote --command "SELECT feed_url FROM sources WHERE feed_url LIKE '%apitube%' LIMIT 1;" > /tmp/src.json 2>/dev/null || true
-          KEY=$(node -e 'const fs=require("fs");const t=fs.readFileSync("/tmp/src.json","utf8");const i=t.indexOf("[");try{const j=JSON.parse(t.slice(i));const u=j[0].results[0].feed_url;console.log(new URL(u).searchParams.get("api_key")||"")}catch(e){console.log("")}')
-          echo "=== D) LIVE APITUBE LATENCY (key length ${#KEY}) ===" >> ../add-source-result.txt
-          if [ -z "$KEY" ]; then
-            echo "could not extract api_key from the D1 sources row" >> ../add-source-result.txt
-          else
-            SINCE=$(date -u -d '3 days ago' +%F)
-            for CLUB in "Manchester United" "Liverpool FC" "Real Madrid" "Bayern Munich" "Atletico Madrid"; do
-              Q=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$CLUB")
-              URL="https://api.apitube.io/v1/news/everything?api_key=${KEY}&title=${Q}&category.id=medtop:15000000&published_at.start=${SINCE}&per_page=50&sort.by=published_at&sort.order=desc"
-              OUT=$(curl -s -m 30 -o /tmp/r.json -w '%{http_code} in %{time_total}s' "$URL" || echo "curl-failed")
-              N=$(node -e 'try{console.log((JSON.parse(require("fs").readFileSync("/tmp/r.json","utf8")).results||[]).length)}catch(e){console.log("parse-fail")}')
-              echo "title=$CLUB -> $OUT, results: $N" >> ../add-source-result.txt
-            done
-            URL="https://api.apitube.io/v1/news/everything?api_key=${KEY}&person.name=Jude%20Bellingham&category.id=medtop:15000000&published_at.start=${SINCE}&per_page=50&sort.by=published_at&sort.order=desc"
-            OUT=$(curl -s -m 30 -o /tmp/p.json -w '%{http_code} in %{time_total}s' "$URL" || echo "curl-failed")
-            N=$(node -e 'try{console.log((JSON.parse(require("fs").readFileSync("/tmp/p.json","utf8")).results||[]).length)}catch(e){console.log("parse-fail")}')
-            echo "person.name=Jude Bellingham -> $OUT, results: $N" >> ../add-source-result.txt
-            echo "--- response head (first 300 chars of the person query) ---" >> ../add-source-result.txt
-            head -c 300 /tmp/p.json >> ../add-source-result.txt
-            echo "" >> ../add-source-result.txt
-            echo "--- rate-limit / quota headers ---" >> ../add-source-result.txt
-            curl -s -m 30 -D - -o /dev/null "$URL" | grep -iE 'ratelimit|retry-after|quota|x-request' >> ../add-source-result.txt || true
-          fi
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
