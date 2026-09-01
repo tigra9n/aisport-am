@@ -472,13 +472,16 @@ export async function GET(request: Request) {
 
   const forcedMode = url.searchParams.get("mode");
 
-  // Publishing window: 09:00-01:00 Yerevan time (UTC+4, no DST). Manual
-  // ?mode= calls bypass the window so testing works any time of day.
+  // Publishing window: 09:00-23:00 Yerevan time (UTC+4, no DST) - 14
+  // hours (9 through 22 inclusive), giving exactly 7 odd + 7 even hours
+  // to match the 7+7 daily caps below with no leftover mismatched hours.
+  // Manual ?mode= calls bypass the window so testing works any time of
+  // day.
   const yerevanHour = (new Date().getUTCHours() + 4) % 24;
   if (!forcedMode) {
-    const inWindow = yerevanHour >= 9 || yerevanHour < 1;
+    const inWindow = yerevanHour >= 9 && yerevanHour < 23;
     if (!inWindow) {
-      return Response.json({ ok: true, mode: "skipped", reason: "outside 09:00-01:00 Yerevan publishing window", generated: 0, log: [] });
+      return Response.json({ ok: true, mode: "skipped", reason: "outside 09:00-23:00 Yerevan publishing window", generated: 0, log: [] });
     }
   }
 
