@@ -99,10 +99,32 @@ if [ -n "${CLOUDFLARE_PURGE_TOKEN:-}" ]; then
       -H "Content-Type: application/json" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{try{const j=JSON.parse(d);console.log(j.result?.[0]?.id||"")}catch{console.log("")}})')"
     if [ -n "$NEW_ZONE_ID" ]; then
       echo "== Purging $NEW_DOMAIN edge cache (zone $NEW_ZONE_ID) =="
-      curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${NEW_ZONE_ID}/purge_cache" \
+      # This purge has been failing with "success":false while the
+      # aisport.am one succeeds, i.e. CLOUDFLARE_PURGE_TOKEN was scoped to
+      # the old zone only and never granted the new one. aifootball.am is
+      # now the live domain, so a stale edge cache there delays every new
+      # article for real visitors. Print the actual API error instead of
+      # just the success flag, and retry with CLOUDFLARE_API_TOKEN, which
+      # demonstrably does reach this zone - the zone-id lookup just above
+      # uses it. Falls back cleanly if that token lacks purge rights too.
+      PURGE_RESP="$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${NEW_ZONE_ID}/purge_cache" \
         -H "Authorization: Bearer ${CLOUDFLARE_PURGE_TOKEN}" \
         -H "Content-Type: application/json" \
-        --data '{"purge_everything":true}' | grep -o '"success":[^,}]*'
+        --data '{"purge_everything":true}')"
+      echo "$PURGE_RESP" | grep -o '"success":[^,}]*'
+      if ! echo "$PURGE_RESP" | grep -q '"success":true'; then
+        echo "purge token failed for $NEW_DOMAIN: $(echo "$PURGE_RESP" | head -c 300)"
+        echo "== Retrying $NEW_DOMAIN purge with CLOUDFLARE_API_TOKEN =="
+        RETRY_RESP="$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${NEW_ZONE_ID}/purge_cache" \
+          -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+          -H "Content-Type: application/json" \
+          --data '{"purge_everything":true}')"
+        echo "$RETRY_RESP" | grep -o '"success":[^,}]*'
+        if ! echo "$RETRY_RESP" | grep -q '"success":true'; then
+          echo "retry also failed: $(echo "$RETRY_RESP" | head -c 300)"
+          echo "ACTION NEEDED: no available token can purge the $NEW_DOMAIN zone."
+        fi
+      fi
     fi
   fi
 else
