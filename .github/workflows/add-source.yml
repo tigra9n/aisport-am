@@ -18,10 +18,8 @@ jobs:
       - name: Check latest articles and live status
         working-directory: aisport-am
         run: |
-          echo "---publishing real article now, retry with longer timeout---" > ../add-source-result.txt
-          curl -s --max-time 120 -X POST "https://aifootball.am/api/debug/publish-now?token=GZfaXwSyo95ooQNDr714eMSv-G_0X2Vf" \
-            -H "Content-Type: application/json" \
-            --data @../publish_body.json >> ../add-source-result.txt
+          echo "---testing rss mode, quota may have refreshed---" > ../add-source-result.txt
+          curl -s --max-time 150 "https://aifootball.am/api/cron/content?mode=rss&token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" >> ../add-source-result.txt
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
