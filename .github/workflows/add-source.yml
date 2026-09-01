@@ -18,7 +18,7 @@ jobs:
       - name: Check latest articles and live status
         working-directory: aisport-am
         run: |
-          echo "---testing with corrected rate-limit pacing (6.5s/entity)---" > ../add-source-result.txt
+          echo "---testing with per_page=10 fix---" > ../add-source-result.txt
           curl -s --max-time 200 "https://aifootball.am/api/cron/content?mode=rss&token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" >> ../add-source-result.txt
           cat ../add-source-result.txt
         env:
