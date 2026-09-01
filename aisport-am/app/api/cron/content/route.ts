@@ -457,6 +457,26 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
   return generated;
 }
 
+// Observability: record every invocation's outcome in D1 so we can see
+// exactly what the automated (cron-job.org / backup-cron.yml) ticks are
+// doing, instead of inferring it. Their curl output is fully suppressed
+// (-s ... || true), so until now every question about "what did the
+// natural tick do?" was answered by guessing. Fire-and-forget, never
+// blocks or fails the main response.
+async function logInvocation(entry: { forced: string | null; mode: string; generated: number; reason?: string; log?: string[] }): Promise<void> {
+  try {
+    const { env } = await import("cloudflare:workers");
+    const db = (env as unknown as { DB?: D1Database }).DB;
+    if (!db) return;
+    await db.prepare(`CREATE TABLE IF NOT EXISTS cron_invocations (id INTEGER PRIMARY KEY AUTOINCREMENT, ts TEXT NOT NULL, forced TEXT, mode TEXT, generated INTEGER, reason TEXT, log TEXT)`).run();
+    await db.prepare(`INSERT INTO cron_invocations(ts,forced,mode,generated,reason,log) VALUES(?,?,?,?,?,?)`)
+      .bind(new Date().toISOString(), entry.forced, entry.mode, entry.generated, entry.reason ?? null, JSON.stringify((entry.log ?? []).slice(0, 40)))
+      .run();
+  } catch {
+    // never let logging break the pipeline
+  }
+}
+
 export async function GET(request: Request) {
   const { env } = await import("cloudflare:workers");
   const runtime = env as unknown as Record<string, string | undefined>;
@@ -487,6 +507,7 @@ export async function GET(request: Request) {
   if (!forcedMode) {
     const inWindow = yerevanHour >= 10 || yerevanHour < 3;
     if (!inWindow) {
+      await logInvocation({ forced: forcedMode, mode: "skipped", generated: 0, reason: "outside window" });
       return Response.json({ ok: true, mode: "skipped", reason: "outside 10:00-03:00 Yerevan publishing window", generated: 0, log: [] });
     }
   }
@@ -515,6 +536,7 @@ export async function GET(request: Request) {
           && Math.floor(d.getUTCMinutes() / 20) === currentWindow;
       }).length;
       if (sameHourWindowCount > 0) {
+        await logInvocation({ forced: forcedMode, mode: "skipped", generated: 0, reason: "already published this window" });
         return Response.json({ ok: true, mode: "skipped", reason: "already published an article in this 20-minute window", generated: 0, log: [] });
       }
       // Atomic claim (kept from a later fix - prevents two concurrent
@@ -528,6 +550,7 @@ export async function GET(request: Request) {
         await db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();
         await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,'claimed',?,0)`).bind(key, Date.now()).run();
       } catch {
+        await logInvocation({ forced: forcedMode, mode: "skipped", generated: 0, reason: "window already claimed" });
         return Response.json({ ok: true, mode: "skipped", reason: "window already claimed by a concurrent request", generated: 0, log: [] });
       }
     } catch {
@@ -561,5 +584,6 @@ export async function GET(request: Request) {
     }
   }
 
+  await logInvocation({ forced: forcedMode, mode, generated, reason: generated > 0 ? "generated" : "nothing found", log });
   return Response.json({ ok: true, mode, generated, log });
 }
