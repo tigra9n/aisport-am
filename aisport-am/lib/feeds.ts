@@ -274,7 +274,7 @@ async function fetchApiTubeDirect(bridgeUrl: string, limit: number): Promise<Fee
     // free tier). More candidates per tick means fewer "everything in the
     // window is already published, nothing new to pick" empty ticks.
     const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&category.id=${encodeURIComponent(categoryId)}&published_at.start=${recentSinceParam()}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
-   const res = await fetchApiTube(apiUrl);cation/json" } });
+       const res = await fetchApiTube(apiUrl);
     if (!res.ok) return [];
     const data = await res.json() as { results?: ApiTubeArticle[] };
     // Domain trust alone isn't enough here: si.com and a few other
@@ -419,7 +419,7 @@ function isAmericanFootball(text: string): boolean {
 export async function fetchApiTubeTitle(apiKey: string, clubName: string, limit: number): Promise<FeedItem[]> {
   try {
     const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&title=${encodeURIComponent(clubName)}&category.id=medtop:15000000&published_at.start=${recentSinceParam()}&per_page=50&sort.by=published_at&sort.order=desc`;
-    const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
+        const res = await fetchApiTube(apiUrl);
     if (!res.ok) return [];
     const data = await res.json() as { results?: ApiTubeArticle[] };
     const verified = (data.results ?? []).filter((a) => {
