@@ -368,13 +368,17 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
             let entitiesTried = 0;
             for (const pick of pickCombinedChain(cycle, rotationSeed)) {
               if (entitiesTried >= MAX_ENTITIES_PER_ATTEMPT) { log.push(`rss: reached ${MAX_ENTITIES_PER_ATTEMPT}-entity cap for this attempt, stopping`); break; }
-              if (Date.now() > searchDeadline) break;
+                if (Date.now() > searchDeadline) {
+                log.push(`rss: search budget exhausted after ${entitiesTried} entities (cap ${MAX_ENTITIES_PER_ATTEMPT})`);
+                break;
+              }
               if (await isEntityOverrepresented(pick.value)) continue;
               entitiesTried++;
+                            const entityStart = Date.now();
               const found = pick.filterType === "title"
                 ? await fetchApiTubeTitle(apiTubeKey, pick.value, 30)
                 : await fetchApiTubePerson(apiTubeKey, pick.value, 30);
-              log.push(`rss debug: [${pick.filterType}] ${pick.value} -> ${found.length} items`);
+                                         log.push(`rss debug: [${pick.filterType}] ${pick.value} -> ${found.length} items (${Date.now() - entityStart}ms)`);
               // Small pause between successive entity searches - APITube's
               // dashboard showed a 59% error rate, and this chain can make
               // many rapid back-to-back calls with no spacing when
