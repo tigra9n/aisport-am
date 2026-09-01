@@ -478,28 +478,29 @@ export async function GET(request: Request) {
 
   const forcedMode = url.searchParams.get("mode");
 
-  // Publishing window: 09:00-23:00 Yerevan time (UTC+4, no DST) - 14
-  // hours (9 through 22 inclusive), giving exactly 7 odd + 7 even hours
-  // to match the 7+7 daily caps below with no leftover mismatched hours.
-  // Manual ?mode= calls bypass the window so testing works any time of
-  // day.
+  // Publishing window: 09:00-02:00 Yerevan time (UTC+4, no DST) - 17
+  // hours. Manual ?mode= calls bypass the window so testing works any
+  // time of day.
   const yerevanHour = (new Date().getUTCHours() + 4) % 24;
   if (!forcedMode) {
-    const inWindow = yerevanHour >= 9 && yerevanHour < 23;
+    const inWindow = yerevanHour >= 9 || yerevanHour < 2;
     if (!inWindow) {
-      return Response.json({ ok: true, mode: "skipped", reason: "outside 09:00-23:00 Yerevan publishing window", generated: 0, log: [] });
+      return Response.json({ ok: true, mode: "skipped", reason: "outside 09:00-02:00 Yerevan publishing window", generated: 0, log: [] });
     }
   }
 
-  // Strict hourly alternation by Yerevan-time hour parity, per explicit
-  // request: odd hour = RSS only, even hour = recap only - no
-  // cross-fallback between the two anymore (an earlier design tried
-  // recap first and fell back to RSS, which blurred the split). Each
-  // gets its own independent daily article cap (7), and gating is
-  // "already published THIS TYPE in this calendar hour" rather than a
-  // shared 2-hour block, so both a recap and an RSS piece can each land
-  // in adjacent hours as intended.
-  const wantRecap = yerevanHour % 2 === 0;
+  // Per-hour pattern, per explicit request: 5 twelve-minute slots per
+  // hour (minutes 0-11, 12-23, 24-35, 36-47, 48-59) - slot 0 = recap,
+  // slots 1-4 = RSS, giving exactly 4 RSS + 1 recap every hour. Dispatch
+  // still checks every 5 minutes (unchanged - see backup-cron.yml), but
+  // gating on "already published this type in this 12-minute slot"
+  // means only the first tick to succeed within each slot actually
+  // produces an article, naturally landing close to the intended
+  // 12-minute cadence without needing to change the external trigger
+  // schedule.
+  const nowForSlot = new Date();
+  const slotIndex = Math.floor(nowForSlot.getUTCMinutes() / 12); // 0-4
+  const wantRecap = slotIndex === 0;
   if (!forcedMode) {
     try {
       const { getDb } = await import("../../../../db");
@@ -507,38 +508,19 @@ export async function GET(request: Request) {
       const { desc } = await import("drizzle-orm");
       const db = await getDb();
       const recent = await db.select({ publishedAt: articles.publishedAt, sourceName: articles.sourceName }).from(articles).orderBy(desc(articles.id)).limit(10);
-      const now = new Date();
-      // Up to 4 articles per hour per type (was 1) - the account
-      // unexpectedly upgraded to APITube's Basic plan (50,000
-      // requests/month vs Free's 100/day), removing the tight quota
-      // pressure that motivated the original 1/hour throttle.
-      const sameHourSameTypeCount = recent.filter((row) => {
+      const sameSlotSameType = recent.some((row) => {
         if (!row.publishedAt) return false;
         const isRecapRow = row.sourceName === "AIFootball";
         if (isRecapRow !== wantRecap) return false;
         const d = new Date(row.publishedAt.replace(" ", "T") + "Z");
-        return d.getUTCFullYear() === now.getUTCFullYear()
-          && d.getUTCMonth() === now.getUTCMonth()
-          && d.getUTCDate() === now.getUTCDate()
-          && d.getUTCHours() === now.getUTCHours();
-      }).length;
-      if (sameHourSameTypeCount >= 4) {
-        return Response.json({ ok: true, mode: "skipped", reason: `already published 4 ${wantRecap ? "recaps" : "RSS articles"} this hour`, generated: 0, log: [] });
-      }
-      // Daily caps raised to match the 4/hour cadence across the 14-hour
-      // window (up to 28 possible slots/type) - Basic plan's much higher
-      // quota (50k/month) means this is now a content-volume choice, not
-      // a quota-conservation necessity like the earlier 7/day was.
-      const today = await db.select({ publishedAt: articles.publishedAt, sourceName: articles.sourceName }).from(articles).orderBy(desc(articles.id)).limit(60);
-      const publishedTodayOfType = today.filter((row) => {
-        if (!row.publishedAt) return false;
-        const isRecapRow = row.sourceName === "AIFootball";
-        if (isRecapRow !== wantRecap) return false;
-        const d = new Date(row.publishedAt.replace(" ", "T") + "Z");
-        return d.getUTCFullYear() === now.getUTCFullYear() && d.getUTCMonth() === now.getUTCMonth() && d.getUTCDate() === now.getUTCDate();
-      }).length;
-      if (publishedTodayOfType >= 28) {
-        return Response.json({ ok: true, mode: "skipped", reason: `daily ${wantRecap ? "recap" : "RSS"} article cap (28) reached`, generated: 0, log: [] });
+        return d.getUTCFullYear() === nowForSlot.getUTCFullYear()
+          && d.getUTCMonth() === nowForSlot.getUTCMonth()
+          && d.getUTCDate() === nowForSlot.getUTCDate()
+          && d.getUTCHours() === nowForSlot.getUTCHours()
+          && Math.floor(d.getUTCMinutes() / 12) === slotIndex;
+      });
+      if (sameSlotSameType) {
+        return Response.json({ ok: true, mode: "skipped", reason: `already published ${wantRecap ? "a recap" : "an RSS article"} in this 12-minute slot`, generated: 0, log: [] });
       }
     } catch {
       // If the check itself fails for some reason, fall through and
