@@ -19,9 +19,7 @@ jobs:
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
-          npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, published_at FROM articles ORDER BY id DESC LIMIT 2;" 2>&1 > ../add-source-result.txt || true
-          echo "---raw APITube test (Basic plan, no auth exposed)---" >> ../add-source-result.txt
-          curl -s "https://api.apitube.io/v1/news/everything?api_key=api_live_IC9sMCy9vUoOAhRSTOnDCOfcvHE1GZ3M9dMzJIBT8GCyAgTVOJnOj&person.name=Erling+Haaland&published_at.start=2026-09-01&per_page=5&language.code=en" >> ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, published_at FROM articles ORDER BY id DESC LIMIT 3;" 2>&1 > ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
