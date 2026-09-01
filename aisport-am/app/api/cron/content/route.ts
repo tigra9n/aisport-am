@@ -403,10 +403,15 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
               // one ongoing transfer saga, for example - while still
               // allowing a genuinely different, important story about
               // the same club/player through.
+              // DEDUP DISABLED per explicit request, prioritizing publish
+              // frequency over avoiding topically-similar repeats. Kept
+              // articleExistsForSource (exact source URL dedup) since
+              // that prevents literally reprocessing the same source
+              // article twice - only the topic-similarity check
+              // (isTopicRecentlyCovered) is disabled here.
               const newItems: FeedItem[] = [];
               for (const candidate of found) {
                 if (await articleExistsForSource(candidate.link)) continue;
-                if (await isTopicRecentlyCovered(pick.value, candidate.title)) continue;
                 newItems.push(candidate);
               }
               if (newItems.length) {
