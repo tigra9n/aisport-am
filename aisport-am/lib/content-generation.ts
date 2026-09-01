@@ -39,7 +39,16 @@ async function callClaude(systemPrompt: string, userPrompt: string, apiKey: stri
         // with Sonnet 5; the cron reliability issue needs a different
         // fix (e.g. relying on GitHub Actions backup cron, which isn't
         // capped at 30s, rather than compromising content quality).
-        model: "claude-opus-5",
+        //
+        // Back to Sonnet 5 from Opus 5 per explicit request: Opus is
+        // ~2.5x the cost per article ($5/$25 vs $2/$10 per MTok, roughly
+        // $0.09 vs $0.037 an article), which the small prepaid balance
+        // burns through fast, and it is slower against the 115s
+        // generation reserve. Sonnet 5 is the floor for quality here -
+        // Haiku was tried and failed badly (see above), and the same
+        // risk applies to any cheaper model, since parseArticleJson
+        // validates JSON shape but cannot catch off-topic content.
+        model: "claude-sonnet-5",
         // Bumped 900 -> 2048 -> 4096 -> 8192: even 4096 still produced an
         // occasional truncated/unparseable JSON response (Claude's own
         // stop_reason=max_tokens before finishing the JSON structure).
