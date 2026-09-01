@@ -522,6 +522,24 @@ export async function GET(request: Request) {
       if (sameSlotSameType) {
         return Response.json({ ok: true, mode: "skipped", reason: `already published ${wantRecap ? "a recap" : "an RSS article"} in this 12-minute slot`, generated: 0, log: [] });
       }
+      // BUG FIXED: the check above (read recent articles, decide) isn't
+      // atomic on its own - two concurrent requests (e.g. dispatch's own
+      // 5-min tick overlapping with a manual test call) can both read
+      // "not yet published" before either one finishes the ~30-60s
+      // generation+save cycle, so both proceed and both eventually
+      // publish. Confirmed live: two articles landed 41 seconds apart in
+      // the same 12-minute slot. Fix: atomically CLAIM the slot with a
+      // plain INSERT (no ON CONFLICT) against api_cache's cache_key
+      // PRIMARY KEY - only one concurrent request can win this insert,
+      // the other gets a constraint-violation exception and skips
+      // immediately instead of also generating.
+      const slotClaimKey = `slot_claim:${nowForSlot.getUTCFullYear()}-${nowForSlot.getUTCMonth()}-${nowForSlot.getUTCDate()}-${nowForSlot.getUTCHours()}-${slotIndex}-${wantRecap ? "recap" : "rss"}`;
+      try {
+        await db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();
+        await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,'claimed',?,0)`).bind(slotClaimKey, Date.now()).run();
+      } catch {
+        return Response.json({ ok: true, mode: "skipped", reason: "slot already claimed by a concurrent request", generated: 0, log: [] });
+      }
     } catch {
       // If the check itself fails for some reason, fall through and
       // attempt generation anyway rather than silently skipping forever.
