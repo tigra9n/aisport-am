@@ -253,7 +253,17 @@ function recentSinceParam(days = 3): string {
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
   return cutoff.toISOString().slice(0, 10);
 }
+const APITUBE_TIMEOUT_MS = 8_000;
 
+async function fetchApiTube(url: string): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), APITUBE_TIMEOUT_MS);
+  try {
+    return await fetch(url, { headers: { "Content-Type": "application/json" }, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 async function fetchApiTubeDirect(bridgeUrl: string, limit: number): Promise<FeedItem[]> {
   try {
     const params = new URL(bridgeUrl).searchParams;
@@ -264,7 +274,7 @@ async function fetchApiTubeDirect(bridgeUrl: string, limit: number): Promise<Fee
     // free tier). More candidates per tick means fewer "everything in the
     // window is already published, nothing new to pick" empty ticks.
     const apiUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&category.id=${encodeURIComponent(categoryId)}&published_at.start=${recentSinceParam()}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
-    const res = await fetch(apiUrl, { headers: { "Content-Type": "application/json" } });
+   const res = await fetchApiTube(apiUrl);cation/json" } });
     if (!res.ok) return [];
     const data = await res.json() as { results?: ApiTubeArticle[] };
     // Domain trust alone isn't enough here: si.com and a few other
@@ -333,7 +343,7 @@ export async function fetchApiTubePerson(apiKey: string, personName: string, lim
   // the best of both.
   try {
     const entityUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&person.name=${encodeURIComponent(personName)}&published_at.start=${recentSinceParam()}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
-    const res = await fetch(entityUrl, { headers: { "Content-Type": "application/json" } });
+    const res = await fetchApiTube(entityUrl);
     if (res.ok) {
       const data = await res.json() as { results?: ApiTubeArticle[] };
       return mapApiTubeResults(verify(data.results ?? []), limit, true);
@@ -355,7 +365,7 @@ export async function fetchApiTubePerson(apiKey: string, personName: string, lim
 
   try {
     const titleUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&title=${encodeURIComponent(personName)}&category.id=medtop:15000000&published_at.start=${recentSinceParam()}&per_page=50&sort.by=published_at&sort.order=desc`;
-    const res = await fetch(titleUrl, { headers: { "Content-Type": "application/json" } });
+    const res = await fetchApiTube(titleUrl);
     if (!res.ok) return [];
     const data = await res.json() as { results?: ApiTubeArticle[] };
     return mapApiTubeResults(verify(data.results ?? []), limit, true);
