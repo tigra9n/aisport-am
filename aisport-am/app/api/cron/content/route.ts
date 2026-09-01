@@ -474,51 +474,60 @@ export async function GET(request: Request) {
 
   // Publishing window: 09:00-01:00 Yerevan time (UTC+4, no DST). Manual
   // ?mode= calls bypass the window so testing works any time of day.
+  const yerevanHour = (new Date().getUTCHours() + 4) % 24;
   if (!forcedMode) {
-    const yerevanHour = (new Date().getUTCHours() + 4) % 24;
     const inWindow = yerevanHour >= 9 || yerevanHour < 1;
     if (!inWindow) {
       return Response.json({ ok: true, mode: "skipped", reason: "outside 09:00-01:00 Yerevan publishing window", generated: 0, log: [] });
     }
   }
 
-  // Publish at most 1 article per 2-hour block, gated on "already
-  // published an article in this same UTC 2-hour block today" -
-  // Cloudflare's native cron and the GitHub Actions backup cron both
-  // have their own jitter, so whichever tick actually fires first within
-  // the block does that block's attempt.
+  // Strict hourly alternation by Yerevan-time hour parity, per explicit
+  // request: odd hour = RSS only, even hour = recap only - no
+  // cross-fallback between the two anymore (an earlier design tried
+  // recap first and fell back to RSS, which blurred the split). Each
+  // gets its own independent daily article cap (7), and gating is
+  // "already published THIS TYPE in this calendar hour" rather than a
+  // shared 2-hour block, so both a recap and an RSS piece can each land
+  // in adjacent hours as intended.
+  const wantRecap = yerevanHour % 2 === 0;
   if (!forcedMode) {
     try {
       const { getDb } = await import("../../../../db");
       const { articles } = await import("../../../../db/schema");
       const { desc } = await import("drizzle-orm");
       const db = await getDb();
-      const recent = await db.select({ publishedAt: articles.publishedAt }).from(articles).orderBy(desc(articles.id)).limit(3);
+      const recent = await db.select({ publishedAt: articles.publishedAt, sourceName: articles.sourceName }).from(articles).orderBy(desc(articles.id)).limit(5);
       const now = new Date();
-      const sameBlockCount = recent.filter((row) => {
+      const sameHourSameType = recent.filter((row) => {
         if (!row.publishedAt) return false;
+        const isRecapRow = row.sourceName === "AIFootball";
+        if (isRecapRow !== wantRecap) return false;
         const d = new Date(row.publishedAt.replace(" ", "T") + "Z");
         return d.getUTCFullYear() === now.getUTCFullYear()
           && d.getUTCMonth() === now.getUTCMonth()
           && d.getUTCDate() === now.getUTCDate()
-          && Math.floor(d.getUTCHours() / 2) === Math.floor(now.getUTCHours() / 2);
+          && d.getUTCHours() === now.getUTCHours();
       }).length;
-      if (sameBlockCount > 0) {
-        return Response.json({ ok: true, mode: "skipped", reason: "already published an article in this 2-hour block", generated: 0, log: [] });
+      if (sameHourSameType > 0) {
+        return Response.json({ ok: true, mode: "skipped", reason: `already published ${wantRecap ? "a recap" : "an RSS article"} this hour`, generated: 0, log: [] });
       }
-      // Daily cap on RSS-mode generation specifically: APITube's free
-      // tier is only 100 requests/day, and each entity search burns one
-      // request. 6 articles/day, with our current 15-entity-per-attempt
-      // cap, keeps us comfortably within budget even in the worst case
-      // (6 * 15 = 90, leaving a 10-request buffer).
-      const todayRss = await db.select({ publishedAt: articles.publishedAt, sourceName: articles.sourceName }).from(articles).orderBy(desc(articles.id)).limit(20);
-      const rssPublishedToday = todayRss.filter((row) => {
-        if (!row.publishedAt || row.sourceName === "AIFootball") return false;
+      // Daily caps: 7 RSS + 7 recap. RSS burns APITube's free-tier
+      // 100-requests/day quota (7 * 15-entity-cap = 105 worst case, close
+      // to the limit but each successful hit uses far less - see
+      // fetchApiTubePerson/fetchApiTubeTitle). Recap uses API-Football,
+      // a separate quota entirely, so 7/day there is just a sensible
+      // content-volume choice, not a quota constraint.
+      const today = await db.select({ publishedAt: articles.publishedAt, sourceName: articles.sourceName }).from(articles).orderBy(desc(articles.id)).limit(30);
+      const publishedTodayOfType = today.filter((row) => {
+        if (!row.publishedAt) return false;
+        const isRecapRow = row.sourceName === "AIFootball";
+        if (isRecapRow !== wantRecap) return false;
         const d = new Date(row.publishedAt.replace(" ", "T") + "Z");
         return d.getUTCFullYear() === now.getUTCFullYear() && d.getUTCMonth() === now.getUTCMonth() && d.getUTCDate() === now.getUTCDate();
       }).length;
-      if (rssPublishedToday >= 6) {
-        return Response.json({ ok: true, mode: "skipped", reason: "daily RSS article cap (6) reached", generated: 0, log: [] });
+      if (publishedTodayOfType >= 7) {
+        return Response.json({ ok: true, mode: "skipped", reason: `daily ${wantRecap ? "recap" : "RSS"} article cap (7) reached`, generated: 0, log: [] });
       }
     } catch {
       // If the check itself fails for some reason, fall through and
@@ -528,28 +537,8 @@ export async function GET(request: Request) {
   const deadline = Date.now() + TIME_BUDGET_MS;
   const log: string[] = [];
   let generated = 0;
-  let mode = forcedMode ?? "rss";
-  if (!forcedMode) {
-    // BUG FIXED: "always try recap first, only fall back to RSS if
-    // nothing to recap" sounded reasonable but backfired - given how many
-    // leagues we track (top-5 Europe + Champions/Europa/Conference +
-    // Saudi + MLS), there's almost ALWAYS a finished match somewhere at
-    // any given hour, so recap mode kept "succeeding" and RSS/general
-    // news never got a turn. Alternate by hour instead, so both content
-    // types get a genuinely fair share across the day - recap still only
-    // fires on its half of the hours, and within those, now picks the
-    // most important available match (see COMPETITION_PRIORITY above)
-    // rather than an arbitrary one.
-    const hourIsEven = new Date().getUTCHours() % 2 === 0;
-    if (hourIsEven) {
-      generated = await runRecaps(claudeApiKey, log, deadline);
-      mode = generated > 0 ? "recap" : "rss";
-      if (generated === 0) generated = await runRss(claudeApiKey, log, deadline, url.searchParams.get("source"), url.searchParams.get("titleQuery"));
-    } else {
-      mode = "rss";
-      generated = await runRss(claudeApiKey, log, deadline, url.searchParams.get("source"), url.searchParams.get("titleQuery"));
-    }
-  } else if (mode === "recap") generated = await runRecaps(claudeApiKey, log, deadline);
+  let mode = forcedMode ?? (wantRecap ? "recap" : "rss");
+  if (mode === "recap") generated = await runRecaps(claudeApiKey, log, deadline);
   else if (mode === "preview") generated = await runPreviews(claudeApiKey, log, deadline);
   else generated = await runRss(claudeApiKey, log, deadline, url.searchParams.get("source"), url.searchParams.get("titleQuery"));
 
