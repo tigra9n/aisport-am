@@ -15,18 +15,28 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Check latest articles and live status (natural, unforced call)
+      - name: Read cron_invocations (timeout-fix verification)
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
-          npx wrangler d1 execute aisport-db --remote --command "SELECT ts, forced, mode, generated, reason, substr(log,1,1200) as log FROM cron_invocations ORDER BY id DESC LIMIT 14;" 2>&1 > ../add-source-result.txt || true
-          echo "---latest articles---" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, published_at FROM articles ORDER BY id DESC LIMIT 2;" 2>&1 >> ../add-source-result.txt || true
+          {
+            echo "=== SECRET PRESENCE (lengths only, no values) ==="
+            echo "GEMINI_API_KEY length: ${#GEMINI_API_KEY}"
+            echo "ANTHROPIC_API_KEY length: ${#ANTHROPIC_API_KEY}"
+            echo "CLOUDFLARE_PURGE_TOKEN length: ${#CLOUDFLARE_PURGE_TOKEN}"
+          } > ../add-source-result.txt
+          echo "=== A) COMPACT: last 40 invocations ===" >> ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT ts, mode, generated, reason, length(log) as loglen FROM cron_invocations ORDER BY id DESC LIMIT 40;" >> ../add-source-result.txt 2>&1 || true
+          echo "=== B) DETAILED: last 10 invocations with full log ===" >> ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT ts, forced, mode, generated, reason, substr(log,1,2500) as log FROM cron_invocations ORDER BY id DESC LIMIT 10;" >> ../add-source-result.txt 2>&1 || true
+          echo "=== C) latest articles ===" >> ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, published_at FROM articles ORDER BY id DESC LIMIT 5;" >> ../add-source-result.txt 2>&1 || true
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_PURGE_TOKEN: ${{ secrets.CLOUDFLARE_PURGE_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
           APITUBE_KEY: ${{ secrets.APITUBE_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
