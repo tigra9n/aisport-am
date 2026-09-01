@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Check latest articles and live status
+      - name: Check latest articles and live status (natural, unforced call)
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
