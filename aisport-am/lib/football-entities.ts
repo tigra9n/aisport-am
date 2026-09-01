@@ -283,8 +283,6 @@ export function quarantineValue(name: string) {
   runtimeQuarantine.add(name);
 }
 
-const TIER_CADENCE: Record<100 | 90 | 80 | 70, number> = { 100: 1, 90: 2, 80: 4, 70: 8 };
-
 // Shared priority-tier chain builder for a flat entity list: most-
 // specific-due-tier first, falling back through the other tiers (tier
 // 100 - Armenia - last, since APITube coverage of Armenian
@@ -299,7 +297,18 @@ const TIER_CADENCE: Record<100 | 90 | 80 | 70, number> = { 100: 1, 90: 2, 80: 4,
 // firing in the same throttle window) always picked the same starting
 // entity, producing several near-duplicate articles about the same club
 // in a row (observed: 3 Olympiacos articles in 10 minutes).
-function buildChain(entities: Entity[], tierCycle: number, rotationSeed: number): string[] {
+// BUG FIXED: this staggering created a real, hour-dependent "lucky
+// window" pattern - correctly noticed live (success seemed to cluster
+// around specific hours). With MAX_ENTITIES_PER_ATTEMPT capping how many
+// entities actually get tried, a non-due tier 70 (the largest tier, most
+// entities) could end up effectively unreachable within the cap whenever
+// tiers 90+80 alone already filled the slots, meaning most hours never
+// really searched tier 70 at all - only the ~1-in-8 hours where tier 70
+// was "due" (and thus ordered first) got full access to it. Removed
+// entirely now that the pool is much larger (~200 entities, was ~79):
+// interleave all tiers with equal standing every attempt instead of
+// favoring whichever tier happens to be "due" this hour.
+function buildChain(entities: Entity[], _tierCycle: number, rotationSeed: number): string[] {
   const byTier: Record<100 | 90 | 80 | 70, string[]> = { 100: [], 90: [], 80: [], 70: [] };
   for (const e of entities) {
     if (runtimeQuarantine.has(e.name)) continue;
@@ -314,11 +323,7 @@ function buildChain(entities: Entity[], tierCycle: number, rotationSeed: number)
     byTier[e.priority].push(e.name);
   }
 
-  const otherTiers = ([90, 80, 70] as const);
-  const dueTiers = otherTiers.filter((t) => tierCycle % TIER_CADENCE[t] === 0);
-  const orderedDue = [...dueTiers].sort((a, b) => TIER_CADENCE[b] - TIER_CADENCE[a]);
-  const fallbackTiers = otherTiers.filter((t) => !dueTiers.includes(t)).sort((a, b) => TIER_CADENCE[b] - TIER_CADENCE[a]);
-  const tierOrder = [...orderedDue, ...fallbackTiers];
+  const tierOrder = [90, 80, 70] as const;
 
   const chain: string[] = [];
   for (const tier of tierOrder) {
