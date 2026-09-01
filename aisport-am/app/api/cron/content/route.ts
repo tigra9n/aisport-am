@@ -359,7 +359,7 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
             // starting point (rotationSeed changes every minute) still
             // covers the whole entity pool over multiple attempts, just
             // more gradually.
-            const MAX_ENTITIES_PER_ATTEMPT = 15;
+            const MAX_ENTITIES_PER_ATTEMPT = 30;
             let entitiesTried = 0;
             for (const pick of pickCombinedChain(cycle, rotationSeed)) {
               if (entitiesTried >= MAX_ENTITIES_PER_ATTEMPT) { log.push(`rss: reached ${MAX_ENTITIES_PER_ATTEMPT}-entity cap for this attempt, stopping`); break; }
@@ -383,7 +383,13 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
               // that pacing at the real limit would actually take. This
               // was very likely causing near-total rate-limit failures on
               // every multi-entity search attempt.
-              await new Promise((resolve) => setTimeout(resolve, 6500));
+              //
+              // UPDATED: account unexpectedly upgraded to Basic plan (50
+              // req/min, real-time access, no 12h delay, 200 results/req -
+              // confirmed via dashboard). 1.5s comfortably respects the
+              // higher 50/min limit (40/min effective pace) while letting
+              // many more entities fit in the search time budget.
+              await new Promise((resolve) => setTimeout(resolve, 1500));
               if (!found.length) continue;
               // Bug fixed: previously broke here on the first entity with
               // ANY items, even if every single one turned out to already
@@ -500,9 +506,13 @@ export async function GET(request: Request) {
       const { articles } = await import("../../../../db/schema");
       const { desc } = await import("drizzle-orm");
       const db = await getDb();
-      const recent = await db.select({ publishedAt: articles.publishedAt, sourceName: articles.sourceName }).from(articles).orderBy(desc(articles.id)).limit(5);
+      const recent = await db.select({ publishedAt: articles.publishedAt, sourceName: articles.sourceName }).from(articles).orderBy(desc(articles.id)).limit(10);
       const now = new Date();
-      const sameHourSameType = recent.filter((row) => {
+      // Up to 4 articles per hour per type (was 1) - the account
+      // unexpectedly upgraded to APITube's Basic plan (50,000
+      // requests/month vs Free's 100/day), removing the tight quota
+      // pressure that motivated the original 1/hour throttle.
+      const sameHourSameTypeCount = recent.filter((row) => {
         if (!row.publishedAt) return false;
         const isRecapRow = row.sourceName === "AIFootball";
         if (isRecapRow !== wantRecap) return false;
@@ -512,16 +522,14 @@ export async function GET(request: Request) {
           && d.getUTCDate() === now.getUTCDate()
           && d.getUTCHours() === now.getUTCHours();
       }).length;
-      if (sameHourSameType > 0) {
-        return Response.json({ ok: true, mode: "skipped", reason: `already published ${wantRecap ? "a recap" : "an RSS article"} this hour`, generated: 0, log: [] });
+      if (sameHourSameTypeCount >= 4) {
+        return Response.json({ ok: true, mode: "skipped", reason: `already published 4 ${wantRecap ? "recaps" : "RSS articles"} this hour`, generated: 0, log: [] });
       }
-      // Daily caps: 7 RSS + 7 recap. RSS burns APITube's free-tier
-      // 100-requests/day quota (7 * 15-entity-cap = 105 worst case, close
-      // to the limit but each successful hit uses far less - see
-      // fetchApiTubePerson/fetchApiTubeTitle). Recap uses API-Football,
-      // a separate quota entirely, so 7/day there is just a sensible
-      // content-volume choice, not a quota constraint.
-      const today = await db.select({ publishedAt: articles.publishedAt, sourceName: articles.sourceName }).from(articles).orderBy(desc(articles.id)).limit(30);
+      // Daily caps raised to match the 4/hour cadence across the 14-hour
+      // window (up to 28 possible slots/type) - Basic plan's much higher
+      // quota (50k/month) means this is now a content-volume choice, not
+      // a quota-conservation necessity like the earlier 7/day was.
+      const today = await db.select({ publishedAt: articles.publishedAt, sourceName: articles.sourceName }).from(articles).orderBy(desc(articles.id)).limit(60);
       const publishedTodayOfType = today.filter((row) => {
         if (!row.publishedAt) return false;
         const isRecapRow = row.sourceName === "AIFootball";
@@ -529,8 +537,8 @@ export async function GET(request: Request) {
         const d = new Date(row.publishedAt.replace(" ", "T") + "Z");
         return d.getUTCFullYear() === now.getUTCFullYear() && d.getUTCMonth() === now.getUTCMonth() && d.getUTCDate() === now.getUTCDate();
       }).length;
-      if (publishedTodayOfType >= 7) {
-        return Response.json({ ok: true, mode: "skipped", reason: `daily ${wantRecap ? "recap" : "RSS"} article cap (7) reached`, generated: 0, log: [] });
+      if (publishedTodayOfType >= 28) {
+        return Response.json({ ok: true, mode: "skipped", reason: `daily ${wantRecap ? "recap" : "RSS"} article cap (28) reached`, generated: 0, log: [] });
       }
     } catch {
       // If the check itself fails for some reason, fall through and
