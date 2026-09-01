@@ -472,20 +472,21 @@ export async function GET(request: Request) {
 
   const forcedMode = url.searchParams.get("mode");
 
-  // Publishing window: 10:00–03:00 Yerevan time (UTC+4, no DST). Manual
+  // Publishing window: 09:00-01:00 Yerevan time (UTC+4, no DST). Manual
   // ?mode= calls bypass the window so testing works any time of day.
   if (!forcedMode) {
     const yerevanHour = (new Date().getUTCHours() + 4) % 24;
-    const inWindow = yerevanHour >= 10 || yerevanHour < 3;
+    const inWindow = yerevanHour >= 9 || yerevanHour < 1;
     if (!inWindow) {
-      return Response.json({ ok: true, mode: "skipped", reason: "outside 10:00-03:00 Yerevan publishing window", generated: 0, log: [] });
+      return Response.json({ ok: true, mode: "skipped", reason: "outside 09:00-01:00 Yerevan publishing window", generated: 0, log: [] });
     }
   }
 
-  // Publish at most 1 article per hour, gated on "already published an
-  // article in this UTC calendar hour" - Cloudflare's native cron and the
-  // GitHub Actions backup cron both have their own jitter, so whichever
-  // tick actually fires first within the hour does that hour's attempt.
+  // Publish at most 1 article per 2-hour block, gated on "already
+  // published an article in this same UTC 2-hour block today" -
+  // Cloudflare's native cron and the GitHub Actions backup cron both
+  // have their own jitter, so whichever tick actually fires first within
+  // the block does that block's attempt.
   if (!forcedMode) {
     try {
       const { getDb } = await import("../../../../db");
@@ -494,31 +495,30 @@ export async function GET(request: Request) {
       const db = await getDb();
       const recent = await db.select({ publishedAt: articles.publishedAt }).from(articles).orderBy(desc(articles.id)).limit(3);
       const now = new Date();
-      const sameHourCount = recent.filter((row) => {
+      const sameBlockCount = recent.filter((row) => {
         if (!row.publishedAt) return false;
         const d = new Date(row.publishedAt.replace(" ", "T") + "Z");
         return d.getUTCFullYear() === now.getUTCFullYear()
           && d.getUTCMonth() === now.getUTCMonth()
           && d.getUTCDate() === now.getUTCDate()
-          && d.getUTCHours() === now.getUTCHours();
+          && Math.floor(d.getUTCHours() / 2) === Math.floor(now.getUTCHours() / 2);
       }).length;
-      if (sameHourCount > 0) {
-        return Response.json({ ok: true, mode: "skipped", reason: "already published an article this hour", generated: 0, log: [] });
+      if (sameBlockCount > 0) {
+        return Response.json({ ok: true, mode: "skipped", reason: "already published an article in this 2-hour block", generated: 0, log: [] });
       }
       // Daily cap on RSS-mode generation specifically: APITube's free
       // tier is only 100 requests/day, and each entity search burns one
-      // request, so an unbounded number of daily attempts could exhaust
-      // the whole quota early in the day. 5 articles/day, with our
-      // current 20-entity-per-attempt cap, keeps us comfortably within
-      // budget even in the worst case (5 * 20 = 100).
+      // request. 6 articles/day, with our current 15-entity-per-attempt
+      // cap, keeps us comfortably within budget even in the worst case
+      // (6 * 15 = 90, leaving a 10-request buffer).
       const todayRss = await db.select({ publishedAt: articles.publishedAt, sourceName: articles.sourceName }).from(articles).orderBy(desc(articles.id)).limit(20);
       const rssPublishedToday = todayRss.filter((row) => {
         if (!row.publishedAt || row.sourceName === "AIFootball") return false;
         const d = new Date(row.publishedAt.replace(" ", "T") + "Z");
         return d.getUTCFullYear() === now.getUTCFullYear() && d.getUTCMonth() === now.getUTCMonth() && d.getUTCDate() === now.getUTCDate();
       }).length;
-      if (rssPublishedToday >= 5) {
-        return Response.json({ ok: true, mode: "skipped", reason: "daily RSS article cap (5) reached", generated: 0, log: [] });
+      if (rssPublishedToday >= 6) {
+        return Response.json({ ok: true, mode: "skipped", reason: "daily RSS article cap (6) reached", generated: 0, log: [] });
       }
     } catch {
       // If the check itself fails for some reason, fall through and
