@@ -499,6 +499,21 @@ export async function GET(request: Request) {
       if (sameHourCount > 0) {
         return Response.json({ ok: true, mode: "skipped", reason: "already published an article this hour", generated: 0, log: [] });
       }
+      // Daily cap on RSS-mode generation specifically: APITube's free
+      // tier is only 100 requests/day, and each entity search burns one
+      // request, so an unbounded number of daily attempts could exhaust
+      // the whole quota early in the day. 5 articles/day, with our
+      // current 20-entity-per-attempt cap, keeps us comfortably within
+      // budget even in the worst case (5 * 20 = 100).
+      const todayRss = await db.select({ publishedAt: articles.publishedAt, sourceName: articles.sourceName }).from(articles).orderBy(desc(articles.id)).limit(20);
+      const rssPublishedToday = todayRss.filter((row) => {
+        if (!row.publishedAt || row.sourceName === "AIFootball") return false;
+        const d = new Date(row.publishedAt.replace(" ", "T") + "Z");
+        return d.getUTCFullYear() === now.getUTCFullYear() && d.getUTCMonth() === now.getUTCMonth() && d.getUTCDate() === now.getUTCDate();
+      }).length;
+      if (rssPublishedToday >= 5) {
+        return Response.json({ ok: true, mode: "skipped", reason: "daily RSS article cap (5) reached", generated: 0, log: [] });
+      }
     } catch {
       // If the check itself fails for some reason, fall through and
       // attempt generation anyway rather than silently skipping forever.
