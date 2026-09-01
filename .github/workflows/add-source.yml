@@ -18,8 +18,10 @@ jobs:
       - name: Check latest articles and live status (natural, unforced call)
         working-directory: aisport-am
         run: |
-          echo "---full rss diagnostic---" > ../add-source-result.txt
-          curl -s --max-time 230 "https://aifootball.am/api/cron/content?mode=rss&token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" >> ../add-source-result.txt
+          npm install --no-audit --no-fund
+          npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, source_name, published_at FROM articles WHERE published_at LIKE '2026-09-01%' ORDER BY id DESC;" 2>&1 > ../add-source-result.txt || true
+          echo "---all claims with timestamps---" >> ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT cache_key, saved_at FROM api_cache WHERE cache_key LIKE 'slot_claim:%' ORDER BY saved_at DESC;" 2>&1 >> ../add-source-result.txt || true
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
