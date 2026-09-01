@@ -18,8 +18,8 @@ jobs:
       - name: Check latest articles and live status
         working-directory: aisport-am
         run: |
-          echo "---triggering rss mode with fresh quota---" > ../add-source-result.txt
-          curl -s --max-time 150 "https://aifootball.am/api/cron/content?mode=rss&token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" >> ../add-source-result.txt
+          echo "---testing with corrected rate-limit pacing (6.5s/entity)---" > ../add-source-result.txt
+          curl -s --max-time 200 "https://aifootball.am/api/cron/content?mode=rss&token=OKUFuRSY7MuxPRsNAe4BhmfxfKOdACaf" >> ../add-source-result.txt
           cat ../add-source-result.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
