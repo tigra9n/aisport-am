@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Confirm the tick after the 19-minute near-miss
+      - name: Confirm generation returned to Claude after the top-up
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
