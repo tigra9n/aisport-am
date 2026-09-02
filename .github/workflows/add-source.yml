@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Read publish spacing and cron_invocations
+      - name: Verify the parser fix and the new minimum-gap rule
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
