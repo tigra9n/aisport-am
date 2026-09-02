@@ -221,23 +221,56 @@ function guessCategory(text: string, fallback: string): string {
   return fallback;
 }
 
+// A model occasionally emits a raw (unescaped) newline/tab/control
+// character inside a string value - a literal line break in the middle of
+// the content field, say - which is invalid per the JSON spec and makes
+// JSON.parse throw "Bad control character in string literal" even though
+// the JSON is otherwise complete.
+//
+// The earlier fix escaped every control character in the whole payload, on
+// the reasoning that the output is always compact single-line JSON so a
+// newline could only ever be inside a string. That held for Claude and
+// broke the moment the Gemini fallback started answering, because Gemini
+// pretty-prints its JSON: the structural newline right after the opening
+// brace was rewritten to a literal \n, and every response then failed with
+// "Expected property name or '}' in JSON at position 1" - position 1 being
+// exactly that escaped newline. Whitespace between tokens is legal JSON and
+// must be left alone, so escape only the control characters found INSIDE a
+// string, tracking string state and backslash escapes while scanning.
+function escapeControlCharsInsideStrings(json: string): string {
+  let out = "";
+  let inString = false;
+  let afterBackslash = false;
+  for (const ch of json) {
+    if (afterBackslash) { out += ch; afterBackslash = false; continue; }
+    if (ch === "\\") { out += ch; afterBackslash = true; continue; }
+    if (ch === '"') { inString = !inString; out += ch; continue; }
+    if (ch >= "\u0000" && ch <= "\u001F") {
+      if (!inString) { out += ch; continue; }
+      if (ch === "\n") { out += "\\n"; continue; }
+      if (ch === "\r") { out += "\\r"; continue; }
+      if (ch === "\t") { out += "\\t"; continue; }
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
 function parseArticleJson(raw: string, fallbackCategory: string): { article: GeneratedArticle | null; reason: string } {
   try {
-    let cleaned = raw.replace(/```json\s*|```\s*$/g, "").trim();
-    // Claude occasionally emits a raw (unescaped) newline/tab/control
-    // character inside a string value - e.g. a literal line break in the
-    // middle of the content field - which is invalid per the JSON spec
-    // and makes JSON.parse throw "Bad control character in string
-    // literal" even though the JSON is otherwise complete and well-formed.
-    // Our expected output is compact single-line JSON, so any raw control
-    // character here is virtually certain to be inside a string value
-    // that needs escaping, not intentional structural whitespace.
-    cleaned = cleaned.replace(/[\u0000-\u001F]/g, (ch) => {
-      if (ch === "\n") return "\\n";
-      if (ch === "\r") return "\\r";
-      if (ch === "\t") return "\\t";
-      return "";
-    });
+    // Anchor the fence stripping rather than replacing globally, and accept
+    // a bare ``` opener as well as ```json - Gemini emits both, while the
+    // old global pattern only recognised the labelled opener.
+    let cleaned = raw.trim().replace(/^```[a-zA-Z]*\s*/, "").replace(/```\s*$/, "").trim();
+    // Some models introduce the object with a sentence ("Here is the
+    // article: {...}"). Keep only the outermost braces in that case.
+    if (!cleaned.startsWith("{")) {
+      const start = cleaned.indexOf("{");
+      const end = cleaned.lastIndexOf("}");
+      if (start !== -1 && end > start) cleaned = cleaned.slice(start, end + 1);
+    }
+    cleaned = escapeControlCharsInsideStrings(cleaned);
     const parsed = JSON.parse(cleaned) as Partial<GeneratedArticle> & {
       publish?: boolean;
       duplicate?: boolean;
