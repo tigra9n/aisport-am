@@ -15,16 +15,27 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Read article 257 in full before correcting its title
+      - name: Correct the Latin surname and wrong given name in article 257
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
-          echo "=== A) RECENT ARTICLES WITH THE GAP SINCE THE PREVIOUS ONE ===" > ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, seo_title, meta_description, excerpt, content, tags, slug FROM articles WHERE id=257;" >> ../add-source-result.txt 2>&1 || true
-          echo "=== B) LAST 30 INVOCATIONS ===" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT substr(ts,12,8) AS at, generated, reason FROM cron_invocations ORDER BY id DESC LIMIT 30;" >> ../add-source-result.txt 2>&1 || true
-          echo "=== C) LAST 5 INVOCATIONS IN FULL ===" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT ts, generated, reason, substr(log,1,1600) AS log FROM cron_invocations ORDER BY id DESC LIMIT 5;" >> ../add-source-result.txt 2>&1 || true
+          # One-off content correction, approved by the site owner. The
+          # 10:47 article was headlined "Ուեյն Ait-Nouri" - the surname
+          # left in Latin script on an Armenian site, and the given name
+          # wrong (the player is Rayan, and the body of the same article
+          # says Ռայան correctly, so only the headline was mistaken). The
+          # replacement chain was dry-run against the four real stored
+          # strings before being run here. The slug is deliberately left
+          # alone so the URL does not change and existing links keep
+          # working.
+          echo "=== BEFORE ===" > ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, seo_title FROM articles WHERE id=257;" >> ../add-source-result.txt 2>&1 || true
+          echo "=== APPLYING CORRECTION ===" >> ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET title = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(title,'Ուեյն Ait-Nouri','Ռայան Ait-Nouri'),'Ait-Nouri-ին','Այտ-Նուրիին'),'Ait-Nouri-ի','Այտ-Նուրիի'),'Ait-Nouri-ն','Այտ-Նուրին'),'Ait-Nouri','Այտ-Նուրի'), seo_title = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(seo_title,'Ուեյն Ait-Nouri','Ռայան Ait-Nouri'),'Ait-Nouri-ին','Այտ-Նուրիին'),'Ait-Nouri-ի','Այտ-Նուրիի'),'Ait-Nouri-ն','Այտ-Նուրին'),'Ait-Nouri','Այտ-Նուրի'), meta_description = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(meta_description,'Ուեյն Ait-Nouri','Ռայան Ait-Nouri'),'Ait-Nouri-ին','Այտ-Նուրիին'),'Ait-Nouri-ի','Այտ-Նուրիի'),'Ait-Nouri-ն','Այտ-Նուրին'),'Ait-Nouri','Այտ-Նուրի'), excerpt = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(excerpt,'Ուեյն Ait-Nouri','Ռայան Ait-Nouri'),'Ait-Nouri-ին','Այտ-Նուրիին'),'Ait-Nouri-ի','Այտ-Նուրիի'),'Ait-Nouri-ն','Այտ-Նուրին'),'Ait-Nouri','Այտ-Նուրի'), content = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(content,'Ուեյն Ait-Nouri','Ռայան Ait-Nouri'),'Ait-Nouri-ին','Այտ-Նուրիին'),'Ait-Nouri-ի','Այտ-Նուրիի'),'Ait-Nouri-ն','Այտ-Նուրին'),'Ait-Nouri','Այտ-Նուրի') WHERE id=257;" >> ../add-source-result.txt 2>&1 || true
+          echo "=== AFTER ===" >> ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, seo_title, substr(excerpt,1,130) AS excerpt FROM articles WHERE id=257;" >> ../add-source-result.txt 2>&1 || true
+          echo "=== ANY LATIN Ait-Nouri LEFT IN ANY ARTICLE? ===" >> ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT id FROM articles WHERE title LIKE '%Ait-Nouri%' OR content LIKE '%Ait-Nouri%' OR excerpt LIKE '%Ait-Nouri%' OR seo_title LIKE '%Ait-Nouri%' OR meta_description LIKE '%Ait-Nouri%';" >> ../add-source-result.txt 2>&1 || true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
