@@ -15,27 +15,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Correct the Latin surname and wrong given name in article 257
+      - name: Measure why the hourly rate is 2 articles instead of 3
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
-          # One-off content correction, approved by the site owner. The
-          # 10:47 article was headlined "Ուեյն Ait-Nouri" - the surname
-          # left in Latin script on an Armenian site, and the given name
-          # wrong (the player is Rayan, and the body of the same article
-          # says Ռայան correctly, so only the headline was mistaken). The
-          # replacement chain was dry-run against the four real stored
-          # strings before being run here. The slug is deliberately left
-          # alone so the URL does not change and existing links keep
-          # working.
-          echo "=== BEFORE ===" > ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, seo_title FROM articles WHERE id=257;" >> ../add-source-result.txt 2>&1 || true
-          echo "=== APPLYING CORRECTION ===" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET title = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(title,'Ուեյն Ait-Nouri','Ռայան Ait-Nouri'),'Ait-Nouri-ին','Այտ-Նուրիին'),'Ait-Nouri-ի','Այտ-Նուրիի'),'Ait-Nouri-ն','Այտ-Նուրին'),'Ait-Nouri','Այտ-Նուրի'), seo_title = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(seo_title,'Ուեյն Ait-Nouri','Ռայան Ait-Nouri'),'Ait-Nouri-ին','Այտ-Նուրիին'),'Ait-Nouri-ի','Այտ-Նուրիի'),'Ait-Nouri-ն','Այտ-Նուրին'),'Ait-Nouri','Այտ-Նուրի'), meta_description = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(meta_description,'Ուեյն Ait-Nouri','Ռայան Ait-Nouri'),'Ait-Nouri-ին','Այտ-Նուրիին'),'Ait-Nouri-ի','Այտ-Նուրիի'),'Ait-Nouri-ն','Այտ-Նուրին'),'Ait-Nouri','Այտ-Նուրի'), excerpt = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(excerpt,'Ուեյն Ait-Nouri','Ռայան Ait-Nouri'),'Ait-Nouri-ին','Այտ-Նուրիին'),'Ait-Nouri-ի','Այտ-Նուրիի'),'Ait-Nouri-ն','Այտ-Նուրին'),'Ait-Nouri','Այտ-Նուրի'), content = REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(content,'Ուեյն Ait-Nouri','Ռայան Ait-Nouri'),'Ait-Nouri-ին','Այտ-Նուրիին'),'Ait-Nouri-ի','Այտ-Նուրիի'),'Ait-Nouri-ն','Այտ-Նուրին'),'Ait-Nouri','Այտ-Նուրի') WHERE id=257;" >> ../add-source-result.txt 2>&1 || true
-          echo "=== AFTER ===" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, seo_title, substr(excerpt,1,130) AS excerpt FROM articles WHERE id=257;" >> ../add-source-result.txt 2>&1 || true
-          echo "=== ANY LATIN Ait-Nouri LEFT IN ANY ARTICLE? ===" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT id FROM articles WHERE title LIKE '%Ait-Nouri%' OR content LIKE '%Ait-Nouri%' OR excerpt LIKE '%Ait-Nouri%' OR seo_title LIKE '%Ait-Nouri%' OR meta_description LIKE '%Ait-Nouri%';" >> ../add-source-result.txt 2>&1 || true
+          echo "=== A) ARTICLES PER HOUR TODAY ===" > ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT substr(published_at,12,2) AS hour, COUNT(*) AS articles FROM articles WHERE published_at >= datetime('now','-14 hours') GROUP BY hour ORDER BY hour DESC;" >> ../add-source-result.txt 2>&1 || true
+          echo "=== B) GAPS BETWEEN CONSECUTIVE ARTICLES ===" >> ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT substr(published_at,12,5) AS at, CAST((julianday(published_at) - julianday(LAG(published_at) OVER (ORDER BY published_at))) * 1440 AS INT) AS gap_min FROM articles WHERE published_at >= datetime('now','-8 hours') ORDER BY published_at DESC;" >> ../add-source-result.txt 2>&1 || true
+          echo "=== C) TICK OUTCOMES, LAST 6 HOURS, TALLIED ===" >> ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT CASE WHEN reason LIKE 'only%' THEN 'waiting for the gap' ELSE reason END AS outcome, COUNT(*) AS n FROM cron_invocations WHERE ts >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-6 hours') GROUP BY outcome ORDER BY n DESC;" >> ../add-source-result.txt 2>&1 || true
+          echo "=== D) THE 'NOTHING FOUND' TICKS IN FULL ===" >> ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT substr(ts,12,8) AS at, substr(log,1,1500) AS log FROM cron_invocations WHERE reason='nothing found' ORDER BY id DESC LIMIT 4;" >> ../add-source-result.txt 2>&1 || true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
