@@ -537,7 +537,18 @@ export async function GET(request: Request) {
   // This does not address the opposite complaint - occasional 40-minute
   // holes. Those are a content problem, not a scheduling one: the search
   // found nothing new that time round, so there was nothing to publish.
-  const MIN_PUBLISH_GAP_MS = 20 * 60 * 1000;
+  // 18 rather than 20, deliberately, because the dispatcher fires only
+  // every ~5 minutes and cannot hit an exact threshold. Measured tick
+  // spacing runs 4:26 to 5:14, so four ticks after an article land
+  // somewhere around 19-21 minutes. Against a 20-minute threshold that is
+  // a coin flip: the 08:45:52 tick came in at 19 minutes 44 seconds -
+  // sixteen seconds short - so publishing waited a whole further tick and
+  // the gap jumped to about 25 minutes. Against 18 the fourth tick clears
+  // every time while the third (~15 minutes) never does, which pins the
+  // real spacing at roughly 19-21 minutes instead of oscillating between
+  // 20 and 25. The cost is an occasional 19-minute gap where the brief
+  // said 20; the benefit is that the rhythm stops visibly stalling.
+  const MIN_PUBLISH_GAP_MS = 18 * 60 * 1000;
   const nowForSlot = new Date();
   let slotClaimKey: string | null = null;
   let claimDb: D1Database | null = null;
@@ -557,8 +568,8 @@ export async function GET(request: Request) {
         const sinceMs = nowForSlot.getTime() - lastMs;
         if (Number.isFinite(lastMs) && sinceMs >= 0 && sinceMs < MIN_PUBLISH_GAP_MS) {
           const sinceMin = Math.floor(sinceMs / 60000);
-          await logInvocation({ forced: forcedMode, mode: "skipped", generated: 0, reason: `only ${sinceMin} min since the last article, need 20` });
-          return Response.json({ ok: true, mode: "skipped", reason: `last article was ${sinceMin} minutes ago, minimum gap is 20 minutes`, generated: 0, log: [] });
+          await logInvocation({ forced: forcedMode, mode: "skipped", generated: 0, reason: `only ${sinceMin} min since the last article, need 18` });
+          return Response.json({ ok: true, mode: "skipped", reason: `last article was ${sinceMin} minutes ago, minimum gap is 18 minutes`, generated: 0, log: [] });
         }
       }
       // BUG FIXED: this used `db` (a Drizzle instance from getDb()),
