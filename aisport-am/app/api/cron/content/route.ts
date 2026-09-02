@@ -121,20 +121,39 @@ async function markEntityUsed(value: string, title: string): Promise<void> {
 const BALANCE_WINDOW_MS = 3 * 60 * 60 * 1000; // 3 hours
 const BALANCE_MAX_REPEATS = 2; // allow at most 2 articles per entity within the window
 
-async function isEntityOverrepresented(value: string): Promise<boolean> {
+// Returns every entity that has already been used often enough in the
+// balance window to be skipped this round.
+//
+// This used to be an isEntityOverrepresented(value) check called once per
+// entity inside the search loop - and each call ran the identical query,
+// "SELECT payload FROM api_cache WHERE cache_key='recent_entities_window'",
+// re-reading and re-parsing the same row every time. That was wasteful at
+// five entities a tick and would be actively limiting now that the search
+// runs several entities at once, since a Worker has a ceiling on how many
+// subrequests one invocation may make. Read the row once, decide the whole
+// set up front, and the search loop needs no database access at all.
+async function loadOverrepresentedEntities(): Promise<Set<string>> {
+  const over = new Set<string>();
   try {
     const { env } = await import("cloudflare:workers");
     const db = (env as unknown as { DB?: D1Database }).DB;
-    if (!db) return false;
+    if (!db) return over;
     const row = await db.prepare("SELECT payload FROM api_cache WHERE cache_key='recent_entities_window'").first<{ payload: string }>();
-    if (!row) return false;
+    if (!row) return over;
     const list = JSON.parse(row.payload) as { value: string; ts: number }[];
     const cutoff = Date.now() - BALANCE_WINDOW_MS;
-    const recentCount = list.filter((e) => e.ts >= cutoff && e.value === value).length;
-    return recentCount >= BALANCE_MAX_REPEATS;
+    const counts = new Map<string, number>();
+    for (const entry of list) {
+      if (entry.ts < cutoff) continue;
+      counts.set(entry.value, (counts.get(entry.value) ?? 0) + 1);
+    }
+    for (const [value, n] of counts) {
+      if (n >= BALANCE_MAX_REPEATS) over.add(value);
+    }
   } catch {
-    return false;
+    // Non-fatal: worst case, balance tracking just doesn't apply this once.
   }
+  return over;
 }
 
 async function recordEntityInWindow(value: string): Promise<void> {
@@ -364,68 +383,84 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
             // starting point (rotationSeed changes every minute) still
             // covers the whole entity pool over multiple attempts, just
             // more gradually.
-            const MAX_ENTITIES_PER_ATTEMPT = 40; // Raised 20->40 to match the expanded ~204-entity pool (was ~79)
+            // Sequential searching was the reason the site published two
+            // articles an hour instead of three. Measured over six hours:
+            // 26 real search attempts, 11 of which ended "nothing found" -
+            // and the logs show why. Each APITube query takes 10-14
+            // seconds, so a 95-second budget only ever covered four or
+            // five entities out of a pool of roughly 200, and it was the
+            // same handful of big clubs every time. Those searches were
+            // not coming back empty either: Bayern returned 3 items, AC
+            // Milan 8, Inter 1 - all of them already published. The
+            // problem was the size of the sample, not the supply of news.
+            //
+            // Running the batch concurrently spends the same wall-clock
+            // budget on several times as many entities. Five at a time
+            // keeps us near 22 requests a minute, comfortably inside
+            // APITube's 50/minute limit, and keeps the subrequest count
+            // per invocation modest now that the balance-window lookup
+            // happens once instead of once per entity.
+            // Held at 15, not the old 40, and the binding constraint is
+            // subrequests rather than time: three batches take about 45
+            // seconds of the 95-second budget, but 15 searches plus their
+            // duplicate checks plus the rest of the tick already approach
+            // the 50-subrequest ceiling a Worker gets on the free plan.
+            // Fifteen is still three times the four or five entities a
+            // sequential search managed. If this account is on the paid
+            // Workers plan the ceiling is 1000 and both caps can rise a
+            // long way, which is worth checking before tuning further.
+            const MAX_ENTITIES_PER_ATTEMPT = 15;
+            const SEARCH_CONCURRENCY = 5;
+            // Each duplicate check is its own database read, and an entity
+            // can return up to 30 items, so an unbounded scan across a
+            // wider batch could issue hundreds. Results arrive newest
+            // first, so the freshest candidates are at the front and a
+            // shallow look finds anything genuinely new.
+            const MAX_ITEMS_CHECKED_PER_ENTITY = 8;
+            const MAX_DUP_CHECKS_PER_ATTEMPT = 20;
+
+            const overrepresented = await loadOverrepresentedEntities();
+            const chain = pickCombinedChain(cycle, rotationSeed).filter((pick) => !overrepresented.has(pick.value));
             let entitiesTried = 0;
-            for (const pick of pickCombinedChain(cycle, rotationSeed)) {
+            let dupChecks = 0;
+
+            search:
+            for (let offset = 0; offset < chain.length; offset += SEARCH_CONCURRENCY) {
               if (entitiesTried >= MAX_ENTITIES_PER_ATTEMPT) { log.push(`rss: reached ${MAX_ENTITIES_PER_ATTEMPT}-entity cap for this attempt, stopping`); break; }
-                if (Date.now() > searchDeadline) {
-                log.push(`rss: search budget exhausted after ${entitiesTried} entities (cap ${MAX_ENTITIES_PER_ATTEMPT})`);
-                break;
+              if (Date.now() > searchDeadline) { log.push(`rss: search budget exhausted after ${entitiesTried} entities (cap ${MAX_ENTITIES_PER_ATTEMPT})`); break; }
+
+              const batch = chain.slice(offset, offset + SEARCH_CONCURRENCY);
+              const batchStart = Date.now();
+              const results = await Promise.all(batch.map(async (pick) => {
+                const entityStart = Date.now();
+                const found = pick.filterType === "title"
+                  ? await fetchApiTubeTitle(apiTubeKey, pick.value, 30)
+                  : await fetchApiTubePerson(apiTubeKey, pick.value, 30);
+                return { pick, found, ms: Date.now() - entityStart };
+              }));
+              entitiesTried += batch.length;
+              log.push(`rss debug: batch of ${batch.length} in ${Date.now() - batchStart}ms: ${results.map((r) => `[${r.pick.filterType}] ${r.pick.value}->${r.found.length} (${r.ms}ms)`).join(", ")}`);
+
+              // Walk the batch in chain order so priority still decides
+              // which entity wins when more than one has fresh material.
+              for (const { pick, found } of results) {
+                if (!found.length) continue;
+                const newItems: FeedItem[] = [];
+                for (const candidate of found.slice(0, MAX_ITEMS_CHECKED_PER_ENTITY)) {
+                  if (dupChecks >= MAX_DUP_CHECKS_PER_ATTEMPT) break;
+                  dupChecks++;
+                  if (await articleExistsForSource(candidate.link)) continue;
+                  newItems.push(candidate);
+                }
+                if (newItems.length) {
+                  log.push(`rss debug: ${pick.filterType}=${pick.value} -> ${found.length} items, ${newItems.length} new`);
+                  items = newItems;
+                  await markEntityUsed(pick.value, newItems[0].title);
+                  await recordEntityInWindow(pick.value);
+                  break search;
+                }
+                log.push(`rss debug: ${pick.filterType}=${pick.value} -> ${found.length} items, all already published`);
               }
-              if (await isEntityOverrepresented(pick.value)) continue;
-              entitiesTried++;
-                            const entityStart = Date.now();
-              const found = pick.filterType === "title"
-                ? await fetchApiTubeTitle(apiTubeKey, pick.value, 30)
-                : await fetchApiTubePerson(apiTubeKey, pick.value, 30);
-                                         log.push(`rss debug: [${pick.filterType}] ${pick.value} -> ${found.length} items (${Date.now() - entityStart}ms)`);
-              // Small pause between successive entity searches - APITube's
-              // dashboard showed a 59% error rate, and this chain can make
-              // many rapid back-to-back calls with no spacing when
-              // exhausting a long entity list looking for fresh content.
-              // BUG FIXED: this 300ms delay was a guess and turned out to
-              // be wildly insufficient - confirmed via APITube's own
-              // dashboard plan comparison table that the free tier's rate
-              // limit is 10 requests/min (1 every 6s on average), not
-              // something a 300ms gap comes anywhere close to respecting.
-              // 20 entities at 300ms apart = 6s total, versus the ~120s
-              // that pacing at the real limit would actually take. This
-              // was very likely causing near-total rate-limit failures on
-              // every multi-entity search attempt.
-              if (!found.length) continue;
-              // Bug fixed: previously broke here on the first entity with
-              // ANY items, even if every single one turned out to already
-              // be published (checked later, per-item, in the loop
-              // below). If that entity's items were all duplicates, the
-              // whole attempt gave up instead of trying the next entity
-              // in the chain - wasted a window's only publish slot on
-              // nothing. Now check for at least one genuinely new item
-              // before committing to this entity's results. Also skips
-              // candidates that look like the same underlying story as
-              // the last thing generated for this entity (see
-              // isTopicRecentlyCovered) - two different outlets covering
-              // one ongoing transfer saga, for example - while still
-              // allowing a genuinely different, important story about
-              // the same club/player through.
-              // DEDUP DISABLED per explicit request, prioritizing publish
-              // frequency over avoiding topically-similar repeats. Kept
-              // articleExistsForSource (exact source URL dedup) since
-              // that prevents literally reprocessing the same source
-              // article twice - only the topic-similarity check
-              // (isTopicRecentlyCovered) is disabled here.
-              const newItems: FeedItem[] = [];
-              for (const candidate of found) {
-                if (await articleExistsForSource(candidate.link)) continue;
-                newItems.push(candidate);
-              }
-              if (newItems.length) {
-                log.push(`rss debug: ${pick.filterType}=${pick.value} -> ${found.length} items, ${newItems.length} new`);
-                items = newItems;
-                await markEntityUsed(pick.value, newItems[0].title);
-                await recordEntityInWindow(pick.value);
-                break;
-              }
-              log.push(`rss debug: ${pick.filterType}=${pick.value} -> ${found.length} items, all duplicates/same-topic, trying next`);
             }
           }
         }
