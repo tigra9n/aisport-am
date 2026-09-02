@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Confirm generation returned to Claude after the top-up
+      - name: Check the first article generated after the balance top-up
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
