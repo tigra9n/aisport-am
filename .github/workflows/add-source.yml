@@ -15,16 +15,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Read cron_invocations (diagnose why the Gemini billing fallback did not fire)
+      - name: Read publish spacing and cron_invocations
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
-          echo "=== A) COMPACT: last 30 invocations ===" > ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT ts, mode, generated, reason, length(log) as loglen FROM cron_invocations ORDER BY id DESC LIMIT 30;" >> ../add-source-result.txt 2>&1 || true
-          echo "=== B) DETAILED: last 6 invocations with full log ===" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT ts, mode, generated, reason, substr(log,1,3000) as log FROM cron_invocations WHERE log LIKE '%generation failed%' OR log LIKE '%BILLING%' ORDER BY id DESC LIMIT 6;" >> ../add-source-result.txt 2>&1 || true
-          echo "=== C) latest articles ===" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, published_at FROM articles ORDER BY id DESC LIMIT 5;" >> ../add-source-result.txt 2>&1 || true
+          echo "=== A) RECENT ARTICLES WITH THE GAP SINCE THE PREVIOUS ONE ===" > ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT id, substr(published_at,12,5) AS at, CAST((julianday(published_at) - julianday(LAG(published_at) OVER (ORDER BY published_at))) * 1440 AS INT) AS gap_min, substr(title,1,42) AS title FROM articles WHERE published_at >= datetime('now','-30 hours') ORDER BY published_at DESC LIMIT 30;" >> ../add-source-result.txt 2>&1 || true
+          echo "=== B) LAST 30 INVOCATIONS ===" >> ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT substr(ts,12,8) AS at, generated, reason FROM cron_invocations ORDER BY id DESC LIMIT 30;" >> ../add-source-result.txt 2>&1 || true
+          echo "=== C) LAST 5 INVOCATIONS IN FULL ===" >> ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT ts, generated, reason, substr(log,1,1600) AS log FROM cron_invocations ORDER BY id DESC LIMIT 5;" >> ../add-source-result.txt 2>&1 || true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
