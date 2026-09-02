@@ -521,9 +521,23 @@ export async function GET(request: Request) {
     }
   }
 
-  // Publish at most 1 article per 20-minute window (0-19, 20-39, 40-59),
-  // gated on "already published an article in this UTC hour AND this
-  // 20-minute window". RSS only - no automatic recap.
+  // Publish at most 1 article per MIN_PUBLISH_GAP_MS, measured from the
+  // previous article's own timestamp.
+  //
+  // This used to gate on CALENDAR 20-minute windows (:00-:19, :20-:39,
+  // :40-:59), which enforced "one per window" but said nothing about the
+  // distance between two articles in ADJACENT windows. Measured live: one
+  // landed at 19:52 (late in its window) and the next at 20:03 (early in
+  // the following one) - 11 minutes apart, both perfectly legal under the
+  // window rule; 07:11 and 07:21 were 10 minutes apart the same way. The
+  // brief was "up to one article per 20 minutes", and a gap since the last
+  // publish expresses that directly, whereas a calendar window only
+  // approximates it and breaks at every boundary.
+  //
+  // This does not address the opposite complaint - occasional 40-minute
+  // holes. Those are a content problem, not a scheduling one: the search
+  // found nothing new that time round, so there was nothing to publish.
+  const MIN_PUBLISH_GAP_MS = 20 * 60 * 1000;
   const nowForSlot = new Date();
   let slotClaimKey: string | null = null;
   let claimDb: D1Database | null = null;
@@ -533,20 +547,19 @@ export async function GET(request: Request) {
       const { articles } = await import("../../../../db/schema");
       const { desc } = await import("drizzle-orm");
       const db = await getDb();
-      const recent = await db.select({ publishedAt: articles.publishedAt }).from(articles).orderBy(desc(articles.id)).limit(3);
-      const currentWindow = Math.floor(nowForSlot.getUTCMinutes() / 20);
-      const sameHourWindowCount = recent.filter((row) => {
-        if (!row.publishedAt) return false;
-        const d = new Date(row.publishedAt.replace(" ", "T") + "Z");
-        return d.getUTCFullYear() === nowForSlot.getUTCFullYear()
-          && d.getUTCMonth() === nowForSlot.getUTCMonth()
-          && d.getUTCDate() === nowForSlot.getUTCDate()
-          && d.getUTCHours() === nowForSlot.getUTCHours()
-          && Math.floor(d.getUTCMinutes() / 20) === currentWindow;
-      }).length;
-      if (sameHourWindowCount > 0) {
-        await logInvocation({ forced: forcedMode, mode: "skipped", generated: 0, reason: "already published this window" });
-        return Response.json({ ok: true, mode: "skipped", reason: "already published an article in this 20-minute window", generated: 0, log: [] });
+      const recent = await db.select({ publishedAt: articles.publishedAt }).from(articles).orderBy(desc(articles.id)).limit(1);
+      const lastPublishedAt = recent[0]?.publishedAt;
+      if (lastPublishedAt) {
+        // published_at is stored as "YYYY-MM-DD HH:MM:SS" in UTC with no
+        // zone marker, so make it explicit before parsing - otherwise it
+        // is read as local time and the gap comes out hours wrong.
+        const lastMs = new Date(lastPublishedAt.replace(" ", "T") + "Z").getTime();
+        const sinceMs = nowForSlot.getTime() - lastMs;
+        if (Number.isFinite(lastMs) && sinceMs >= 0 && sinceMs < MIN_PUBLISH_GAP_MS) {
+          const sinceMin = Math.floor(sinceMs / 60000);
+          await logInvocation({ forced: forcedMode, mode: "skipped", generated: 0, reason: `only ${sinceMin} min since the last article, need 20` });
+          return Response.json({ ok: true, mode: "skipped", reason: `last article was ${sinceMin} minutes ago, minimum gap is 20 minutes`, generated: 0, log: [] });
+        }
       }
       // BUG FIXED: this used `db` (a Drizzle instance from getDb()),
       // calling .prepare() on it - but .prepare() is raw D1's API, not
@@ -557,7 +570,12 @@ export async function GET(request: Request) {
       // calls skipped this whole block and worked fine - exactly the
       // "manual works, automatic never does" pattern seen all day.
       // Use the raw D1 binding, like every other helper in this file.
-      const key = `window_claim:${nowForSlot.getUTCFullYear()}-${nowForSlot.getUTCMonth()}-${nowForSlot.getUTCDate()}-${nowForSlot.getUTCHours()}-${currentWindow}`;
+      //
+      // Keyed on the 5-minute dispatch tick now that there is no calendar
+      // window to key on. It serves the same purpose as before: two
+      // requests belonging to the SAME tick cannot both publish. Spacing
+      // between separate ticks is the gap check above, not this claim.
+      const key = `publish_claim:${Math.floor(nowForSlot.getTime() / (5 * 60 * 1000))}`;
       const { env: claimEnv } = await import("cloudflare:workers");
       const rawDb = (claimEnv as unknown as { DB?: D1Database }).DB;
       if (rawDb) {
@@ -567,8 +585,8 @@ export async function GET(request: Request) {
           await rawDb.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();
           await rawDb.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,'claimed',?,0)`).bind(key, Date.now()).run();
         } catch {
-          await logInvocation({ forced: forcedMode, mode: "skipped", generated: 0, reason: "window already claimed" });
-          return Response.json({ ok: true, mode: "skipped", reason: "window already claimed by a concurrent request", generated: 0, log: [] });
+          await logInvocation({ forced: forcedMode, mode: "skipped", generated: 0, reason: "publish already claimed by a concurrent request" });
+          return Response.json({ ok: true, mode: "skipped", reason: "another request in this tick is already publishing", generated: 0, log: [] });
         }
       }
     } catch {
