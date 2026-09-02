@@ -98,6 +98,22 @@ async function callClaude(systemPrompt: string, userPrompt: string, apiKey: stri
   }
 }
 
+// Appended to the shared system prompt on Gemini calls only. The shared
+// prompt already ends with "answer ONLY with a valid JSON object, without
+// markdown" - Gemini ignored that and wrapped its output in a ```json
+// fence anyway, so the reliable control is responseMimeType below, not
+// stronger wording. What this adds is the part no API setting can
+// enforce: Gemini is the cheaper fallback model, and the failure mode
+// this pipeline has already suffered once (Haiku writing an opera review
+// in place of a footballer) is on-topic drift, which produces perfectly
+// valid JSON and so passes every check we have.
+const GEMINI_PROMPT_SUFFIX = `
+
+━━━ ԼՐԱՑՈՒՑԻՉ ԽՍՏՈՒԹՅՈՒՆ ━━━
+Գրիր ԲԱՑԱՌԱՊԵՍ քեզ տրված աղբյուր-նյութի փաստերի հիման վրա։ Մի ավելացրու քո հիշողությունից եկած մանրամասներ (փոխանցման գումարներ, պայմանագրի ժամկետներ, հաշիվներ, ամսաթվեր, մեջբերումներ), որոնք աղբյուրում չկան։ Եթե աղբյուրի փաստերը քիչ են ամբողջական հոդվածի համար, գրիր ավելի կարճ նյութ, բայց ոչինչ մի լրացրու։
+Եթե աղբյուր-նյութը ֆուտբոլի մասին չէ, կամ չափազանց հատվածական է, վերադարձրու publish:false և needs_review:true, փոխանակ որևէ բան հորինելու։
+Վերնագիրն ու բովանդակությունը պետք է վերաբերեն ՆՈՒՅՆ դեպքին, ինչ աղբյուրը։`;
+
 async function callGemini(systemPrompt: string, userPrompt: string, apiKey: string): Promise<{ text: string | null; debug: string }> {
   const started = Date.now();
   try {
@@ -120,9 +136,15 @@ async function callGemini(systemPrompt: string, userPrompt: string, apiKey: stri
         signal: controller.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          system_instruction: { parts: [{ text: systemPrompt }] },
+          system_instruction: { parts: [{ text: systemPrompt + GEMINI_PROMPT_SUFFIX }] },
           contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-          generationConfig: { maxOutputTokens: 8192, temperature: 0.7 },
+          // responseMimeType is the structural fix for the markdown fences
+          // that broke parsing: Google returns a bare JSON body, so the
+          // model cannot wrap it in ```json no matter what it intends.
+          // Temperature drops 0.7 -> 0.3 because this is faithful
+          // rewriting of supplied facts, not open-ended writing, and the
+          // known hazard with a cheaper model is invention.
+          generationConfig: { maxOutputTokens: 8192, temperature: 0.3, responseMimeType: "application/json" },
         }),
       },
     );
@@ -132,10 +154,20 @@ async function callGemini(systemPrompt: string, userPrompt: string, apiKey: stri
       const bodyText = await response.text().catch(() => "");
       return { text: null, debug: `[${ms}ms] gemini http ${response.status}: ${bodyText.slice(0, 300)}` };
     }
-    const data = await response.json() as { candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[] };
+    const data = await response.json() as {
+      candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
+      usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number };
+    };
+    // Logged so free-tier headroom is observable from cron_invocations
+    // rather than only from the Google console: a quota exhaustion shows
+    // up as an http 429 above, and these counts say how much each article
+    // actually consumes if the key is ever moved to a paid project.
+    const usage = data.usageMetadata
+      ? `, tokens=${data.usageMetadata.promptTokenCount ?? "?"}in/${data.usageMetadata.candidatesTokenCount ?? "?"}out`
+      : "";
     const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") || null;
     if (!text) return { text: null, debug: `[${ms}ms] gemini: no text, finishReason=${data.candidates?.[0]?.finishReason}, raw=${JSON.stringify(data).slice(0, 300)}` };
-    return { text, debug: `[${ms}ms] gemini ok, finishReason=${data.candidates?.[0]?.finishReason}, len=${text.length}` };
+    return { text, debug: `[${ms}ms] gemini ok, finishReason=${data.candidates?.[0]?.finishReason}, len=${text.length}${usage}` };
   } catch (err) {
     return { text: null, debug: `[${Date.now() - started}ms] gemini threw: ${String(err)}` };
   }
