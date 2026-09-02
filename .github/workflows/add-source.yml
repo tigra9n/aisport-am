@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Diagnose the missing article after 08:26
+      - name: Confirm the tick after the 19-minute near-miss
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
