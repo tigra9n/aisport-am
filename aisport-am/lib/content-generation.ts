@@ -107,11 +107,22 @@ async function callClaude(systemPrompt: string, userPrompt: string, apiKey: stri
 // this pipeline has already suffered once (Haiku writing an opera review
 // in place of a footballer) is on-topic drift, which produces perfectly
 // valid JSON and so passes every check we have.
+//
+// The first version of this suffix overcorrected. Told to be strict and
+// to prefer publish:false over inventing, Gemini started applying that
+// to the SOURCE's credibility rather than to its own output, and
+// rejected a real story with needs_review:true because it judged the
+// facts implausible - "Michael Carrick as Manchester United manager,
+// Ait-Nouri as a Manchester City player". Those are simply transfers
+// more recent than the model's knowledge. The two ideas have to be
+// separated explicitly: do not add facts the source does not contain,
+// but do not second-guess the facts it does - the source is newer than
+// the model, and unfamiliar is not the same as false.
 const GEMINI_PROMPT_SUFFIX = `
 
 ━━━ ԼՐԱՑՈՒՑԻՉ ԽՍՏՈՒԹՅՈՒՆ ━━━
 Գրիր ԲԱՑԱՌԱՊԵՍ քեզ տրված աղբյուր-նյութի փաստերի հիման վրա։ Մի ավելացրու քո հիշողությունից եկած մանրամասներ (փոխանցման գումարներ, պայմանագրի ժամկետներ, հաշիվներ, ամսաթվեր, մեջբերումներ), որոնք աղբյուրում չկան։ Եթե աղբյուրի փաստերը քիչ են ամբողջական հոդվածի համար, գրիր ավելի կարճ նյութ, բայց ոչինչ մի լրացրու։
-Եթե աղբյուր-նյութը ֆուտբոլի մասին չէ, կամ չափազանց հատվածական է, վերադարձրու publish:false և needs_review:true, փոխանակ որևէ բան հորինելու։
+Աղբյուրը վստահելի ֆուտբոլային լրատվամիջոց է, և նրա հաղորդած փաստերն ավելի թարմ են, քան քո գիտելիքը։ ՄԻ մերժիր նյութը միայն այն պատճառով, որ փաստերն անծանոթ կամ անսպասելի են քեզ համար՝ մարզչի նոր նշանակում, ակումբը փոխած ֆուտբոլիստ, թարմ տրանսֆեր։ Այդպիսի դեպքերում աղբյուրն է ճիշտը, ոչ թե քո հիշողությունը։ publish:false կամ needs_review:true վերադարձրու ՄԻԱՅՆ երբ աղբյուրն ինքն իրեն հակասում է, կամ նյութը ֆուտբոլի մասին չէ, կամ տեքստն այնքան հատվածական է, որ հոդված գրելու բան չկա։
 Վերնագիրն ու բովանդակությունը պետք է վերաբերեն ՆՈՒՅՆ դեպքին, ինչ աղբյուրը։`;
 
 async function callGemini(systemPrompt: string, userPrompt: string, apiKey: string): Promise<{ text: string | null; debug: string }> {
