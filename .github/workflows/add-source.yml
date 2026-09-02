@@ -15,14 +15,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Read cron_invocations (verify a third consecutive 20-minute window published)
+      - name: Read cron_invocations (diagnose why the Gemini billing fallback did not fire)
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
           echo "=== A) COMPACT: last 30 invocations ===" > ../add-source-result.txt
           npx wrangler d1 execute aisport-db --remote --command "SELECT ts, mode, generated, reason, length(log) as loglen FROM cron_invocations ORDER BY id DESC LIMIT 30;" >> ../add-source-result.txt 2>&1 || true
           echo "=== B) DETAILED: last 6 invocations with full log ===" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT ts, mode, generated, reason, substr(log,1,2500) as log FROM cron_invocations ORDER BY id DESC LIMIT 6;" >> ../add-source-result.txt 2>&1 || true
+          npx wrangler d1 execute aisport-db --remote --command "SELECT ts, mode, generated, reason, substr(log,1,3000) as log FROM cron_invocations WHERE log LIKE '%generation failed%' OR log LIKE '%BILLING%' ORDER BY id DESC LIMIT 6;" >> ../add-source-result.txt 2>&1 || true
           echo "=== C) latest articles ===" >> ../add-source-result.txt
           npx wrangler d1 execute aisport-db --remote --command "SELECT id, title, published_at FROM articles ORDER BY id DESC LIMIT 5;" >> ../add-source-result.txt 2>&1 || true
         env:
