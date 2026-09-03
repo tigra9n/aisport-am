@@ -44,26 +44,45 @@ log(`  date line: ${await page.evaluate(() => {
 })}`);
 
 // 3. A live-match modal: are the lineup names links now? Lineups only exist
-// for matches close to kickoff, so try several rather than concluding from
-// one match that happens not to have them.
-const hrefs = await page.evaluate(() =>
-  [...document.querySelectorAll('a[href*="match="]')].map((x) => x.getAttribute("href")).slice(0, 8));
-await page.goto(`${BASE}/live`, { waitUntil: "load", timeout: 60000 }).catch(() => {});
-await page.waitForTimeout(2000);
-const liveHrefs = await page.evaluate(() =>
-  [...document.querySelectorAll('a[href*="match="]')].map((x) => x.getAttribute("href")).slice(0, 12));
-const candidates = [...new Set([...liveHrefs, ...hrefs])];
-log(`\n=== match modal — ${candidates.length} matches to try ===`);
-let checked = 0;
-for (const href of candidates) {
-  if (checked >= 6) break;
-  checked += 1;
-  await page.goto(new URL(href, BASE).toString(), { waitUntil: "load", timeout: 60000 });
+// close to kickoff, and today's fixtures have not published any, so look at
+// the past few days as well. Ask the site's own API first - that is a cheap
+// way to find a match that actually has a lineup, and it also shows whether
+// the player id we now depend on is present in the data at all.
+const dayOffset = (n) => {
+  const d = new Date(Date.now() + n * 86400000);
+  return d.toISOString().slice(0, 10);
+};
+const candidates = [];
+for (const path of ["/", `/live?date=${dayOffset(-1)}`, `/live?date=${dayOffset(-2)}`, "/live"]) {
+  await page.goto(BASE + path, { waitUntil: "load", timeout: 60000 }).catch(() => {});
+  await page.waitForTimeout(1200);
+  const found = await page.evaluate(() =>
+    [...document.querySelectorAll('a[href*="match="]')].map((x) => x.getAttribute("href")));
+  for (const h of found) if (!candidates.includes(h)) candidates.push(h);
+}
+log(`\n=== match modal — ${candidates.length} matches found ===`);
+let withLineup = null;
+for (const href of candidates.slice(0, 25)) {
+  const id = new URL(href, BASE).searchParams.get("match");
+  if (!id) continue;
+  const res = await page.request.get(`${BASE}/api/live/match/${id}`, { timeout: 60000 }).catch(() => null);
+  if (!res || !res.ok()) continue;
+  const data = await res.json().catch(() => null);
+  const starters = data?.lineups?.[0]?.starters ?? [];
+  if (!starters.length) continue;
+  const withId = starters.filter((p) => p.id).length;
+  log(`  ${id}: ${data.lineups.length} lineups, ${starters.length} starters, ${withId} of them carry a player id`);
+  log(`    first starter: ${JSON.stringify(starters[0])}`);
+  if (withId > 0) { withLineup = href; break; }
+}
+if (!withLineup) {
+  log(`  no match with a published lineup in that window - the links cannot be checked in the page yet`);
+} else {
+  await page.goto(new URL(withLineup, BASE).toString(), { waitUntil: "load", timeout: 60000 });
   const tab = page.locator("button", { hasText: "Կազմեր" }).first();
-  await tab.waitFor({ state: "visible", timeout: 30000 }).catch(() => {});
-  if (!(await tab.count())) { log(`  ${href}: no tabs (details unavailable)`); continue; }
-  await tab.click();
-  await page.waitForTimeout(3000);
+  await tab.waitFor({ state: "visible", timeout: 40000 }).catch(() => {});
+  await tab.click().catch(() => {});
+  await page.waitForTimeout(4000);
   const m = await page.evaluate(() => ({
     pitchPlayers: document.querySelectorAll(".pitch-player").length,
     pitchLinks: document.querySelectorAll("a.pitch-player-link").length,
@@ -72,17 +91,14 @@ for (const href of candidates) {
     teams: [...document.querySelectorAll(".pitch-team-label strong")].map((t) => t.textContent?.trim()),
     firstHref: document.querySelector("a.pitch-player-link")?.getAttribute("href") ?? null,
   }));
-  if (m.pitchPlayers === 0) { log(`  ${href}: no lineup published yet`); continue; }
-  log(`  ${href}: ${m.teams.join(" vs ")}`);
-  log(`    pitch ${m.pitchLinks}/${m.pitchPlayers} names are links | subs ${m.subLinks}/${m.subs} | first link ${m.firstHref}`);
+  log(`  rendered: ${m.teams.join(" vs ")}`);
+  log(`    pitch ${m.pitchLinks}/${m.pitchPlayers} names are links | subs ${m.subLinks}/${m.subs} | first ${m.firstHref}`);
   await page.screenshot({ path: `${OUT}/lineup.jpg`, type: "jpeg", quality: 70 });
-  // Follow one of them: the point is that it reaches a real player page.
   if (m.firstHref) {
     await page.goto(new URL(m.firstHref, BASE).toString(), { waitUntil: "load", timeout: 60000 });
     await page.waitForTimeout(1500);
     log(`    following it lands on: ${await page.evaluate(() => document.querySelector("h1")?.textContent?.trim() ?? "404")}`);
   }
-  break;
 }
 
 // 4. Can Cloudflare resize a remote image for us? This decides whether the
