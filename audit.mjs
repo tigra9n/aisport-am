@@ -199,5 +199,28 @@ log(`\n=== player names in Armenian ===`);
   }
 }
 
+// ---------- 8. Is the edge serving a stale home page? Articles are being
+// published every twenty minutes, but a reader reported seeing nothing new
+// for two hours - and an earlier run read an old share image from "/" while
+// the same page with a cache-busting parameter gave the new one. Ask for
+// both and compare what they say the newest article is.
+log(`\n=== is the home page served from cache ===`);
+{
+  const newest = async (url) => {
+    const res = await page.request.get(url, { timeout: 45000 }).catch(() => null);
+    if (!res || !res.ok()) return { title: `HTTP ${res ? res.status() : "?"}`, headers: {} };
+    const html = await res.text();
+    const m = html.match(/<h1[^>]*>(?:<a[^>]*>)?([^<]{12,})/) ?? html.match(/href="\/news\/[a-z0-9-]+"[^>]*>([^<]{12,})/);
+    return { title: (m?.[1] ?? "?").trim().slice(0, 46), headers: res.headers() };
+  };
+  const plain = await newest(BASE + "/");
+  const fresh = await newest(`${BASE}/?cachebust=${Date.now()}`);
+  log(`  plain  /            newest headline: "${plain.title}"`);
+  log(`    cf-cache-status: ${plain.headers["cf-cache-status"] ?? "none"} | age: ${plain.headers["age"] ?? "none"} | cache-control: ${plain.headers["cache-control"] ?? "none"}`);
+  log(`  /?cachebust=...     newest headline: "${fresh.title}"`);
+  log(`    cf-cache-status: ${fresh.headers["cf-cache-status"] ?? "none"} | age: ${fresh.headers["age"] ?? "none"}`);
+  log(`  same content: ${plain.title === fresh.title ? "yes" : "NO - the plain URL is stale"}`);
+}
+
 await browser.close();
 fs.writeFileSync("add-source-result.txt", report.join("\n"));
