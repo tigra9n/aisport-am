@@ -3,8 +3,17 @@ import { NextRequest, NextResponse } from "next/server";
 // Once aifootball.am is live, this makes aisport.am permanently redirect
 // page requests to the same URL on aifootball.am - the old domain keeps
 // working for existing links/bookmarks/search results, it just forwards
-// visitors (and search engine crawlers, via the 308 status) to the new
+// visitors (and search engine crawlers, via the 301 status) to the new
 // canonical domain instead of serving duplicate content on two hostnames.
+//
+// 301 rather than 308 because this is a site move, and Google's Change of
+// Address tool in Search Console documents 301 as the redirect a move must
+// use. The two are both permanent redirects and a browser treats them
+// identically for the GET page requests this matcher covers - 308 only
+// adds a guarantee that the request method survives the redirect, which
+// matters for POST and is irrelevant here, since /api is excluded below
+// precisely so that non-GET and machine callers never see a redirect at
+// all. So 301 costs nothing and is the status the tooling expects.
 //
 // BUG FOUND AND FIXED: /api/* was originally included in this redirect
 // too. cron-job.org (external service, triggers /api/cron/dispatch every
@@ -25,7 +34,7 @@ export function middleware(request: NextRequest) {
     url.hostname = NEW_HOST;
     url.port = "";
     url.protocol = "https:";
-    return NextResponse.redirect(url, 308);
+    return NextResponse.redirect(url, 301);
   }
   return NextResponse.next();
 }
