@@ -98,6 +98,8 @@ for (const [label, path] of [
   else failures.push(`${label}: no link to one was found on the live site`);
 }
 
+await expectPage("about", "/about", ["</html>"]);
+await expectPage("contact", "/contact", ["</html>"]);
 await expectPage("armenia", "/armenia", ["</html>"]);
 await expectPage("live", "/live", ["</html>"]);
 await expectPage("search", "/search?q=%D4%B2%D5%A1%D6%80%D5%BD%D5%A5%D5%AC%D5%B8%D5%B6%D5%A1", ["</html>"]);
