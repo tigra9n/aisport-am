@@ -45,6 +45,25 @@ for (const [name, path] of [["home", `/?cachebust=${Date.now()}`], ["article", a
   log(`    twitter:card   ${meta("twitter:card") ?? "MISSING"}`);
 }
 
+// An Armenian page will always carry some Latin, and most of it belongs
+// there: UEFA, NWSL, "Sisian City Stadium", the name of a section. Listing
+// the acceptable words was the first idea and the wrong one - every new
+// club, stadium and competition would have to be added by hand, and until
+// someone did, the report would cry wolf about a name that is correct.
+//
+// So the list runs the other way, and stays closed. A real leak is
+// untranslated prose, and English prose is built from ordinary words; a
+// word this list does not know is almost always a name, and a name is
+// meant to stay Latin. Months and weekdays are here because an English
+// date is the leak this pipeline actually produces. Nothing about football
+// is here on purpose: "Match Center" and "LIVE" are section names.
+const ENGLISH_PROSE = ("january february march april may june july august september october november december " +
+  "monday tuesday wednesday thursday friday saturday sunday yesterday today tomorrow " +
+  "the and but with from that this these those have has had was were are will would could should been " +
+  "they their them there here what when where which while because after before against between during " +
+  "about into over under than then also only just more most very said says told according however although"
+).split(" ");
+
 // ---------- 2. Pages never measured, at phone width.
 log(`\n=== pages never audited (phone) ===`);
 const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
@@ -58,7 +77,7 @@ for (const [name, path] of [
   const res = await p.goto(BASE + path, { waitUntil: "load", timeout: 60000 }).catch(() => null);
   if (!res) { log(`  ${name}: unreachable`); continue; }
   await p.waitForTimeout(1200);
-  const m = await p.evaluate(() => ({
+  const m = await p.evaluate((english) => ({
     height: document.documentElement.scrollHeight,
     overflow: Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
     text: (document.body.innerText ?? "").trim().length,
@@ -74,12 +93,16 @@ for (const [name, path] of [
     noAlt: [...document.querySelectorAll("img")].filter((i) => i.getAttribute("alt") === null).length,
     decorative: [...document.querySelectorAll("img")].filter((i) => i.getAttribute("alt") === "").length,
     broken: [...document.querySelectorAll("img")].filter((i) => i.complete && i.naturalWidth === 0 && i.currentSrc).length,
-    latin: ((document.body.innerText ?? "").match(/\b[A-Za-z]{4,}\b/g) ?? [])
-      .filter((w) => !["FOOTBALL", "Esport", "Live", "Facebook", "Instagram", "Telegram", "Threads", "AIFootball"].includes(w))
-      .slice(0, 8),
-  }));
+    // Split by whether the word is ordinary English (a leak) or a word this
+    // list does not know (a name, and almost certainly meant to be there).
+    latin: [...new Set(((document.body.innerText ?? "").match(/\b[A-Za-z]{3,}\b/g) ?? [])
+      .filter((w) => english.includes(w.toLowerCase())))].slice(0, 8),
+    latinNames: [...new Set(((document.body.innerText ?? "").match(/\b[A-Z][A-Za-z]{3,}\b/g) ?? [])
+      .filter((w) => !english.includes(w.toLowerCase())))].slice(0, 6),
+  }), ENGLISH_PROSE);
   log(`  ${name} (${path}): HTTP ${res.status()} | ${m.height}px | text ${m.text} | img ${m.imgs} (missing alt ${m.noAlt}, decorative ${m.decorative}, broken ${m.broken})${m.overflow ? ` | OVERFLOW ${m.overflow}px` : ""}`);
-  if (m.latin.length) log(`    latin words: ${m.latin.join(", ")}`);
+  if (m.latin.length) log(`    ENGLISH PROSE ON AN ARMENIAN PAGE: ${m.latin.join(", ")}`);
+  if (m.latinNames.length) log(`    latin names (expected): ${m.latinNames.join(", ")}`);
 }
 
 // ---------- 3. Does the site's own search find anything?
