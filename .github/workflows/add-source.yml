@@ -42,13 +42,25 @@ jobs:
       - name: Why has nothing been published for two hours
         run: |
           npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
-          echo "=== the last hours of publishing ===" > halt.txt
+          echo "=== now, and the last ten articles ===" > halt.txt
           npx wrangler d1 execute aisport-db --remote --json --command \
-            "SELECT strftime('%Y-%m-%d %H:00', published_at) AS hour, COUNT(*) AS n FROM articles WHERE published_at > datetime('now','-8 hours') GROUP BY hour ORDER BY hour DESC" 2>&1 | tail -40 >> halt.txt
-          echo "" >> halt.txt
-          echo "=== the last cron runs ===" >> halt.txt
+            "SELECT datetime('now') AS utc_now, (SELECT COUNT(*) FROM articles WHERE published_at > datetime('now','-2 hours')) AS last_2h" > q1.json 2>&1 || true
           npx wrangler d1 execute aisport-db --remote --json --command \
-            "SELECT * FROM cron_invocations ORDER BY id DESC LIMIT 12" 2>&1 | tail -80 >> halt.txt
+            "SELECT published_at, substr(title,1,52) AS title FROM articles ORDER BY published_at DESC LIMIT 10" > q2.json 2>&1 || true
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT id, ts, mode, generated, substr(reason,1,90) AS reason FROM cron_invocations ORDER BY id DESC LIMIT 10" > q3.json 2>&1 || true
+          node -e "
+            const fs=require('fs');
+            const rows=(f)=>{try{const r=fs.readFileSync(f,'utf8');return JSON.parse(r.slice(r.indexOf('[')))[0].results||[]}catch(e){return []}};
+            const out=[];
+            for(const r of rows('q1.json')) out.push('  now (UTC): '+r.utc_now+' | articles in the last 2 hours: '+r.last_2h);
+            out.push('  --- last ten articles ---');
+            for(const r of rows('q2.json')) out.push('    '+r.published_at+'  '+r.title);
+            out.push('  --- last ten cron runs ---');
+            for(const r of rows('q3.json')) out.push('    '+r.ts+'  '+r.mode+' gen='+r.generated+'  '+(r.reason||''));
+            console.log(out.join('\n'));
+            fs.appendFileSync('halt.txt', out.join('\n')+'\n');
+          "
           echo "" >> halt.txt
           echo "=== does the stored APITube key still work? ===" >> halt.txt
           npx wrangler d1 execute aisport-db --remote --json --command \
