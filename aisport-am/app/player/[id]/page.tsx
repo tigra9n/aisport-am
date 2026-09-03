@@ -5,6 +5,7 @@ import { SiteFooter } from "../../../components/site-footer";
 import { SiteHeader } from "../../../components/site-header";
 import { formatDateHy } from "../../../lib/format-date";
 import { getPlayerProfile, getPlayerTransfers } from "../../../lib/player-server";
+import { knownPlayer } from "../../../lib/entity-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +37,26 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
   const playerId = Number.parseInt(id, 10);
   if (!Number.isFinite(playerId)) notFound();
   const [profile, transfers] = await Promise.all([getPlayerProfile(playerId), getPlayerTransfers(playerId)]);
-  if (!profile) notFound();
+
+  // Same rule as the team page: a player the top-scorer table already knows
+  // gets a page carrying the name the reader clicked on, not a 404. The
+  // 404s Google recorded here were the API being slow on a first visit, not
+  // pages that were missing.
+  if (!profile) {
+    const known = await knownPlayer(playerId);
+    if (!known) notFound();
+    return <main><SiteHeader /><div className="site-shell inner-page">
+      <span className="page-kicker">Խաղացողի պրոֆիլ</span>
+      <div className="player-header">
+        {known.photo ? <img src={sizedImage(known.photo, 128)} alt="" className="player-header-photo" loading="lazy" /> : <div className="player-header-photo squad-photo-placeholder">{known.name.slice(0, 1)}</div>}
+        <div>
+          <h1 className="page-title">{known.name}</h1>
+          <div className="player-facts">{known.team && <span>⚽ {known.team}</span>}</div>
+        </div>
+      </div>
+      <p className="detail-empty">Այս խաղացողի մանրամասն վիճակագրությունը այս պահին հասանելի չէ։ Փորձիր մի փոքր ուշ։</p>
+    </div><SiteFooter /></main>;
+  }
 
   return <main><SiteHeader /><div className="site-shell inner-page">
     <span className="page-kicker">Խաղացողի պրոֆիլ</span>

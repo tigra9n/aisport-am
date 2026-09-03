@@ -62,6 +62,21 @@ type ApiFootballTransfer = {
   transfers: { date: string; type: string | null; teams: { in: { name: string; logo?: string | null }; out: { name: string; logo?: string | null } } }[];
 };
 
+// One retry, immediately. The failures that produced 404s on a first visit
+// were transient - the same URL answered a second later - and a single
+// extra attempt costs one API call only when something has already gone
+// wrong. Retrying more than once would turn a real outage into a stall.
+async function fetchApi(url: string, key: string): Promise<Response | null> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(url, { headers: { "x-apisports-key": key, Accept: "application/json" } });
+      if (response.ok) return response;
+    } catch { /* fall through to the retry */ }
+    if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return null;
+}
+
 let cacheTableReady: Promise<unknown> | null = null;
 async function ensureCacheTable(db: D1Database) {
   cacheTableReady ??= db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();
@@ -88,8 +103,8 @@ async function cachedGet<T>(cacheKey: string, ttlMs: number, url: string, key: s
   }
 
   try {
-    const response = await fetch(url, { headers: { "x-apisports-key": key, Accept: "application/json" } });
-    if (!response.ok) throw new Error(`http ${response.status}`);
+    const response = await fetchApi(url, key);
+    if (!response) throw new Error("unreachable");
     const json = await response.json();
     const result = extract(json);
     if (result === null) throw new Error("empty");

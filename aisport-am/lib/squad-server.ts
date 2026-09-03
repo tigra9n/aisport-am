@@ -17,6 +17,21 @@ type ApiFootballSquad = {
   players: { id: number; name: string; number: number | null; position: string; age: number | null; photo?: string | null }[];
 };
 
+// One retry, immediately. The failures that produced 404s on a first visit
+// were transient - the same URL answered a second later - and a single
+// extra attempt costs one API call only when something has already gone
+// wrong. Retrying more than once would turn a real outage into a stall.
+async function fetchApi(url: string, key: string): Promise<Response | null> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(url, { headers: { "x-apisports-key": key, Accept: "application/json" } });
+      if (response.ok) return response;
+    } catch { /* fall through to the retry */ }
+    if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return null;
+}
+
 let cacheTableReady: Promise<unknown> | null = null;
 async function ensureCacheTable(db: D1Database) {
   cacheTableReady ??= db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();
@@ -68,10 +83,8 @@ export async function getCoach(teamId: number): Promise<Coach | null> {
   }
 
   try {
-    const response = await fetch(`https://v3.football.api-sports.io/coachs?team=${teamId}`, {
-      headers: { "x-apisports-key": key, Accept: "application/json" },
-    });
-    if (!response.ok) throw new Error(`http ${response.status}`);
+    const response = await fetchApi(`https://v3.football.api-sports.io/coachs?team=${teamId}`, key);
+    if (!response) throw new Error("unreachable");
     const data = await response.json() as { response?: ApiFootballCoach[] };
     // The endpoint returns every coach who's managed the team; the current
     // one is whichever entry has no end date on their stint with this team.
@@ -113,10 +126,8 @@ export async function getCoachById(coachId: number): Promise<Coach | null> {
   }
 
   try {
-    const response = await fetch(`https://v3.football.api-sports.io/coachs?id=${coachId}`, {
-      headers: { "x-apisports-key": key, Accept: "application/json" },
-    });
-    if (!response.ok) throw new Error(`http ${response.status}`);
+    const response = await fetchApi(`https://v3.football.api-sports.io/coachs?id=${coachId}`, key);
+    if (!response) throw new Error("unreachable");
     const data = await response.json() as { response?: ApiFootballCoach[] };
     const raw = data.response?.[0];
     if (!raw) throw new Error("empty");
@@ -157,10 +168,8 @@ export async function getSquad(teamId: number): Promise<Squad | null> {
   }
 
   try {
-    const response = await fetch(`https://v3.football.api-sports.io/players/squads?team=${teamId}`, {
-      headers: { "x-apisports-key": key, Accept: "application/json" },
-    });
-    if (!response.ok) throw new Error(`http ${response.status}`);
+    const response = await fetchApi(`https://v3.football.api-sports.io/players/squads?team=${teamId}`, key);
+    if (!response) throw new Error("unreachable");
     const data = await response.json() as { response?: ApiFootballSquad[] };
     const entry = data.response?.[0];
     if (!entry?.players?.length) throw new Error("empty");
