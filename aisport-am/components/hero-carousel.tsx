@@ -20,7 +20,7 @@ export function HeroCarousel({ articles }: { articles: ArticlePreview[] }) {
 
   return <div className="featured-news-stack">
     <article className="main-lead hero-carousel-card" key={item.slug}>
-      <Link className="lead-image" href={`/news/${item.slug}`}><img src={item.image} alt="" decoding="async" fetchPriority="high" /></Link>
+      <Link prefetch={false} className="lead-image" href={`/news/${item.slug}`}><img src={item.image} alt="" decoding="async" fetchPriority="high" /></Link>
       <div className="lead-overlay">
         <span className="breaking-label"><i /> Գլխավոր լուր</span>
         <h1><Link href={`/news/${item.slug}`}>{item.title}</Link></h1>

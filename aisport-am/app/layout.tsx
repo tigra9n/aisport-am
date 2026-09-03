@@ -29,6 +29,13 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="hy" data-theme="dark" suppressHydrationWarning>
+      <head>
+        {/* The team badges and the analytics script come from two hosts the
+            browser cannot discover until it is parsing, by which time the
+            handshake is on the critical path. */}
+        <link rel="preconnect" href="https://media.api-sports.io" crossOrigin="" />
+        <link rel="preconnect" href="https://www.googletagmanager.com" />
+      </head>
       <body>
         {children}
         {/* Google Analytics 4 - property created 2026-08-27 for real

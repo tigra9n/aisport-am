@@ -357,3 +357,11 @@ img{display:block;max-width:100%}
 .player-photo{width:26px;height:26px;border-radius:50%;object-fit:cover;flex:none;background:var(--surface-2)}
 .topscorers-table td:nth-child(2){min-width:150px}
 .player-team-hint{color:var(--muted);font-weight:600;font-size:8px}
+
+/* Below-the-fold blocks are skipped by layout and paint until they are
+   scrolled near. The bytes are the same, but on a cheap phone the first
+   render stops doing work for content nobody is looking at yet. The
+   intrinsic size keeps the scrollbar honest so the page does not jump. */
+.sport-news-block{content-visibility:auto;contain-intrinsic-size:auto 900px}
+.headline-feed-item{content-visibility:auto;contain-intrinsic-size:auto 96px}
+.standings-block,.transfers-section{content-visibility:auto;contain-intrinsic-size:auto 600px}
