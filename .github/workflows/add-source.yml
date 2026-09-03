@@ -49,6 +49,13 @@ jobs:
             "SELECT published_at, substr(title,1,52) AS title FROM articles ORDER BY published_at DESC LIMIT 10" > q2.json 2>&1 || true
           npx wrangler d1 execute aisport-db --remote --json --command \
             "SELECT id, ts, mode, generated, substr(reason,1,90) AS reason FROM cron_invocations ORDER BY id DESC LIMIT 10" > q3.json 2>&1 || true
+          # What the searches actually spent their time on, and how the rate
+          # compares before and after the Armenians-first change (deployed
+          # around 11:00 UTC).
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT ts, substr(log,1,600) AS log FROM cron_invocations WHERE mode='rss' ORDER BY id DESC LIMIT 4" > q4.json 2>&1 || true
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT 'before 11:00' AS window, COUNT(*) AS n FROM articles WHERE published_at BETWEEN datetime('now','-12 hours') AND '2026-09-03 11:00:00' UNION ALL SELECT 'after 11:00', COUNT(*) FROM articles WHERE published_at > '2026-09-03 11:00:00'" > q5.json 2>&1 || true
           node -e "
             const fs=require('fs');
             const rows=(f)=>{try{const r=fs.readFileSync(f,'utf8');return JSON.parse(r.slice(r.indexOf('[')))[0].results||[]}catch(e){return []}};
@@ -58,6 +65,10 @@ jobs:
             for(const r of rows('q2.json')) out.push('    '+r.published_at+'  '+r.title);
             out.push('  --- last ten cron runs ---');
             for(const r of rows('q3.json')) out.push('    '+r.ts+'  '+r.mode+' gen='+r.generated+'  '+(r.reason||''));
+            out.push('  --- what the searches spent their time on ---');
+            for(const r of rows('q4.json')) out.push('    '+r.ts+'\n      '+String(r.log||'').replace(/\\n/g,'\n      '));
+            out.push('  --- rate before and after the change ---');
+            for(const r of rows('q5.json')) out.push('    '+r.window+': '+r.n+' articles');
             console.log(out.join('\n'));
             fs.appendFileSync('halt.txt', out.join('\n')+'\n');
           "
