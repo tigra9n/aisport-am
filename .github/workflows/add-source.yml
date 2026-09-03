@@ -58,6 +58,16 @@ jobs:
             console.log(lines.join('\n'));
             fs.writeFileSync('apistatus.txt',lines.join('\n'));
           "
+          # The 404s are not a quota problem - the account is on Pro, 1645 of
+          # 7500 used. So ask the API directly about the exact ids whose
+          # pages 404, and see whether the data is there at all.
+          for T in 522 6286 490 1693 582 26738 504; do
+            echo "  team $T squad: $(curl -s -o /dev/null -w '%{http_code}' "https://v3.football.api-sports.io/players/squads?team=$T" -H "x-apisports-key: ${API_FOOTBALL_KEY}") results=$(curl -s "https://v3.football.api-sports.io/players/squads?team=$T" -H "x-apisports-key: ${API_FOOTBALL_KEY}" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);console.log(j.results+' errors='+JSON.stringify(j.errors))}catch(e){console.log('parse-fail')}})")" >> apistatus.txt
+          done
+          for P in 152982 10329 1100 1864 321648; do
+            echo "  player $P season2026: $(curl -s "https://v3.football.api-sports.io/players?id=$P&season=2026" -H "x-apisports-key: ${API_FOOTBALL_KEY}" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);console.log(j.results+' errors='+JSON.stringify(j.errors))}catch(e){console.log('parse-fail')}})") | profiles: $(curl -s "https://v3.football.api-sports.io/players/profiles?player=$P" -H "x-apisports-key: ${API_FOOTBALL_KEY}" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);console.log(j.results+' errors='+JSON.stringify(j.errors))}catch(e){console.log('parse-fail')}})")" >> apistatus.txt
+          done
+          cat apistatus.txt
         env:
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
 
