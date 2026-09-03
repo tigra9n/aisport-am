@@ -125,6 +125,9 @@ jobs:
           echo "  --- $ERR of $((OK+ERR)) names cost a failed request on every attempt ---" >> apitube.txt
           fi
           cat apitube.txt
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Can this account write to R2 at all
         run: |
