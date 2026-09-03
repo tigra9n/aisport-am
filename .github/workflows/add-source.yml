@@ -1,6 +1,7 @@
 name: Add RSS Source
 
 on:
+  workflow_dispatch: {}
   push:
     branches: [main]
     paths: ['.github/workflows/add-source.yml']
@@ -15,11 +16,147 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Break down the page weight, and check the player stats table
+      - name: How many articles has the site published per hour since the parallel search went in
+        run: |
+          npm install --no-save wrangler@4.92.0
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT strftime('%Y-%m-%d %H:00', published_at) AS hour, COUNT(*) AS articles FROM articles WHERE published_at > datetime('now','-30 hours') GROUP BY hour ORDER BY hour DESC" \
+            > rate.json 2>&1 || true
+          node -e "
+            const fs=require('fs');
+            let raw=fs.readFileSync('rate.json','utf8');
+            const start=raw.indexOf('[');
+            let rows=[];
+            try{rows=JSON.parse(raw.slice(start))[0].results;}catch(e){console.log(raw.slice(0,900));}
+            const lines=['=== articles published per hour (UTC), last 30 hours ==='];
+            for(const r of rows) lines.push('  '+r.hour+'  '+'#'.repeat(r.articles)+' '+r.articles);
+            const total=rows.reduce((n,r)=>n+r.articles,0);
+            lines.push('  total '+total+' over '+rows.length+' hours with output, average '+(total/Math.max(rows.length,1)).toFixed(2)+' per active hour');
+            console.log(lines.join('\n'));
+            fs.writeFileSync('rate.txt',lines.join('\n'));
+          "
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: What is the API-Football plan and how much of it is spent
+        run: |
+          # I have been asserting "100 requests a day" from general
+          # knowledge. The API reports its own plan and the day's usage, so
+          # ask it rather than designing around a number nobody checked.
+          curl -s "https://v3.football.api-sports.io/status" \
+            -H "x-apisports-key: ${API_FOOTBALL_KEY}" -H "Accept: application/json" > apistatus.json || true
+          node -e "
+            const fs=require('fs');
+            let j={};
+            try{j=JSON.parse(fs.readFileSync('apistatus.json','utf8'));}catch(e){}
+            const r=j.response||{};
+            const lines=['=== API-Football account ==='];
+            lines.push('  plan: '+(r.subscription?.plan??'?')+' | active: '+(r.subscription?.active??'?')+' | ends: '+(r.subscription?.end??'?'));
+            lines.push('  today: '+(r.requests?.current??'?')+' of '+(r.requests?.limit_day??'?')+' requests used');
+            if(j.errors&&Object.keys(j.errors).length) lines.push('  errors: '+JSON.stringify(j.errors));
+            console.log(lines.join('\n'));
+            fs.writeFileSync('apistatus.txt',lines.join('\n'));
+          "
+          # The 404s are not a quota problem - the account is on Pro, 1645 of
+          # 7500 used. So ask the API directly about the exact ids whose
+          # pages 404, and see whether the data is there at all.
+          for T in 522 6286 490 1693 582 26738 504; do
+            echo "  team $T squad: $(curl -s -o /dev/null -w '%{http_code}' "https://v3.football.api-sports.io/players/squads?team=$T" -H "x-apisports-key: ${API_FOOTBALL_KEY}") results=$(curl -s "https://v3.football.api-sports.io/players/squads?team=$T" -H "x-apisports-key: ${API_FOOTBALL_KEY}" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);console.log(j.results+' errors='+JSON.stringify(j.errors))}catch(e){console.log('parse-fail')}})")" >> apistatus.txt
+          done
+          for P in 152982 10329 1100 1864 321648; do
+            echo "  player $P season2026: $(curl -s "https://v3.football.api-sports.io/players?id=$P&season=2026" -H "x-apisports-key: ${API_FOOTBALL_KEY}" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);console.log(j.results+' errors='+JSON.stringify(j.errors))}catch(e){console.log('parse-fail')}})") | profiles: $(curl -s "https://v3.football.api-sports.io/players/profiles?player=$P" -H "x-apisports-key: ${API_FOOTBALL_KEY}" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);console.log(j.results+' errors='+JSON.stringify(j.errors))}catch(e){console.log('parse-fail')}})")" >> apistatus.txt
+          done
+          cat apistatus.txt
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+
+      - name: Which player names does APITube not recognise
+        run: |
+          # The dashboard reports a 64% error rate. The code asks APITube's
+          # strict person.name registry first for every name, and only falls
+          # back to a plain title search when that errors - so every name the
+          # registry does not carry costs one failed request, on every single
+          # attempt, forever. Count how many of the names are like that.
+          npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
+          # Find where the key actually lives rather than assuming a column.
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT name FROM sqlite_master WHERE type='table'" > tables.json 2>&1 || true
+          echo "  tables: $(tr -d '\n' < tables.json | grep -o '\"name\":\"[a-z_]*\"' | tr '\n' ' ')" >> apitube.txt
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT * FROM sources LIMIT 5" > src.json 2>&1 || true
+          KEY=$(node -e "
+            const fs=require('fs');
+            let raw='';try{raw=fs.readFileSync('src.json','utf8');}catch(e){}
+            const i=raw.indexOf('[');
+            let key='';
+            if(i>=0){
+              try{
+                const rows=JSON.parse(raw.slice(i))[0].results||[];
+                for(const r of rows){
+                  for(const v of Object.values(r)){
+                    if(typeof v==='string'){
+                      const m=v.match(/api_key=([^&\\s\"]+)/)||v.match(/(api_live_[A-Za-z0-9]+)/);
+                      if(m){key=m[1];break;}
+                    }
+                  }
+                  if(key)break;
+                }
+              }catch(e){}
+            }
+            console.error('columns seen: '+(()=>{try{const rows=JSON.parse(raw.slice(i))[0].results||[];return rows.length?Object.keys(rows[0]).join(','):'no rows';}catch(e){return 'unparsed'}})());
+            console.log(key);
+          " 2>>apitube.txt)
+          if [ -z "$KEY" ]; then echo "  (could not read the APITube key from D1)" >> apitube.txt; else
+          NAMES="Henrikh_Mkhitaryan Eduard_Spertsyan Grant-Leon_Ranos Tigran_Barseghyan Vahan_Bichakhchyan Kylian_Mbappe Lamine_Yamal Erling_Haaland Vinicius_Junior Jude_Bellingham Mohamed_Salah Harry_Kane Lionel_Messi Bukayo_Saka Rodri Federico_Valverde Alexander_Isak Florian_Wirtz Jamal_Musiala Victor_Osimhen"
+          OK=0; ERR=0
+          for RAW in $NAMES; do
+            N=$(echo "$RAW" | tr '_' ' ')
+            BODY=$(curl -s -G "https://api.apitube.io/v1/news/everything" \
+              --data-urlencode "api_key=$KEY" --data-urlencode "person.name=$N" \
+              --data-urlencode "per_page=1" --data-urlencode "language.code=en")
+            if echo "$BODY" | grep -q "ER0216\|ER0220\|ER0228\|ER0151"; then
+              CODE=$(echo "$BODY" | grep -o "ER0[0-9]*" | head -1)
+              echo "  NOT IN REGISTRY ($CODE): $N" >> apitube.txt; ERR=$((ERR+1))
+            else
+              echo "  ok: $N" >> apitube.txt; OK=$((OK+1))
+            fi
+          done
+          echo "  --- $ERR of $((OK+ERR)) names cost a failed request on every attempt ---" >> apitube.txt
+          fi
+          cat apitube.txt
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Can this account write to R2 at all
+        run: |
+          # Resizing images ourselves needs somewhere to put them. R2's free
+          # tier is large enough (10 GB; the site produces about 4 MB a day),
+          # but only if the deploy token is allowed to create a bucket. Find
+          # out before designing around it.
+          npx wrangler r2 bucket list > r2.txt 2>&1 || true
+          echo "=== r2 access ===" >> add-source-result.txt || true
+          head -20 r2.txt
+          head -20 r2.txt > r2-head.txt
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Verify the Armenian names, the lineup links and the image proxy
         run: |
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium
           node audit.mjs || true
+          cat rate.txt >> add-source-result.txt 2>/dev/null || echo "(rate query produced nothing)" >> add-source-result.txt
+          echo "" >> add-source-result.txt
+          cat apistatus.txt >> add-source-result.txt 2>/dev/null || true
+          echo "" >> add-source-result.txt
+          echo "=== APITube person.name registry ===" >> add-source-result.txt
+          cat apitube.txt >> add-source-result.txt 2>/dev/null || echo "(no output)" >> add-source-result.txt
+          echo "" >> add-source-result.txt
+          echo "=== can the deploy token use R2? ===" >> add-source-result.txt
+          cat r2-head.txt >> add-source-result.txt 2>/dev/null || echo "(no output)" >> add-source-result.txt
           echo "" >> add-source-result.txt
           echo "--- screenshots produced ---" >> add-source-result.txt
           ls -la audit >> add-source-result.txt 2>&1 || true

@@ -1,4 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
+import { sizedImage } from "../lib/image-proxy";
 import Link from "next/link";
 import { Suspense } from "react";
 import { LeagueTabs } from "../components/league-tabs";
@@ -7,7 +8,7 @@ import { SiteHeader } from "../components/site-header";
 import { HeroCarousel } from "../components/hero-carousel";
 import { HeadlineFeed } from "../components/headline-feed";
 import { AdSpaces } from "../components/ad-spaces";
-import { MatchModal } from "../components/match-modal";
+import { MatchModalLazy } from "../components/match-modal-lazy";
 import { trendingTopics, type ArticlePreview } from "../lib/content";
 import { leagues } from "../lib/football";
 import { getStandings } from "../lib/football-server";
@@ -15,6 +16,12 @@ import { getTopScorers } from "../lib/topscorers-server";
 import { getLiveMatches } from "../lib/live-football-server";
 import { getPublishedArticles, getArticlesByCategory, toPreview } from "../lib/articles";
 import { getOpinions, type Opinion } from "../lib/opinions";
+
+import type { Metadata } from "next";
+
+// Without this the old domain's home page and this one look to a crawler
+// like two unrelated copies of the same thing.
+export const metadata: Metadata = { alternates: { canonical: "https://aifootball.am/" } };
 
 // The live-score request must run in the production Worker. Without this,
 // the page can be prerendered at deploy time and never reach the live API.
@@ -85,13 +92,22 @@ export default async function Home() {
   // would skip or repeat articles.
   const articlesInHeadline = headlineStream.filter((item) => item.basePath !== "/opinions").length;
   const heroArticles = articles.slice(0, 6);
+  // Everything the page has already shown, so the sport sections below do
+  // not print the same article a second time. The audit found five headlines
+  // on the home page appearing twice - the hero and the headline feed take
+  // the newest articles, and the by-sport sections then took the newest of
+  // each category, which for football is the same set. Ask for more than we
+  // need and drop what has already appeared.
+  const alreadyShown = new Set([...heroArticles, ...headlineStream].map((item) => item.slug));
   const sportSectionsData = await Promise.all(homepageSports.map(async (sport) => {
     if (sport.source === "opinions") {
-      const rows = await getOpinions(4, sport.opinionCategory);
-      return { name: sport.name, slug: sport.slug, href: `/opinions?category=${encodeURIComponent(sport.opinionCategory)}`, basePath: "/opinions", items: rows.map(opinionToPreview) };
+      const rows = await getOpinions(8, sport.opinionCategory);
+      const items = rows.map(opinionToPreview).filter((item) => !alreadyShown.has(item.slug)).slice(0, 4);
+      return { name: sport.name, slug: sport.slug, href: `/opinions?category=${encodeURIComponent(sport.opinionCategory)}`, basePath: "/opinions", items };
     }
-    const rows = await getArticlesByCategory(sport.dbCategory, 4);
-    return { name: sport.name, slug: sport.slug, href: `/category/${sport.slug}`, basePath: "/news", items: rows.map(toPreview) };
+    const rows = await getArticlesByCategory(sport.dbCategory, 14);
+    const items = rows.map(toPreview).filter((item) => !alreadyShown.has(item.slug)).slice(0, 4);
+    return { name: sport.name, slug: sport.slug, href: `/category/${sport.slug}`, basePath: "/news", items };
   }));
   const sportSections = sportSectionsData;
 
@@ -130,13 +146,13 @@ export default async function Home() {
       <section className="live-ribbon" aria-label="Ուղիղ արդյունքներ">
         <div className="site-shell live-ribbon-inner">
           <Link className="live-title" href="/live"><span /> LIVE</Link>
-          <div className="live-ticker"><div className="live-ticker-track">{[...live.matches, ...live.matches].map((match, index) => <Link className="live-ribbon-match" href={`/?match=${match.id}`} scroll={false} key={`${match.id}-${index}`}><small className={match.isLive ? "ticker-live" : ""}>{match.status}</small><strong>{match.home}</strong><b>{match.homeScore ?? "–"}</b><span>:</span><b>{match.awayScore ?? "–"}</b><strong>{match.away}</strong></Link>)}</div></div>
+          <div className="live-ticker"><div className="live-ticker-track">{[...live.matches, ...live.matches].map((match, index) => <Link className="live-ribbon-match" href={`/?match=${match.id}`} scroll={false} prefetch={false} key={`${match.id}-${index}`}><small className={match.isLive ? "ticker-live" : ""}>{match.status}</small><strong>{match.home}</strong><b>{match.homeScore ?? "–"}</b><span>:</span><b>{match.awayScore ?? "–"}</b><strong>{match.away}</strong></Link>)}</div></div>
           <Link className="all-scores" href="/live">Բոլոր խաղերը →</Link>
         </div>
       </section>
 
       <div className="site-shell home-main">
-        <section className="trending-bar" aria-label="Թրենդային թեմաներ"><strong>Թրենդային</strong>{trendingTopics.map((topic) => <Link href={`/search?q=${encodeURIComponent(topic.query)}`} key={topic.label}>{topic.label}</Link>)}</section>
+        <section className="trending-bar" aria-label="Թրենդային թեմաներ"><strong>Թրենդային</strong>{trendingTopics.map((topic) => <Link prefetch={false} href={`/search?q=${encodeURIComponent(topic.query)}`} key={topic.label}>{topic.label}</Link>)}</section>
 
         <section className="hero-news-grid newsroom-hero">
           <aside className="headline-feed" aria-label="Լրահոս">
@@ -158,7 +174,7 @@ export default async function Home() {
                 <div className="sport-news-head"><div><span /> <h3>{sport.name}</h3></div><Link href={sport.href}>Բոլոր լուրերը →</Link></div>
                 <div className="sport-news-grid">
                   {sport.items.map((article, index) => <article className={index === 0 ? "sport-news-card featured" : "sport-news-card"} key={article.slug}>
-                    <Link className="sport-news-image" href={`${sport.basePath}/${article.slug}`}><img src={article.image} alt="" referrerPolicy="no-referrer" /></Link>
+                    <Link className="sport-news-image" href={`${sport.basePath}/${article.slug}`}><img src={sizedImage(article.image, 420)} alt={article.title} referrerPolicy="no-referrer" loading="lazy" decoding="async" /></Link>
                     <div><span>{article.category}</span><h4><Link href={`${sport.basePath}/${article.slug}`}>{article.title}</Link></h4>{index === 0 ? <p>{article.excerpt}</p> : null}<time>{article.time} · {article.readTime}</time></div>
                   </article>)}
                 </div>
@@ -171,7 +187,7 @@ export default async function Home() {
               <div className="sidebar-title"><div><span className="live-pulse" />Այսօր՝ ուղիղ</div><Link href="/live">Բոլորը</Link></div>
               <div className={live.unavailable ? "live-source-strip demo" : "live-source-strip real"}>{live.unavailable ? "Live տվյալները ժամանակավորապես անհասանելի են" : "Իրական live տվյալներ"}</div>
               {!live.matches.length && live.unavailable ? <div className="no-matches">Կեղծ հաշիվներ չենք ցուցադրում․ իրական տվյալները շուտով կվերականգնվեն։</div> : null}
-              {live.matches.slice(0, 3).map((match) => <div className="score-card" key={match.id}><div><span>{match.competition}</span><b>{match.status}</b></div><p><strong className="team-with-logo">{match.homeLogo&&<img src={match.homeLogo} alt="" className="team-logo" loading="lazy" />}{match.home}</strong><b>{match.homeScore ?? "–"}</b></p><p><strong className="team-with-logo">{match.awayLogo&&<img src={match.awayLogo} alt="" className="team-logo" loading="lazy" />}{match.away}</strong><b>{match.awayScore ?? "–"}</b></p></div>)}
+              {live.matches.slice(0, 3).map((match) => <div className="score-card" key={match.id}><div><span>{match.competition}</span><b>{match.status}</b></div><p><strong className="team-with-logo">{match.homeLogo&&<img src={sizedImage(match.homeLogo, 24)} alt="" className="team-logo" loading="lazy" />}{match.home}</strong><b>{match.homeScore ?? "–"}</b></p><p><strong className="team-with-logo">{match.awayLogo&&<img src={sizedImage(match.awayLogo, 24)} alt="" className="team-logo" loading="lazy" />}{match.away}</strong><b>{match.awayScore ?? "–"}</b></p></div>)}
             </section>
             <section className="sidebar-block standings-block">
               <div className="sidebar-title"><div>Թոփ 5 առաջնություններ</div><Link href="/standings">Լրիվ</Link></div>
@@ -185,7 +201,7 @@ export default async function Home() {
       </div>
       <AdSpaces bottom />
       <SiteFooter />
-      <Suspense fallback={null}><MatchModal /></Suspense>
+      <Suspense fallback={null}><MatchModalLazy /></Suspense>
     </main>
   );
 }

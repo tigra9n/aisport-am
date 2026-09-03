@@ -1,5 +1,6 @@
 "use client";
 
+import { sizedImage } from "../lib/image-proxy";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -50,16 +51,24 @@ function surname(name: string) {
 }
 
 function PitchPlayer({ player, card }: { player: LineupPlayer; card?: "yellow" | "red" }) {
-  return (
-    <div className="pitch-player">
+  const body = (
+    <>
       {player.rating && <span className={`pitch-rating ${ratingClass(player.rating)}`}>{player.rating}</span>}
       <span className="pitch-player-dot">
         {player.number ?? "•"}
         {card && <i className={`pitch-card ${card}`} />}
       </span>
       <span className="pitch-player-name">{surname(player.name)}</span>
-    </div>
+    </>
   );
+  // The lineup is where a reader meets a name for the first time, so it is
+  // the natural way into the player page. The id comes from the lineups
+  // endpoint; older cached lineups have none, and those stay plain text
+  // rather than linking somewhere that would 404.
+  if (player.id) {
+    return <Link href={`/player/${player.id}`} className="pitch-player pitch-player-link">{body}</Link>;
+  }
+  return <div className="pitch-player">{body}</div>;
 }
 
 type CardMap = Map<string, "yellow" | "red">;
@@ -206,18 +215,18 @@ export function MatchModal() {
             <h2 className="match-details-title match-modal-title">
               {details.match.homeId ? (
                 <Link href={`/team/${details.match.homeId}`} className="team-with-logo title-team" onClick={close}>
-                  {details.match.homeLogo && <img src={details.match.homeLogo} alt="" className="team-logo-lg" loading="lazy" />}{details.match.home}
+                  {details.match.homeLogo && <img src={sizedImage(details.match.homeLogo, 48)} alt="" className="team-logo-lg" loading="lazy" />}{details.match.home}
                 </Link>
               ) : (
-                <span className="team-with-logo title-team">{details.match.homeLogo && <img src={details.match.homeLogo} alt="" className="team-logo-lg" loading="lazy" />}{details.match.home}</span>
+                <span className="team-with-logo title-team">{details.match.homeLogo && <img src={sizedImage(details.match.homeLogo, 48)} alt="" className="team-logo-lg" loading="lazy" />}{details.match.home}</span>
               )}
               <b>{details.match.homeScore ?? "–"} : {details.match.awayScore ?? "–"}</b>
               {details.match.awayId ? (
                 <Link href={`/team/${details.match.awayId}`} className="team-with-logo title-team" onClick={close}>
-                  {details.match.awayLogo && <img src={details.match.awayLogo} alt="" className="team-logo-lg" loading="lazy" />}{details.match.away}
+                  {details.match.awayLogo && <img src={sizedImage(details.match.awayLogo, 48)} alt="" className="team-logo-lg" loading="lazy" />}{details.match.away}
                 </Link>
               ) : (
-                <span className="team-with-logo title-team">{details.match.awayLogo && <img src={details.match.awayLogo} alt="" className="team-logo-lg" loading="lazy" />}{details.match.away}</span>
+                <span className="team-with-logo title-team">{details.match.awayLogo && <img src={sizedImage(details.match.awayLogo, 48)} alt="" className="team-logo-lg" loading="lazy" />}{details.match.away}</span>
               )}
             </h2>
             <div className="match-facts">
@@ -295,9 +304,15 @@ export function MatchModal() {
                             <h3>{lineup.team} · Պահեստայիններ</h3>
                             <div className="subs-grid">
                               {lineup.substitutes.map((player, index) => (
-                                <span className="subs-chip" key={`${player.name}-${index}`}>
-                                  <b>{player.number ?? "•"}</b>{player.name}
-                                </span>
+                                player.id ? (
+                                  <Link href={`/player/${player.id}`} className="subs-chip subs-chip-link" key={`${player.name}-${index}`}>
+                                    <b>{player.number ?? "•"}</b>{player.name}
+                                  </Link>
+                                ) : (
+                                  <span className="subs-chip" key={`${player.name}-${index}`}>
+                                    <b>{player.number ?? "•"}</b>{player.name}
+                                  </span>
+                                )
                               ))}
                             </div>
                           </div>
@@ -394,11 +409,11 @@ export function MatchModal() {
                         <td><span className="position-marker">{row.position}</span></td>
                         <td>{row.teamId ? (
                           <Link href={`/team/${row.teamId}`} className="team-cell-link" onClick={close}>
-                            {row.teamLogo ? <img src={row.teamLogo} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}
+                            {row.teamLogo ? <img src={sizedImage(row.teamLogo, 24)} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}
                             <strong>{row.team}</strong>
                           </Link>
                         ) : (
-                          <span className="team-with-logo">{row.teamLogo ? <img src={row.teamLogo} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}<strong>{row.team}</strong></span>
+                          <span className="team-with-logo">{row.teamLogo ? <img src={sizedImage(row.teamLogo, 24)} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}<strong>{row.team}</strong></span>
                         )}</td>
                         <td>{row.played}</td>
                         <td>{row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}</td>
@@ -418,11 +433,11 @@ export function MatchModal() {
                     {details.topScorers.slice(0, 10).map((row) => (
                       <tr key={row.name}>
                         <td><span className="position-marker">{row.rank}</span></td>
-                        <td><span className="player-with-photo"><Link href={`/player/${row.id}`} className="team-cell-link" onClick={close}>{row.photo && <img src={row.photo} alt="" className="player-photo" loading="lazy" />}<strong>{row.name}</strong></Link></span></td>
+                        <td><span className="player-with-photo"><Link href={`/player/${row.id}`} className="team-cell-link" onClick={close}>{row.photo && <img src={sizedImage(row.photo, 32)} alt="" className="player-photo" loading="lazy" />}<strong>{row.name}</strong></Link></span></td>
                         <td>{row.teamId ? (
-                          <Link href={`/team/${row.teamId}`} className="team-with-logo team-cell-link" onClick={close}>{row.teamLogo && <img src={row.teamLogo} alt="" className="team-logo" loading="lazy" />}{row.team}</Link>
+                          <Link href={`/team/${row.teamId}`} className="team-with-logo team-cell-link" onClick={close}>{row.teamLogo && <img src={sizedImage(row.teamLogo, 24)} alt="" className="team-logo" loading="lazy" />}{row.team}</Link>
                         ) : (
-                          <span className="team-with-logo">{row.teamLogo && <img src={row.teamLogo} alt="" className="team-logo" loading="lazy" />}{row.team}</span>
+                          <span className="team-with-logo">{row.teamLogo && <img src={sizedImage(row.teamLogo, 24)} alt="" className="team-logo" loading="lazy" />}{row.team}</span>
                         )}</td>
                         <td><b>{row.goals}</b></td>
                       </tr>

@@ -1,5 +1,6 @@
 "use client";
 
+import { sizedImage } from "../lib/image-proxy";
 import Link from "next/link";
 import { useState } from "react";
 import { leagues, type StandingRow } from "../lib/football";
@@ -56,11 +57,11 @@ export function LeagueTabs({ tables, topScorerTables, compact = false }: { table
                   <td><span className="position-marker">{row.position}</span></td>
                   <td>{row.teamId ? (
                     <Link href={`/team/${row.teamId}`} className="team-cell-link">
-                      {row.teamLogo ? <img src={row.teamLogo} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}
+                      {row.teamLogo ? <img src={sizedImage(row.teamLogo, 24)} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}
                       <strong>{row.team}</strong>
                     </Link>
                   ) : (
-                    <span className="team-with-logo">{row.teamLogo ? <img src={row.teamLogo} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}<strong>{row.team}</strong></span>
+                    <span className="team-with-logo">{row.teamLogo ? <img src={sizedImage(row.teamLogo, 24)} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}<strong>{row.team}</strong></span>
                   )}</td>
                   <td>{row.played}</td>
                   {!compact ? <><td>{row.won}</td><td>{row.draw}</td><td>{row.lost}</td><td>{row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}</td></> : null}
@@ -81,11 +82,11 @@ export function LeagueTabs({ tables, topScorerTables, compact = false }: { table
                     <td><span className="position-marker">{row.rank}</span></td>
                     <td>
                       <Link href={`/player/${row.id}`} className="player-with-photo team-cell-link">
-                        {row.photo && <img src={row.photo} alt="" className="player-photo" loading="lazy" />}
+                        {row.photo && <img src={sizedImage(row.photo, 32)} alt="" className="player-photo" loading="lazy" />}
                         <strong>{row.name}{compact && <span className="player-team-hint"> ({row.team})</span>}</strong>
                       </Link>
                     </td>
-                    {!compact ? <td><span className="team-with-logo">{row.teamLogo && <img src={row.teamLogo} alt="" className="team-logo" loading="lazy" />}{row.team}</span></td> : null}
+                    {!compact ? <td><span className="team-with-logo">{row.teamLogo && <img src={sizedImage(row.teamLogo, 24)} alt="" className="team-logo" loading="lazy" />}{row.team}</span></td> : null}
                     {!compact ? <td>{row.appearances}</td> : null}
                     {!compact ? <td>{row.assists}</td> : null}
                     <td><b>{row.goals}</b></td>

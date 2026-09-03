@@ -354,7 +354,13 @@ export async function fetchApiTubePerson(apiKey: string, personName: string, lim
   // search, which fixed the "not found" cases but regressed everyone
   // else to a narrower match than they'd had before - this hybrid keeps
   // the best of both.
-  try {
+  // Skip the registry lookup entirely for a name it has already refused.
+  // Fifteen of twenty names measured are not in it, and each one was
+  // costing a request that was known in advance to fail.
+  const { unknownPersonNames, rememberUnknownPerson } = await import("./apitube-registry");
+  const knownAbsent = (await unknownPersonNames()).has(personName);
+
+  if (!knownAbsent) try {
     const entityUrl = `https://api.apitube.io/v1/news/everything?api_key=${encodeURIComponent(apiKey)}&person.name=${encodeURIComponent(personName)}&published_at.start=${recentSinceParam()}&per_page=50&language.code=en&sort.by=published_at&sort.order=desc`;
     const res = await fetchApiTube(entityUrl);
     if (res.ok) {
@@ -362,6 +368,10 @@ export async function fetchApiTubePerson(apiKey: string, personName: string, lim
       return mapApiTubeResults(verify(data.results ?? []), limit, true);
     }
     const bodyText = await res.text().catch(() => "");
+    if (bodyText.includes("ER0216")) {
+      // Write it down so this name never costs a failed request again.
+      await rememberUnknownPerson(personName);
+    }
     if (!bodyText.includes("ER0216")) {
       // A different error (rate limit, server issue, etc.) - don't mask
       // it by silently falling through to a second call, just report no

@@ -1,9 +1,11 @@
+import { sizedImage } from "../../../lib/image-proxy";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
 import { SiteHeader } from "../../../components/site-header";
 import { getCoach, getSquad, positionLabel, POSITION_ORDER } from "../../../lib/squad-server";
+import { knownTeam } from "../../../lib/entity-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +28,25 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
   const teamId = Number.parseInt(id, 10);
   if (!Number.isFinite(teamId)) notFound();
   const [squad, coach] = await Promise.all([getSquad(teamId), getCoach(teamId)]);
-  if (!squad) notFound();
+
+  // No squad is not the same as no team. The standings table already knows
+  // this club - its name and badge are what the reader clicked on - so the
+  // page is rendered with those rather than answering "does not exist",
+  // which is what it used to do whenever the API was slow or a club simply
+  // has no squad published. Only a team nothing knows about is a 404.
+  if (!squad) {
+    const known = await knownTeam(teamId);
+    if (!known) notFound();
+    return <main><SiteHeader /><div className="site-shell inner-page">
+      <span className="page-kicker">Ակումբի կազմ</span>
+      <h1 className="page-title team-page-title">
+        {known.logo && <img src={sizedImage(known.logo, 48)} alt="" className="team-logo-lg" loading="lazy" />}
+        {known.name}
+      </h1>
+      <p className="detail-empty">Այս ակումբի կազմի տվյալները այս պահին հասանելի չեն։ Փորձիր մի փոքր ուշ։</p>
+      <p className="page-intro"><Link href="/standings">Աղյուսակներ</Link> · <Link href="/live">Ուղիղ արդյունքներ</Link></p>
+    </div><SiteFooter /></main>;
+  }
 
   const groups = POSITION_ORDER.map((position) => ({
     position,
@@ -37,13 +57,13 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
   return <main><SiteHeader /><div className="site-shell inner-page">
     <span className="page-kicker">Ակումբի կազմ</span>
     <h1 className="page-title team-page-title">
-      {squad.teamLogo && <img src={squad.teamLogo} alt="" className="team-logo-lg" loading="lazy" />}
+      {squad.teamLogo && <img src={sizedImage(squad.teamLogo, 48)} alt="" className="team-logo-lg" loading="lazy" />}
       {squad.teamName}
     </h1>
     <p className="page-intro">Ակումբի ամբողջական խաղացողների կազմը՝ ըստ դիրքի, համարով և տարիքով։ Սեղմիր խաղացողի վրա՝ պրոֆիլն ու տրանսֆերները տեսնելու համար։</p>
     {coach && (
       <Link href={`/coach/${coach.id}`} className="coach-card">
-        {coach.photo ? <img src={coach.photo} alt="" className="squad-photo" loading="lazy" /> : <div className="squad-photo squad-photo-placeholder">{coach.name.slice(0, 1)}</div>}
+        {coach.photo ? <img src={sizedImage(coach.photo, 64)} alt="" className="squad-photo" loading="lazy" /> : <div className="squad-photo squad-photo-placeholder">{coach.name.slice(0, 1)}</div>}
         <div>
           <span>Գլխավոր մարզիչ</span>
           <strong>{coach.name}</strong>
@@ -58,7 +78,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
           <div className="squad-grid">
             {group.players.map((player) => (
               <Link href={`/player/${player.id}`} className="squad-card" key={player.id}>
-                {player.photo ? <img src={player.photo} alt="" className="squad-photo" loading="lazy" /> : <div className="squad-photo squad-photo-placeholder">{player.name.slice(0, 1)}</div>}
+                {player.photo ? <img src={sizedImage(player.photo, 64)} alt="" className="squad-photo" loading="lazy" /> : <div className="squad-photo squad-photo-placeholder">{player.name.slice(0, 1)}</div>}
                 <div>
                   <strong>{player.name}</strong>
                   <span>{player.number ? `#${player.number}` : "—"}{player.age ? ` · ${player.age} տարեկան` : ""}</span>
@@ -74,7 +94,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
           <div className="squad-grid">
             {other.map((player) => (
               <Link href={`/player/${player.id}`} className="squad-card" key={player.id}>
-                {player.photo ? <img src={player.photo} alt="" className="squad-photo" loading="lazy" /> : <div className="squad-photo squad-photo-placeholder">{player.name.slice(0, 1)}</div>}
+                {player.photo ? <img src={sizedImage(player.photo, 64)} alt="" className="squad-photo" loading="lazy" /> : <div className="squad-photo squad-photo-placeholder">{player.name.slice(0, 1)}</div>}
                 <div>
                   <strong>{player.name}</strong>
                   <span>{player.number ? `#${player.number}` : "—"}{player.age ? ` · ${player.age} տարեկան` : ""}</span>

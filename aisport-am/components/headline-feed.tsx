@@ -1,6 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
+import { sizedImage } from "../lib/image-proxy";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import type { ArticlePreview } from "../lib/content";
@@ -58,8 +59,8 @@ export function HeadlineFeed({ initialArticles, initialOffset }: { initialArticl
   return (
     <div className="headline-feed-list" ref={listRef}>
       {items.map((article) => (
-        <Link className="headline-feed-item" href={`${article.basePath ?? "/news"}/${article.slug}`} key={article.slug}>
-          <img src={article.image} alt="" referrerPolicy="no-referrer" />
+        <Link prefetch={false} className="headline-feed-item" href={`${article.basePath ?? "/news"}/${article.slug}`} key={article.slug}>
+          <img src={sizedImage(article.image, 140)} alt={article.title} referrerPolicy="no-referrer" loading="lazy" decoding="async" />
           <div><span>{article.category}</span><h3>{article.title}</h3><time>{article.time}</time></div>
         </Link>
       ))}

@@ -1,3 +1,5 @@
+import { armenianCountry } from "./names-hy";
+import { armenianPlayerName } from "./player-names-hy";
 import { armenianTeamName } from "./team-names-hy";
 
 export type SquadPlayer = { id: number; name: string; number: number | null; position: string; age: number | null; photo: string | null };
@@ -15,6 +17,21 @@ type ApiFootballSquad = {
   team: { name: string; logo?: string | null };
   players: { id: number; name: string; number: number | null; position: string; age: number | null; photo?: string | null }[];
 };
+
+// One retry, immediately. The failures that produced 404s on a first visit
+// were transient - the same URL answered a second later - and a single
+// extra attempt costs one API call only when something has already gone
+// wrong. Retrying more than once would turn a real outage into a stall.
+async function fetchApi(url: string, key: string): Promise<Response | null> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(url, { headers: { "x-apisports-key": key, Accept: "application/json" } });
+      if (response.ok) return response;
+    } catch { /* fall through to the retry */ }
+    if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return null;
+}
 
 let cacheTableReady: Promise<unknown> | null = null;
 async function ensureCacheTable(db: D1Database) {
@@ -43,7 +60,7 @@ function mapCoach(raw: ApiFootballCoach): Coach {
     id: raw.id,
     name: raw.name,
     photo: raw.photo ?? null,
-    nationality: raw.nationality ?? null,
+    nationality: raw.nationality ? armenianCountry(raw.nationality) : null,
     age: raw.age ?? null,
     career: raw.career.map((c) => ({ team: armenianTeamName(c.team.name), teamLogo: c.team.logo ?? null, start: c.start, end: c.end })),
   };
@@ -56,7 +73,7 @@ export async function getCoach(teamId: number): Promise<Coach | null> {
   if (!key) return null;
 
   const db = (env as unknown as { DB?: D1Database }).DB;
-  const cacheKey = `apifootball:v2:coach:${teamId}`;
+  const cacheKey = `apifootball:v3:coach:${teamId}`;
 
   if (db) {
     await ensureCacheTable(db);
@@ -67,10 +84,8 @@ export async function getCoach(teamId: number): Promise<Coach | null> {
   }
 
   try {
-    const response = await fetch(`https://v3.football.api-sports.io/coachs?team=${teamId}`, {
-      headers: { "x-apisports-key": key, Accept: "application/json" },
-    });
-    if (!response.ok) throw new Error(`http ${response.status}`);
+    const response = await fetchApi(`https://v3.football.api-sports.io/coachs?team=${teamId}`, key);
+    if (!response) throw new Error("unreachable");
     const data = await response.json() as { response?: ApiFootballCoach[] };
     // The endpoint returns every coach who's managed the team; the current
     // one is whichever entry has no end date on their stint with this team.
@@ -83,8 +98,12 @@ export async function getCoach(teamId: number): Promise<Coach | null> {
     return coach;
   } catch {
     if (db) {
-      const stale = await db.prepare("SELECT payload FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{ payload: string }>();
-      if (stale) { try { return JSON.parse(stale.payload) as Coach; } catch { /* fall through */ } }
+      // Also read the previous key: bumping it empties the cache, and without
+      // this the page answers 404 whenever the upstream API is unavailable.
+      for (const staleKey of [cacheKey, `apifootball:v2:coach:${teamId}`]) {
+        const stale = await db.prepare("SELECT payload FROM api_cache WHERE cache_key=?").bind(staleKey).first<{ payload: string }>();
+        if (stale) { try { return JSON.parse(stale.payload) as Coach; } catch { /* try the next one */ } }
+      }
     }
     return null;
   }
@@ -97,7 +116,7 @@ export async function getCoachById(coachId: number): Promise<Coach | null> {
   if (!key) return null;
 
   const db = (env as unknown as { DB?: D1Database }).DB;
-  const cacheKey = `apifootball:v1:coachbyid:${coachId}`;
+  const cacheKey = `apifootball:v2:coachbyid:${coachId}`;
 
   if (db) {
     await ensureCacheTable(db);
@@ -108,10 +127,8 @@ export async function getCoachById(coachId: number): Promise<Coach | null> {
   }
 
   try {
-    const response = await fetch(`https://v3.football.api-sports.io/coachs?id=${coachId}`, {
-      headers: { "x-apisports-key": key, Accept: "application/json" },
-    });
-    if (!response.ok) throw new Error(`http ${response.status}`);
+    const response = await fetchApi(`https://v3.football.api-sports.io/coachs?id=${coachId}`, key);
+    if (!response) throw new Error("unreachable");
     const data = await response.json() as { response?: ApiFootballCoach[] };
     const raw = data.response?.[0];
     if (!raw) throw new Error("empty");
@@ -122,8 +139,10 @@ export async function getCoachById(coachId: number): Promise<Coach | null> {
     return coach;
   } catch {
     if (db) {
-      const stale = await db.prepare("SELECT payload FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{ payload: string }>();
-      if (stale) { try { return JSON.parse(stale.payload) as Coach; } catch { /* fall through */ } }
+      for (const staleKey of [cacheKey, `apifootball:v1:coachbyid:${coachId}`]) {
+        const stale = await db.prepare("SELECT payload FROM api_cache WHERE cache_key=?").bind(staleKey).first<{ payload: string }>();
+        if (stale) { try { return JSON.parse(stale.payload) as Coach; } catch { /* try the next one */ } }
+      }
     }
     return null;
   }
@@ -136,7 +155,7 @@ export async function getSquad(teamId: number): Promise<Squad | null> {
   if (!key) return null;
 
   const db = (env as unknown as { DB?: D1Database }).DB;
-  const cacheKey = `apifootball:v1:squad:${teamId}`;
+  const cacheKey = `apifootball:v2:squad:${teamId}`;
 
   if (db) {
     await ensureCacheTable(db);
@@ -150,17 +169,15 @@ export async function getSquad(teamId: number): Promise<Squad | null> {
   }
 
   try {
-    const response = await fetch(`https://v3.football.api-sports.io/players/squads?team=${teamId}`, {
-      headers: { "x-apisports-key": key, Accept: "application/json" },
-    });
-    if (!response.ok) throw new Error(`http ${response.status}`);
+    const response = await fetchApi(`https://v3.football.api-sports.io/players/squads?team=${teamId}`, key);
+    if (!response) throw new Error("unreachable");
     const data = await response.json() as { response?: ApiFootballSquad[] };
     const entry = data.response?.[0];
     if (!entry?.players?.length) throw new Error("empty");
     const squad: Squad = {
       teamName: armenianTeamName(entry.team.name),
       teamLogo: entry.team.logo ?? null,
-      players: entry.players.map((p) => ({ id: p.id, name: p.name, number: p.number, position: p.position, age: p.age, photo: p.photo ?? null })),
+      players: entry.players.map((p) => ({ id: p.id, name: armenianPlayerName(p.name), number: p.number, position: p.position, age: p.age, photo: p.photo ?? null })),
     };
     if (db) {
       await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey, JSON.stringify(squad), Date.now()).run();

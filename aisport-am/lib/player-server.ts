@@ -1,3 +1,5 @@
+import { armenianCompetition, armenianCountry } from "./names-hy";
+import { armenianPlayerName } from "./player-names-hy";
 import { armenianTeamName } from "./team-names-hy";
 
 export type PlayerSeasonStat = {
@@ -61,13 +63,35 @@ type ApiFootballTransfer = {
   transfers: { date: string; type: string | null; teams: { in: { name: string; logo?: string | null }; out: { name: string; logo?: string | null } } }[];
 };
 
+// One retry, immediately. The failures that produced 404s on a first visit
+// were transient - the same URL answered a second later - and a single
+// extra attempt costs one API call only when something has already gone
+// wrong. Retrying more than once would turn a real outage into a stall.
+async function fetchApi(url: string, key: string): Promise<Response | null> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(url, { headers: { "x-apisports-key": key, Accept: "application/json" } });
+      if (response.ok) return response;
+    } catch { /* fall through to the retry */ }
+    if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return null;
+}
+
 let cacheTableReady: Promise<unknown> | null = null;
 async function ensureCacheTable(db: D1Database) {
   cacheTableReady ??= db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();
   await cacheTableReady;
 }
 
-async function cachedGet<T>(cacheKey: string, ttlMs: number, url: string, key: string, extract: (json: unknown) => T | null): Promise<T | null> {
+// `legacyKeys` are the cache keys this value used to be stored under. They
+// are only ever read, and only when a live fetch has just failed: bumping a
+// key empties the cache, and without this a page that had been serving a
+// cached profile for a day starts answering 404 the moment the upstream API
+// is out of quota. An older row is the wrong shape in some small way - that
+// is why the key moved - but it is a page instead of a dead end, and the
+// next successful fetch replaces it.
+async function cachedGet<T>(cacheKey: string, ttlMs: number, url: string, key: string, extract: (json: unknown) => T | null, legacyKeys: string[] = []): Promise<T | null> {
   const { env } = await import("cloudflare:workers");
   const db = (env as unknown as { DB?: D1Database }).DB;
 
@@ -80,8 +104,8 @@ async function cachedGet<T>(cacheKey: string, ttlMs: number, url: string, key: s
   }
 
   try {
-    const response = await fetch(url, { headers: { "x-apisports-key": key, Accept: "application/json" } });
-    if (!response.ok) throw new Error(`http ${response.status}`);
+    const response = await fetchApi(url, key);
+    if (!response) throw new Error("unreachable");
     const json = await response.json();
     const result = extract(json);
     if (result === null) throw new Error("empty");
@@ -91,8 +115,10 @@ async function cachedGet<T>(cacheKey: string, ttlMs: number, url: string, key: s
     return result;
   } catch {
     if (db) {
-      const stale = await db.prepare("SELECT payload FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{ payload: string }>();
-      if (stale) { try { return JSON.parse(stale.payload) as T; } catch { /* fall through */ } }
+      for (const staleKey of [cacheKey, ...legacyKeys]) {
+        const stale = await db.prepare("SELECT payload FROM api_cache WHERE cache_key=?").bind(staleKey).first<{ payload: string }>();
+        if (stale) { try { return JSON.parse(stale.payload) as T; } catch { /* try the next one */ } }
+      }
     }
     return null;
   }
@@ -104,16 +130,65 @@ function currentSeasonYear() {
   return month >= 7 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
 }
 
+// The bio-only endpoint. It takes no season, so it answers for a player the
+// season-scoped endpoint has nothing on - a squad player who has not been
+// used this year, which is most of an Armenian league bench.
+type ApiFootballPlayerBio = { player?: ApiFootballPlayerProfile["player"] };
+
+async function fetchBioOnly(playerId: number, key: string): Promise<PlayerProfile | null> {
+  return cachedGet<PlayerProfile>(
+    `apifootball:v2:playerbio:${playerId}`,
+    7 * 24 * 60 * 60 * 1000,
+    `https://v3.football.api-sports.io/players/profiles?player=${playerId}`,
+    key,
+    (json) => {
+      const p = (json as { response?: ApiFootballPlayerBio[] })?.response?.[0]?.player;
+      if (!p?.id || !p.name) return null;
+      return {
+        id: p.id,
+        name: armenianPlayerName(p.name),
+        photo: p.photo ?? null,
+        nationality: p.nationality ? armenianCountry(p.nationality) : null,
+        birthDate: p.birth?.date ?? null,
+        birthPlace: p.birth?.place ?? null,
+        height: p.height ?? null,
+        weight: p.weight ?? null,
+        age: p.age ?? null,
+        position: null,
+        currentTeam: null,
+        currentTeamLogo: null,
+        shirtNumber: null,
+        season: currentSeasonYear(),
+        statistics: [],
+      };
+    },
+  );
+}
+
 export async function getPlayerProfile(playerId: number): Promise<PlayerProfile | null> {
   const { env } = await import("cloudflare:workers");
   const runtime = env as unknown as Record<string, string | undefined>;
   const key = runtime.API_FOOTBALL_KEY;
   if (!key) return null;
+  // Try this season, then last season, then the bio-only endpoint. Linking a
+  // lineup name to a page that answers 404 is worse than linking nothing, and
+  // the season-scoped endpoint returns an empty response for any player who
+  // has not appeared this year. The extra calls only happen when the first
+  // one comes back empty, and the answer is cached either way.
   const season = currentSeasonYear();
-  // Cache key bumped to v2: the stored shape now carries statistics, and a
-  // v1 row would deserialise into a profile whose table is silently empty.
+  return (
+    (await profileForSeason(playerId, key, season)) ??
+    (await profileForSeason(playerId, key, season - 1)) ??
+    (await fetchBioOnly(playerId, key))
+  );
+}
+
+async function profileForSeason(playerId: number, key: string, season: number): Promise<PlayerProfile | null> {
+  // Cache key bumped on every change to what gets stored: the payload now
+  // carries statistics (v2) and Armenian country/competition names (v3), and
+  // an older row would keep serving the previous shape for a whole day.
   return cachedGet<PlayerProfile>(
-    `apifootball:v2:playerprofile:${playerId}`,
+    `apifootball:v4:playerprofile:${playerId}:${season}`,
     24 * 60 * 60 * 1000,
     `https://v3.football.api-sports.io/players?id=${playerId}&season=${season}`,
     key,
@@ -124,7 +199,7 @@ export async function getPlayerProfile(playerId: number): Promise<PlayerProfile 
 
       const statistics: PlayerSeasonStat[] = (entry.statistics ?? [])
         .map((row) => ({
-          league: row.league?.name ?? "—",
+          league: armenianCompetition(row.league?.name) || "—",
           leagueLogo: row.league?.logo ?? null,
           team: armenianTeamName(row.team?.name ?? ""),
           teamLogo: row.team?.logo ?? null,
@@ -149,9 +224,9 @@ export async function getPlayerProfile(playerId: number): Promise<PlayerProfile 
 
       return {
         id: p.id,
-        name: p.name,
+        name: armenianPlayerName(p.name),
         photo: p.photo ?? null,
-        nationality: p.nationality ?? null,
+        nationality: p.nationality ? armenianCountry(p.nationality) : null,
         birthDate: p.birth?.date ?? null,
         birthPlace: p.birth?.place ?? null,
         height: p.height ?? null,
@@ -165,6 +240,7 @@ export async function getPlayerProfile(playerId: number): Promise<PlayerProfile 
         statistics,
       };
     },
+    [`apifootball:v3:playerprofile:${playerId}`, `apifootball:v2:playerprofile:${playerId}`],
   );
 }
 
