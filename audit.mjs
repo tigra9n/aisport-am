@@ -138,7 +138,25 @@ log(`  date line: ${await page.evaluate(() => {
     }));
   }
   if (!bad.length) log(`  every one of them answers`);
-  else { log(`  BROKEN: ${bad.length}`); for (const b of bad.slice(0, 15)) log(`    ${b}`); }
+  else {
+    log(`  BROKEN under 8-at-a-time: ${bad.length}`);
+    for (const b of bad.slice(0, 15)) log(`    ${b}`);
+
+    // The API has data for these ids - checked directly - so the page is
+    // failing to read what it is sent rather than being asked for something
+    // that does not exist. Before fixing that, rule out the checker itself:
+    // eight pages at once, each making its own API calls, is not how a
+    // reader arrives. Google reported three of these, not fourteen.
+    log(`  now one at a time, a second apart:`);
+    for (const entry of bad.slice(0, 15)) {
+      const href = entry.split(" ")[1];
+      await new Promise((r) => setTimeout(r, 1000));
+      const first = await page.request.get(BASE + href, { timeout: 45000 }).catch(() => null);
+      await new Promise((r) => setTimeout(r, 1000));
+      const second = await page.request.get(BASE + href, { timeout: 45000 }).catch(() => null);
+      log(`    ${href}: ${first ? first.status() : "err"} then ${second ? second.status() : "err"}`);
+    }
+  }
 }
 
 // 7. Can Cloudflare resize a remote image for us? This decides whether the
