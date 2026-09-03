@@ -12,24 +12,40 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Measure why the hourly rate is 2 articles instead of 3
-        working-directory: aisport-am
+      - name: Verify what Google will actually find
         run: |
-          npm install --no-audit --no-fund
-          echo "=== A) ARTICLES PER HOUR TODAY ===" > ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT substr(published_at,12,2) AS hour, COUNT(*) AS articles FROM articles WHERE published_at >= datetime('now','-14 hours') GROUP BY hour ORDER BY hour DESC;" >> ../add-source-result.txt 2>&1 || true
-          echo "=== B) GAPS BETWEEN CONSECUTIVE ARTICLES ===" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT substr(published_at,12,5) AS at, CAST((julianday(published_at) - julianday(LAG(published_at) OVER (ORDER BY published_at))) * 1440 AS INT) AS gap_min FROM articles WHERE published_at >= datetime('now','-8 hours') ORDER BY published_at DESC;" >> ../add-source-result.txt 2>&1 || true
-          echo "=== C) TICK OUTCOMES, LAST 6 HOURS, TALLIED ===" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT CASE WHEN reason LIKE 'only%' THEN 'waiting for the gap' ELSE reason END AS outcome, COUNT(*) AS n FROM cron_invocations WHERE ts >= strftime('%Y-%m-%dT%H:%M:%SZ','now','-6 hours') GROUP BY outcome ORDER BY n DESC;" >> ../add-source-result.txt 2>&1 || true
-          echo "=== D) THE 'NOTHING FOUND' TICKS IN FULL ===" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT substr(ts,12,8) AS at, substr(log,1,1500) AS log FROM cron_invocations WHERE reason='nothing found' ORDER BY id DESC LIMIT 4;" >> ../add-source-result.txt 2>&1 || true
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Checked from a runner because the site is not reachable from
+          # the agent's network. Submitting a sitemap to Search Console is
+          # pointless if it 404s, is empty, or lists the wrong host, so
+          # confirm all three before asking Google to crawl it.
+          {
+            echo "=== robots.txt ==="
+            curl -s -m 30 -w "\nHTTP %{http_code} in %{time_total}s\n" https://aifootball.am/robots.txt
+            echo
+            echo "=== sitemap.xml: status, size, URL count ==="
+            curl -s -m 60 -o /tmp/sitemap.xml -w "HTTP %{http_code} in %{time_total}s, %{size_download} bytes\n" https://aifootball.am/sitemap.xml
+            echo "total <loc> entries: $(grep -o '<loc>' /tmp/sitemap.xml | wc -l)"
+            echo "article URLs (/news/): $(grep -o '<loc>[^<]*/news/[^<]*</loc>' /tmp/sitemap.xml | wc -l)"
+            echo "any URL still pointing at the OLD domain: $(grep -c 'aisport\.am' /tmp/sitemap.xml || true)"
+            echo
+            echo "=== first 3 and last 3 URLs ==="
+            grep -o '<loc>[^<]*</loc>' /tmp/sitemap.xml | head -3
+            echo "..."
+            grep -o '<loc>[^<]*</loc>' /tmp/sitemap.xml | tail -3
+            echo
+            echo "=== does the newest article page render for a crawler? ==="
+            NEWEST=$(grep -o '<loc>[^<]*/news/[^<]*</loc>' /tmp/sitemap.xml | tail -1 | sed 's|<loc>||; s|</loc>||')
+            echo "testing: $NEWEST"
+            curl -s -m 30 -o /tmp/article.html -w "HTTP %{http_code} in %{time_total}s, %{size_download} bytes\n" \
+              -A "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" "$NEWEST"
+            echo "has <title>: $(grep -o '<title>[^<]*</title>' /tmp/article.html | head -1)"
+            echo "has meta description: $(grep -o 'name="description" content="[^"]\{0,80\}' /tmp/article.html | head -1)"
+            echo "has JSON-LD structured data: $(grep -c 'application/ld+json' /tmp/article.html || true)"
+            echo
+            echo "=== old domain behaviour (should be a permanent redirect) ==="
+            curl -s -m 30 -o /dev/null -w "aisport.am -> HTTP %{http_code}, redirects to %{redirect_url}\n" https://aisport.am/
+          } > ../add-source-result.txt 2>&1 || true
+          cat ../add-source-result.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
