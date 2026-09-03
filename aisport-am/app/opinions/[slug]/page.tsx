@@ -1,4 +1,4 @@
-import { sizedImage } from "../../../lib/image-proxy";
+import { shareImage, sizedImage } from "../../../lib/image-proxy";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
@@ -30,13 +30,13 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
       description,
       url,
       locale: "hy_AM",
-      images: [{ url: image, width: 1200, height: 630, alt: title }],
+      images: [{ url: shareImage(image), width: 1200, height: 630, alt: title }],
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
-      images: [image],
+      images: [shareImage(image)],
     },
     other: { "article:section": category },
   };

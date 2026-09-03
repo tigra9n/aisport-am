@@ -380,3 +380,7 @@ img{display:block;max-width:100%}
 .article-breadcrumb a{color:var(--muted);text-decoration:none}
 .article-breadcrumb a:hover{color:var(--blue)}
 .article-tag.is-page{border-color:var(--blue);color:var(--blue)}
+
+/* The not-found page: a way onward rather than a dead stop. */
+.not-found-page .page-kicker{color:var(--muted)}
+.not-found-heading{margin:26px 0 12px;font-size:15px;color:var(--ink)}

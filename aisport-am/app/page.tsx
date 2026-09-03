@@ -92,13 +92,22 @@ export default async function Home() {
   // would skip or repeat articles.
   const articlesInHeadline = headlineStream.filter((item) => item.basePath !== "/opinions").length;
   const heroArticles = articles.slice(0, 6);
+  // Everything the page has already shown, so the sport sections below do
+  // not print the same article a second time. The audit found five headlines
+  // on the home page appearing twice - the hero and the headline feed take
+  // the newest articles, and the by-sport sections then took the newest of
+  // each category, which for football is the same set. Ask for more than we
+  // need and drop what has already appeared.
+  const alreadyShown = new Set([...heroArticles, ...headlineStream].map((item) => item.slug));
   const sportSectionsData = await Promise.all(homepageSports.map(async (sport) => {
     if (sport.source === "opinions") {
-      const rows = await getOpinions(4, sport.opinionCategory);
-      return { name: sport.name, slug: sport.slug, href: `/opinions?category=${encodeURIComponent(sport.opinionCategory)}`, basePath: "/opinions", items: rows.map(opinionToPreview) };
+      const rows = await getOpinions(8, sport.opinionCategory);
+      const items = rows.map(opinionToPreview).filter((item) => !alreadyShown.has(item.slug)).slice(0, 4);
+      return { name: sport.name, slug: sport.slug, href: `/opinions?category=${encodeURIComponent(sport.opinionCategory)}`, basePath: "/opinions", items };
     }
-    const rows = await getArticlesByCategory(sport.dbCategory, 4);
-    return { name: sport.name, slug: sport.slug, href: `/category/${sport.slug}`, basePath: "/news", items: rows.map(toPreview) };
+    const rows = await getArticlesByCategory(sport.dbCategory, 14);
+    const items = rows.map(toPreview).filter((item) => !alreadyShown.has(item.slug)).slice(0, 4);
+    return { name: sport.name, slug: sport.slug, href: `/category/${sport.slug}`, basePath: "/news", items };
   }));
   const sportSections = sportSectionsData;
 
@@ -165,7 +174,7 @@ export default async function Home() {
                 <div className="sport-news-head"><div><span /> <h3>{sport.name}</h3></div><Link href={sport.href}>Բոլոր լուրերը →</Link></div>
                 <div className="sport-news-grid">
                   {sport.items.map((article, index) => <article className={index === 0 ? "sport-news-card featured" : "sport-news-card"} key={article.slug}>
-                    <Link className="sport-news-image" href={`${sport.basePath}/${article.slug}`}><img src={sizedImage(article.image, 420)} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async" /></Link>
+                    <Link className="sport-news-image" href={`${sport.basePath}/${article.slug}`}><img src={sizedImage(article.image, 420)} alt={article.title} referrerPolicy="no-referrer" loading="lazy" decoding="async" /></Link>
                     <div><span>{article.category}</span><h4><Link href={`${sport.basePath}/${article.slug}`}>{article.title}</Link></h4>{index === 0 ? <p>{article.excerpt}</p> : null}<time>{article.time} · {article.readTime}</time></div>
                   </article>)}
                 </div>

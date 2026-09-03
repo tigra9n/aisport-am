@@ -60,7 +60,7 @@ export function HeadlineFeed({ initialArticles, initialOffset }: { initialArticl
     <div className="headline-feed-list" ref={listRef}>
       {items.map((article) => (
         <Link prefetch={false} className="headline-feed-item" href={`${article.basePath ?? "/news"}/${article.slug}`} key={article.slug}>
-          <img src={sizedImage(article.image, 140)} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async" />
+          <img src={sizedImage(article.image, 140)} alt={article.title} referrerPolicy="no-referrer" loading="lazy" decoding="async" />
           <div><span>{article.category}</span><h3>{article.title}</h3><time>{article.time}</time></div>
         </Link>
       ))}

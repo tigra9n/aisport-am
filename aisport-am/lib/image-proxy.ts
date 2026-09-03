@@ -51,3 +51,37 @@ export function sizedImage(src: string | null | undefined, width: number): strin
   });
   return `${PROXY}?${params.toString()}`;
 }
+
+// The picture Telegram, Facebook and WhatsApp show when a link is posted.
+//
+// It has a harder job than an image on a page. A social crawler fetches it
+// with no referrer and no cookies, and several of the sources the site uses
+// refuse exactly that - the Getty photograph on an opinion piece answers
+// 400 to a bare request, which means Tigran's own articles, the best thing
+// on the site, would post with no picture at all.
+//
+// Routing it through the proxy fixes that in two ways: the fetch is made by
+// the proxy rather than by Facebook, and if the source refuses even that,
+// `default` hands back a picture that is always available instead of an
+// error. A card with a stock photograph is worth much more than a card with
+// a grey box.
+//
+// JPEG rather than WebP: the page can serve WebP because browsers all read
+// it, but link previews are rendered by a long tail of clients and JPEG is
+// the format none of them get wrong.
+const SHARE_FALLBACK = "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=1200&q=85";
+
+export function shareImage(src: string | null | undefined): string {
+  const source = src && src.startsWith("http") ? src : SHARE_FALLBACK;
+  if (!PROXY_IMAGES) return source;
+  const params = new URLSearchParams({
+    url: source,
+    w: "1200",
+    h: "630",
+    fit: "cover",
+    q: "80",
+    output: "jpg",
+    default: SHARE_FALLBACK,
+  });
+  return `${PROXY}?${params.toString()}`;
+}
