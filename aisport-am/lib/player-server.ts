@@ -137,7 +137,7 @@ type ApiFootballPlayerBio = { player?: ApiFootballPlayerProfile["player"] };
 
 async function fetchBioOnly(playerId: number, key: string): Promise<PlayerProfile | null> {
   return cachedGet<PlayerProfile>(
-    `apifootball:v2:playerbio:${playerId}`,
+    `apifootball:v3:playerbio:${playerId}`,
     7 * 24 * 60 * 60 * 1000,
     `https://v3.football.api-sports.io/players/profiles?player=${playerId}`,
     key,
@@ -188,7 +188,7 @@ async function profileForSeason(playerId: number, key: string, season: number): 
   // carries statistics (v2) and Armenian country/competition names (v3), and
   // an older row would keep serving the previous shape for a whole day.
   return cachedGet<PlayerProfile>(
-    `apifootball:v4:playerprofile:${playerId}:${season}`,
+    `apifootball:v5:playerprofile:${playerId}:${season}`,
     24 * 60 * 60 * 1000,
     `https://v3.football.api-sports.io/players?id=${playerId}&season=${season}`,
     key,
@@ -240,7 +240,7 @@ async function profileForSeason(playerId: number, key: string, season: number): 
         statistics,
       };
     },
-    [`apifootball:v3:playerprofile:${playerId}`, `apifootball:v2:playerprofile:${playerId}`],
+    [`apifootball:v4:playerprofile:${playerId}:${season}`, `apifootball:v3:playerprofile:${playerId}`, `apifootball:v2:playerprofile:${playerId}`],
   );
 }
 

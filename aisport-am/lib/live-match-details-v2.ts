@@ -304,8 +304,8 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
   const db=(env as unknown as {DB?:D1Database}).DB;
 
   const fixtureCacheKey=`apifootball:v9:fixture:${fixtureId}`;
-  const eventsCacheKey=`apifootball:v10:events:${fixtureId}`;
-  const lineupsCacheKey=`apifootball:v11:lineups:${fixtureId}`;
+  const eventsCacheKey=`apifootball:v11:events:${fixtureId}`;
+  const lineupsCacheKey=`apifootball:v12:lineups:${fixtureId}`;
   const statsCacheKey=`apifootball:v9:stats:${fixtureId}`;
   const predictionCacheKey=`apifootball:v9:prediction:${fixtureId}`;
   const ratingsCacheKey=`apifootball:v9:ratings:${fixtureId}`;
