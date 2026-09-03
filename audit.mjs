@@ -99,8 +99,12 @@ log(`  ${await p.evaluate(() => {
 log(`\n=== duplicate coverage on the home page ===`);
 await p.goto(BASE, { waitUntil: "load", timeout: 60000 }).catch(() => {});
 await p.waitForTimeout(1500);
+// Only within the by-sport grid. The hero carousel repeating the top story
+// in the headline strip is the design of a news page, not a defect - I
+// "fixed" that once and pushed the live feed two hours into the past.
 const titles = await p.evaluate(() =>
-  [...document.querySelectorAll("h1, h2, h3, h4")].map((h) => h.textContent?.trim() ?? "").filter((t) => t.length > 25));
+  [...document.querySelectorAll(".sport-news-grid h4, .sport-news-grid h3")]
+    .map((h) => h.textContent?.trim() ?? "").filter((t) => t.length > 25));
 const words = (t) => new Set(t.toLowerCase().split(/\s+/).filter((w) => w.length > 3));
 let pairs = 0;
 for (let i = 0; i < titles.length; i++) {
