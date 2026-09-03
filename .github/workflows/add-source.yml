@@ -203,15 +203,18 @@ jobs:
         run: |
           npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
           echo "=== the Kone article, in full ===" > titles.txt
-          npx wrangler d1 execute aisport-db --remote --json --command             "SELECT slug, title, seo_title, excerpt, meta_description, substr(content,1,400) AS body FROM articles WHERE slug LIKE '%konei-pokhadrutyan%'"             > t1.json 2>&1 || true
+          npx wrangler d1 execute aisport-db --remote --json --command             "SELECT slug, title, seo_title, excerpt, substr(content,1,300) AS body FROM articles WHERE slug LIKE '%kone%' OR title LIKE '%Կոնե%' ORDER BY published_at DESC LIMIT 5"             > t1.json 2>&1 || true
           # And whether any other article's SEO title says something the
           # headline does not - the two are allowed to differ in wording,
           # never in what they claim.
-          npx wrangler d1 execute aisport-db --remote --json --command             "SELECT slug, title, seo_title FROM articles WHERE seo_title IS NOT NULL AND seo_title <> '' AND seo_title <> title AND published_at > datetime('now','-3 days') LIMIT 25"             > t2.json 2>&1 || true
+          npx wrangler d1 execute aisport-db --remote --json --command             "SELECT slug, title FROM articles WHERE published_at > datetime('now','-3 days') AND title LIKE '%. %' LIMIT 25"             > t2.json 2>&1 || true
           node -e "
             const fs=require('fs');
             const rows=(f)=>{try{const raw=fs.readFileSync(f,'utf8');const j=JSON.parse(raw.slice(raw.indexOf('[')));return j[0]?.results??[]}catch(e){return []}};
-            for (const r of rows('t1.json')) {
+            const kone=rows('t1.json');
+            console.log('  rows matching: '+kone.length);
+            if (!kone.length) console.log('  raw: '+fs.readFileSync('t1.json','utf8').slice(0,300).replace(/\n/g,' '));
+            for (const r of kone) {
               console.log('  slug:      '+r.slug);
               console.log('  title:     '+r.title);
               console.log('  seo_title: '+(r.seo_title??'(none)'));
@@ -219,13 +222,10 @@ jobs:
               console.log('  meta_desc: '+(r.meta_description??'(none)').slice(0,160));
               console.log('  body:      '+(r.body??'').replace(/\n/g,' ').slice(0,300));
             }
-            const diffs=rows('t2.json');
+            const twoSentence=rows('t2.json');
             console.log('');
-            console.log('  articles in the last 3 days whose seo_title differs from the title: '+diffs.length);
-            for (const r of diffs.slice(0,12)) {
-              console.log('    title: '+r.title);
-              console.log('    seo:   '+r.seo_title);
-            }
+            console.log('  titles of the last 3 days carrying a second sentence: '+twoSentence.length);
+            for (const r of twoSentence.slice(0,12)) console.log('    '+r.title);
           " >> titles.txt 2>&1
           cat titles.txt
 
