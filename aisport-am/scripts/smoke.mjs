@@ -117,6 +117,23 @@ await expectStatus("news feed api", "/api/articles?limit=1", 200);
 await expectStatus("missing article", "/news/this-slug-does-not-exist-smoke-test", 404);
 await expectStatus("missing opinion", "/opinions/this-slug-does-not-exist-smoke", 404);
 
+// The Google News sitemap is only useful while it is correct: the format
+// is strict, and Google drops a feed whose entries are older than two days.
+{
+  const { status, body } = await get("/news-sitemap.xml");
+  const problems = [];
+  if (status !== 200) problems.push(`status ${status}`);
+  if (!body.includes("http://www.google.com/schemas/sitemap-news/0.9")) problems.push("missing the news namespace");
+  const count = (body.match(/<news:news>/g) ?? []).length;
+  if (count === 0) problems.push("no articles listed");
+  if (count > 1000) problems.push(`${count} articles, over Google's limit of 1000`);
+  const dates = [...body.matchAll(/<news:publication_date>([^<]+)</g)].map((m) => Date.parse(m[1]));
+  const tooOld = dates.filter((date) => Number.isFinite(date) && Date.now() - date > 3 * 24 * 60 * 60 * 1000);
+  if (tooOld.length) problems.push(`${tooOld.length} entries older than the two-day window`);
+  checked.push(`${problems.length ? "FAIL" : "ok  "}  ${"news sitemap".padEnd(22)} /news-sitemap.xml -> ${count} articles`);
+  if (problems.length) failures.push(`news sitemap: ${problems.join(", ")}`);
+}
+
 // The placeholder ad boxes ("Վերին գովազդային տարածք") are switched off by
 // ADS_ENABLED in components/ad-spaces.tsx. A reader met them above the
 // first headline and the site read as unfinished, so if that flag is ever
