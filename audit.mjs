@@ -113,5 +113,62 @@ for (let i = 0; i < titles.length; i++) {
 }
 if (!pairs) log(`  no near-duplicate headlines among ${titles.length} on the page`);
 
+// ---------- 6. Light mode. The league picker was invisible there - a
+// hard-coded dark background under theme-coloured text - and nothing had
+// ever checked the light theme at all. Walk the visible text and report
+// anything whose contrast against its own background is too low to read.
+log(`\n=== light mode contrast ===`);
+for (const [name, path] of [["home", "/"], ["standings", "/standings"], ["article", articlePath], ["live", "/live"]]) {
+  await p.goto(BASE + path, { waitUntil: "load", timeout: 60000 }).catch(() => {});
+  await p.evaluate(() => {
+    document.documentElement.setAttribute("data-theme", "light");
+    try { localStorage.setItem("theme", "light"); } catch { /* ignore */ }
+  });
+  await p.waitForTimeout(900);
+  const bad = await p.evaluate(() => {
+    const parse = (c) => (c.match(/[\d.]+/g) ?? []).map(Number);
+    const lum = ([r, g, b]) => {
+      const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+    };
+    const backdrop = (el) => {
+      for (let node = el; node; node = node.parentElement) {
+        const bg = getComputedStyle(node).backgroundColor;
+        const parts = parse(bg);
+        if (parts.length >= 3 && (parts[3] === undefined || parts[3] > 0.5)) return parts;
+      }
+      return [255, 255, 255];
+    };
+    const out = [];
+    for (const el of document.querySelectorAll("body *")) {
+      const text = (el.textContent ?? "").trim();
+      if (!text || el.children.length > 0) continue;
+      const box = el.getBoundingClientRect();
+      if (box.width < 8 || box.height < 8) continue;
+      const style = getComputedStyle(el);
+      if (style.visibility === "hidden" || style.opacity === "0") continue;
+      const fg = parse(style.color);
+      if (fg.length < 3) continue;
+      const l1 = lum(fg) + 0.05;
+      const l2 = lum(backdrop(el)) + 0.05;
+      const ratio = l1 > l2 ? l1 / l2 : l2 / l1;
+      if (ratio < 3) out.push(`${ratio.toFixed(1)}:1  <${el.tagName.toLowerCase()}${el.className ? "." + String(el.className).split(" ")[0] : ""}> "${text.slice(0, 40)}"`);
+    }
+    // The select is not caught by the walk above: its text is drawn by the
+    // browser, not by a child node.
+    for (const el of document.querySelectorAll("select")) {
+      const style = getComputedStyle(el);
+      const fg = parse(style.color); const bg = parse(style.backgroundColor);
+      if (fg.length < 3 || bg.length < 3) continue;
+      const l1 = lum(fg) + 0.05; const l2 = lum(bg) + 0.05;
+      const ratio = l1 > l2 ? l1 / l2 : l2 / l1;
+      if (ratio < 3) out.push(`${ratio.toFixed(1)}:1  <select.${String(el.className).split(" ")[0]}>`);
+    }
+    return [...new Set(out)];
+  });
+  log(`  ${name}: ${bad.length ? `${bad.length} unreadable` : "everything readable"}`);
+  for (const b of bad.slice(0, 6)) log(`    ${b}`);
+}
+
 await browser.close();
 fs.writeFileSync("add-source-result.txt", report.join("\n"));
