@@ -1,6 +1,5 @@
 import { activeProfiles } from "../lib/social";
 import Link from "next/link";
-import { BrandLogo } from "./brand-logo";
 
 const footerSports = [
   { name: "Միջազգային ֆուտբոլ", href: "/league/PL" },
@@ -18,7 +17,7 @@ export function SiteFooter() {
     <footer className="new-footer">
       <div className="site-shell footer-main">
         <div>
-          <Link prefetch={false} className="aisport-logo footer-logo" href="/" aria-label="AIFootball գլխավոր էջ"><BrandLogo idSuffix="f" /></Link>
+          <Link prefetch={false} className="aisport-logo footer-logo" href="/"><span className="aisport-symbol">AI</span><strong>FOOTBALL</strong><i>AM</i></Link>
           <p>Միջազգային ֆուտբոլի և հայկական սպորտի արագ, խորքային և վստահելի լուսաբանում։</p>
         </div>
         <div><strong>Մարզաձևեր</strong>{footerSports.map((sport) => <Link prefetch={false} href={sport.href} key={sport.href}>{sport.name}</Link>)}</div>
