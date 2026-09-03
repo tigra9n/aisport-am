@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { getPublishedArticles } from "../lib/articles";
 import { getOpinions } from "../lib/opinions";
 import { categories } from "../lib/content";
+import { LEAGUE_TAGS } from "../lib/league-tags";
 
 // force-dynamic alone has been observed to still let this metadata route
 // get frozen at its build-time snapshot in this Workers build pipeline
@@ -31,6 +32,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const categoryPages: MetadataRoute.Sitemap = categories.map((c) => ({
     url: `${BASE_URL}/category/${c.slug}`,
+    lastModified: now,
+    changeFrequency: "hourly",
+    priority: 0.6,
+  }));
+
+  // The league pages were missing entirely. They are the same kind of page
+  // as the category ones - a per-competition landing page that fills itself
+  // from new articles - and they carry the internal links that lead a
+  // crawler to the individual articles.
+  const leaguePages: MetadataRoute.Sitemap = LEAGUE_TAGS.map((league) => ({
+    url: `${BASE_URL}/league/${league.code}`,
     lastModified: now,
     changeFrequency: "hourly",
     priority: 0.6,
@@ -68,5 +80,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.85,
   }));
 
-  return [...staticPages, ...categoryPages, ...articlePages, ...opinionPages];
+  return [...staticPages, ...categoryPages, ...leaguePages, ...articlePages, ...opinionPages];
 }
