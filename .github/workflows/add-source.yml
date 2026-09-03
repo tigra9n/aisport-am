@@ -12,68 +12,23 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Verify the old Armenian URLs still resolve
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Audit every page type in a real browser, desktop and phone
         run: |
-          # The seven slugs have been rewritten, so their original URLs now
-          # exist only as redirects. Both entry points have to work: the old
-          # slug on the new domain, and the old slug on the old domain, which
-          # must reach the final destination in a single hop rather than
-          # bouncing host-first and slug-second.
-          OLDNEW=(
-            "արակս-արարատ-ը-ընդունում-է-կիլիկիային-գավաթային-af-1588810-preview|araks-ararat-y-yndunum-e-kilikiayin-gavatayin-af-1588810-preview"
-            "ֆուլհեմ-չելսի-պրեմիեր-լիգայի-կարևոր-հանդիպում-af-1557376-preview|fulhem-chelsi-premier-ligayi-karevor-handipum-af-1557376-preview"
-            "օսասունա---լևանտե-լա-լիգայի-հանդիպում-af-1570350-preview|osasuna---levante-la-ligayi-handipum-af-1570350-preview"
-            "մալագան-ընդունում-է-դեպորտիվոյին-լա-լիգայի-af-1570349-preview|malagan-yndunum-e-deportivoyin-la-ligayi-af-1570349-preview"
-            "բոլոնիան-հյուրընկալում-է-լացիոյին-սերիա-ա-ում-af-1550089-preview|bolonian-hyurynkalum-e-latsioyin-seria-a-um-af-1550089-preview"
-            "ռոման-հյուրընկալում-է-ֆիորենտինային-af-1550087-preview|roman-hyurynkalum-e-fiorentinayin-af-1550087-preview"
-            "անգլիայի-հավաքականի-գիշերային-արկածները-նոր-գլխացավանք-66997343|angliayi-havaqakani-gisherayin-arkatsnery-nor-glkhatsavanq-66997343"
-          )
-          {
-            PASS=0; FAIL=0
-            for ENTRY in "${OLDNEW[@]}"; do
-              OLD="${ENTRY%%|*}"; NEW="${ENTRY##*|}"
-              ENC=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$OLD")
-              WANT="https://aifootball.am/news/$NEW"
-
-              C1=$(curl -s -m 30 -o /dev/null -w '%{http_code}' "https://aifootball.am/news/$ENC")
-              T1=$(curl -s -m 30 -o /dev/null -w '%{redirect_url}' "https://aifootball.am/news/$ENC")
-              F1=$(curl -s -m 30 -L -o /dev/null -w '%{http_code}' "https://aifootball.am/news/$ENC")
-
-              C2=$(curl -s -m 30 -o /dev/null -w '%{http_code}' "https://aisport.am/news/$ENC")
-              T2=$(curl -s -m 30 -o /dev/null -w '%{redirect_url}' "https://aisport.am/news/$ENC")
-
-              NEWCODE=$(curl -s -m 30 -o /dev/null -w '%{http_code}' "$WANT")
-
-              SHORT=$(printf '%s' "$NEW" | cut -c1-40)
-              OK=yes
-              [ "$C1" = "301" ] && [ "$T1" = "$WANT" ] && [ "$F1" = "200" ] || OK=no
-              [ "$C2" = "301" ] && [ "$T2" = "$WANT" ] || OK=no
-              [ "$NEWCODE" = "200" ] || OK=no
-              if [ "$OK" = yes ]; then
-                PASS=$((PASS+1)); echo "OK    $SHORT"
-              else
-                FAIL=$((FAIL+1))
-                echo "FAIL  $SHORT"
-                echo "        new domain + old slug: $C1 -> $T1 (final $F1)"
-                echo "        old domain + old slug: $C2 -> $T2"
-                echo "        new URL direct: $NEWCODE"
-              fi
-            done
-            echo
-            echo "passed: $PASS / 7   failed: $FAIL"
-            echo
-            echo "=== the sitemap should now carry only Latin article URLs ==="
-            curl -s -m 60 -o /tmp/s.xml https://aifootball.am/sitemap.xml
-            echo "total URLs: $(grep -c '<loc>' /tmp/s.xml)"
-            echo "URLs containing a percent-escape (want 0): $(grep -o '<loc>[^<]*%[^<]*</loc>' /tmp/s.xml | wc -l)"
-            echo "URLs containing a non-ASCII byte (want 0): $(grep -oP '<loc>[^<]*[^\x00-\x7F][^<]*</loc>' /tmp/s.xml | wc -l)"
-          } > add-source-result.txt 2>&1 || true
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+          node audit.mjs || true
+          echo "" >> add-source-result.txt
+          echo "--- screenshots produced ---" >> add-source-result.txt
+          ls -la audit >> add-source-result.txt 2>&1 || true
           cat add-source-result.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
-          git add -f add-source-result.txt
-          git commit -m "add-source result [skip ci]" || true
+          git add -f add-source-result.txt audit
+          git commit -m "audit result [skip ci]" || true
           git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
