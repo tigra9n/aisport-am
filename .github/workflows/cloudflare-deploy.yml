@@ -58,6 +58,13 @@ jobs:
           bash scripts/cf-deploy.sh 2>&1 | tee /tmp/deploy-log.txt
           exit ${PIPESTATUS[0]}
 
+      # Types cannot see a route that throws on real data, a page that 404s
+      # because a lookup broke, or a template that renders empty. This opens
+      # one page of every type on the deployed site and fails the run if any
+      # of them is not a real page.
+      - name: Smoke-test the deployed site
+        run: node scripts/smoke.mjs
+
       - name: Upload log for debugging
         if: always()
         run: |
