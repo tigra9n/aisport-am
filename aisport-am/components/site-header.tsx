@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { BrandLogo } from "./brand-logo";
 import { FormEvent, useEffect, useState } from "react";
 import { formatLongDateHy } from "../lib/format-date";
 
@@ -74,7 +73,7 @@ export function SiteHeader() {
         <div className="site-shell brand-row">
           <button className="icon-button mobile-menu-button" type="button" aria-label="Բացել մենյուն" aria-expanded={menuOpen} onClick={() => setMenuOpen(!menuOpen)}>☰</button>
           <Link prefetch={false} className="aisport-logo" href="/" aria-label="AIFootball գլխավոր էջ">
-            <BrandLogo idSuffix="h" />
+            <span className="aisport-symbol">AI</span><strong>FOOTBALL</strong><i>AM</i>
           </Link>
           <p className="brand-line">Ֆուտբոլը՝ արագ, խելացի, հայերեն</p>
           <div className="header-actions">
