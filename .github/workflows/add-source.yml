@@ -205,8 +205,11 @@ jobs:
         run: |
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium
-          API_FOOTBALL_KEY="${API_FOOTBALL_KEY}" node make-social-images.mjs || true
+          echo "=== social image generation ===" > imagelog.txt
+          API_FOOTBALL_KEY="${API_FOOTBALL_KEY}" node make-social-images.mjs >> imagelog.txt 2>&1 || echo "  (the script exited non-zero)" >> imagelog.txt
+          cat imagelog.txt
           node audit.mjs || true
+          cat imagelog.txt >> add-source-result.txt 2>/dev/null || true
           cat rate.txt >> add-source-result.txt 2>/dev/null || echo "(rate query produced nothing)" >> add-source-result.txt
           echo "" >> add-source-result.txt
           echo "" >> add-source-result.txt
