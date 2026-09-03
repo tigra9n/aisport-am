@@ -44,8 +44,8 @@ jobs:
             echo
             echo "=== old domain behaviour (should be a permanent redirect) ==="
             curl -s -m 30 -o /dev/null -w "aisport.am -> HTTP %{http_code}, redirects to %{redirect_url}\n" https://aisport.am/
-          } > ../add-source-result.txt 2>&1 || true
-          cat ../add-source-result.txt
+          } > add-source-result.txt 2>&1 || true
+          cat add-source-result.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
