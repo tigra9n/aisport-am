@@ -146,7 +146,12 @@ export function shareImage(src: string | null | undefined): string {
     w: "1200",
     h: "630",
     fit: "cover",
-    q: "80",
+    // 80 gave a 405 KB card for a detailed Getty photograph - four times
+    // what the same card weighs for an ordinary press image, downloaded
+    // every time the link is unfurled in a chat. At this size the card is
+    // seen at about 500px wide in a feed; 74 is indistinguishable there and
+    // costs a third less.
+    q: "74",
     output: "jpg",
     default: SHARE_FALLBACK,
   });
