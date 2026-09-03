@@ -192,6 +192,7 @@ jobs:
         run: |
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium
+          node make-social-images.mjs || true
           node audit.mjs || true
           cat rate.txt >> add-source-result.txt 2>/dev/null || echo "(rate query produced nothing)" >> add-source-result.txt
           echo "" >> add-source-result.txt
@@ -212,7 +213,7 @@ jobs:
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
-          git add -f add-source-result.txt audit
+          git add -f add-source-result.txt audit aisport-am/public/fb-profile.png aisport-am/public/fb-cover.png
           git commit -m "audit result [skip ci]" || true
           git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
         env:
