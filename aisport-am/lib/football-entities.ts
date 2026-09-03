@@ -19,13 +19,21 @@ export type EntityClass = "person.name" | "title";
 
 type Entity = { name: string; priority: 100 | 90 | 80 | 70; section: string };
 
-// How many Armenians-abroad to put at the head of a search attempt. They
-// lead every attempt rather than waiting their turn, but not all of them
-// at once: an attempt only tries fifteen entities in total, and eight
-// names that happen to have no news today would eat half that budget and
-// cost the site its publishing rate. Three lead, the rest sit at the end
-// of the chain where they are still reachable if nothing else answers.
-const ABROAD_PER_ATTEMPT = 3;
+// How many Armenians-abroad to put at the head of a search attempt.
+//
+// It was three, and the search logs settled the question: across four
+// attempts, seven different Armenian names each took eleven to fourteen
+// seconds and every one of them returned nothing. APITube simply has no
+// current coverage of them. Three of the fifteen slots, and three of the
+// five in the very first concurrent batch, were being spent for certain on
+// nothing - and the gap between articles went from twenty minutes to
+// nearly thirty.
+//
+// One, rotating. The rotation still brings every name round over a day, so
+// an Armenian story is caught the day it appears, at a third of the cost.
+// The other seven stay at the tail of the chain, reached when nothing
+// ahead of them answered - which is exactly when an extra try is free.
+const ABROAD_PER_ATTEMPT = 1;
 
 const CLUBS: Entity[] = [
   { name: "FC Noah", priority: 100, section: "armenia" },
