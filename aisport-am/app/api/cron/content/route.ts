@@ -2,6 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { sources } from "../../../../db/schema";
 import { articleExistsForSource, lastSaveSkipReason, saveGeneratedArticle } from "../../../../lib/articles";
+import { warmImageCache } from "../../../../lib/image-proxy";
 import { generateFromSourceSnippet, generateMatchPreview, generateMatchRecap, lastGenerationDebug } from "../../../../lib/content-generation";
 import { fetchArticlePage, fetchFeed, fetchApiTubePerson, fetchApiTubeTitle, validateImageUrl, type FeedItem } from "../../../../lib/feeds";
 import { pickCombinedChain } from "../../../../lib/football-entities";
@@ -492,7 +493,14 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
         const saved = await saveGeneratedArticle({
           ...article, imageUrl: resolvedImage, sourceName: source.name, sourceUrl: item.link, uniquePart: String(Date.now()).slice(-8),
         });
-        if (saved) { generated++; log.push(`rewrite: ${item.title.slice(0, 40)}`); }
+        if (saved) {
+          generated++;
+          log.push(`rewrite: ${item.title.slice(0, 40)}`);
+          // Warm the proxy while we are still here, so the first reader of
+          // this article - and of the home page it is about to lead - does
+          // not wait for the picture to be fetched and re-encoded.
+          await warmImageCache(resolvedImage);
+        }
         else if (lastSaveSkipReason) log.push(`skipped as a repeat: ${item.title.slice(0, 40)} | ${lastSaveSkipReason}`);
       }
     }

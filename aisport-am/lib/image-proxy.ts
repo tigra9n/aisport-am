@@ -87,6 +87,38 @@ export function imageSrcSet(src: string | null | undefined, widths: number[]): s
     .join(", ");
 }
 
+/**
+ * Ask the proxy for a freshly published article's photograph, so the first
+ * reader does not have to wait for it to be fetched and re-encoded.
+ *
+ * The home page's largest element is the newest article's picture, and that
+ * picture changes every twenty minutes. Measured at 360px with the CPU
+ * throttled 4x, the home LCP swung between 1.43s and 3.91s across runs while
+ * an older article's page held steady near 1.7s - the difference being
+ * whether the proxy had seen that image before. Whoever arrives first after
+ * a publication pays for the miss.
+ *
+ * Called from the cron after a successful save. Failures are ignored: this
+ * is a favour to the next visitor, never a condition of publishing.
+ */
+export async function warmImageCache(src: string | null | undefined): Promise<void> {
+  if (!src || !PROXY_IMAGES || !isProxyable(src)) return;
+
+  // The widths the hero, the cards and the article page actually request.
+  const urls = [sizedImage(src, 700), sizedImage(src, 900), ...(imageSrcSet(src, [360, 760, 1400])?.split(", ").map((entry) => entry.split(" ")[0]) ?? [])];
+
+  await Promise.all(
+    [...new Set(urls)].map(async (url) => {
+      try {
+        await fetch(url, { method: "GET", cf: { cacheEverything: true } } as RequestInit);
+      } catch {
+        // The proxy being slow or unreachable is exactly the case this is
+        // trying to soften; it must not become a reason not to publish.
+      }
+    }),
+  );
+}
+
 // The picture Telegram, Facebook and WhatsApp show when a link is posted.
 //
 // It has a harder job than an image on a page. A social crawler fetches it
