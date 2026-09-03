@@ -1,3 +1,4 @@
+import { activeProfiles } from "../lib/social";
 import Link from "next/link";
 
 const footerSports = [
@@ -9,6 +10,9 @@ const footerSports = [
 ];
 
 export function SiteFooter() {
+  // Only the accounts that actually exist - see lib/social.ts.
+  const profiles = activeProfiles();
+
   return (
     <footer className="new-footer">
       <div className="site-shell footer-main">
@@ -18,7 +22,11 @@ export function SiteFooter() {
         </div>
         <div><strong>Մարզաձևեր</strong>{footerSports.map((sport) => <Link prefetch={false} href={sport.href} key={sport.href}>{sport.name}</Link>)}</div>
         <div><strong>AIFootball</strong><Link prefetch={false} href="/podcasts">Փոդքաստներ</Link><Link prefetch={false} href="/standings">Աղյուսակներ</Link><Link prefetch={false} href="/live">Live</Link><Link prefetch={false} href="/opinions">Հեղինակային նյութեր</Link></div>
-        <div><strong>Հետևեք մեզ</strong><span>Facebook</span><span>Instagram</span><span>Telegram</span><span>Threads</span></div>
+        {profiles.length > 0 && (
+          <div><strong>Հետևեք մեզ</strong>{profiles.map((profile) => (
+            <a href={profile.url} target="_blank" rel="noopener noreferrer" key={profile.key}>{profile.label}</a>
+          ))}</div>
+        )}
       </div>
       <div className="site-shell footer-bottom"><span>© 2026 AIFootball</span><span>Բովանդակության օգտագործումը՝ սկզբնաղբյուրի հղումով</span><span><Link prefetch={false} href="/privacy">Գաղտնիության քաղաքականություն</Link> · <Link prefetch={false} href="/terms">Օգտագործման կանոններ</Link></span></div>
     </footer>

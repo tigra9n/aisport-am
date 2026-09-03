@@ -19,6 +19,53 @@ export function HeadlineFeed({ initialArticles, initialOffset }: { initialArticl
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
 
+  // The site publishes roughly every twenty minutes, and the page did not
+  // notice. Anyone who left the tab open - Tigran twice today - saw a strip
+  // labelled "24/7, updating" showing the same headlines it had an hour
+  // earlier and concluded the site had stopped. It had not; the page simply
+  // never asked again.
+  //
+  // Polling the first page every ninety seconds and prepending whatever is
+  // new. It only touches the top of the list, so anything already loaded by
+  // scrolling stays where it is, and the offset moves by however many
+  // arrived so the next scroll page does not repeat them. Nothing is
+  // announced when nothing is new.
+  useEffect(() => {
+    let cancelled = false;
+
+    const poll = async () => {
+      // Asking while the tab is in the background wakes a phone's radio for
+      // a list nobody is looking at.
+      if (document.visibilityState !== "visible") return;
+      try {
+        const res = await fetch("/api/articles?offset=0&limit=9", { cache: "no-store" });
+        const data = await res.json() as { previews?: ArticlePreview[] };
+        const latest = data.previews ?? [];
+        if (cancelled || !latest.length) return;
+        setItems((prev) => {
+          const seen = new Set(prev.map((a) => a.slug));
+          const fresh = latest.filter((a) => !seen.has(a.slug));
+          if (!fresh.length) return prev;
+          setOffset((current) => current + fresh.length);
+          return [...fresh, ...prev];
+        });
+      } catch {
+        // A failed poll is not worth telling the reader about; the next one
+        // is ninety seconds away.
+      }
+    };
+
+    const timer = window.setInterval(poll, 90_000);
+    // And immediately when the reader comes back to the tab, which is when
+    // the staleness is most obvious.
+    document.addEventListener("visibilitychange", poll);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", poll);
+    };
+  }, []);
+
   useEffect(() => {
     const sentinel = sentinelRef.current;
     const root = listRef.current;

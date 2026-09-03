@@ -1,6 +1,7 @@
 import { shareImage, sizedImage } from "../../../lib/image-proxy";
 import { tagHref, tagIsPage } from "../../../lib/tag-links";
 import { categories } from "../../../lib/content";
+import { ShareRow } from "../../../components/share-row";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -120,6 +121,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
     {/* eslint-disable-next-line @next/next/no-img-element */}
     {image ? <img className="article-image" src={sizedImage(image, 900)} alt={title} referrerPolicy="no-referrer" decoding="async" fetchPriority="high" /> : <div className="article-placeholder" aria-hidden="true">AI</div>}
     <div className="article-content">{paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</div>
+    <ShareRow url={`https://aifootball.am/news/${slug}`} title={title} />
     {tags.length > 0 ? <div className="article-tags">{orderedTags.map((tag) => <Link prefetch={false} key={tag} href={tagHref(tag)} className={tagIsPage(tag) ? "article-tag is-page" : "article-tag"}>#{tag}</Link>)}</div> : null}
     <aside className="source-box"><strong>Սկզբնաղբյուր</strong><p>Նյութը պատրաստվել է հրապարակված սկզբնաղբյուրի հիման վրա։</p><a href={sourceUrl} target="_blank" rel="noreferrer">Բացել սկզբնաղբյուրը ↗</a></aside>
     {related.length > 0 ? <section className="related-articles"><h2>{category}․ ևս</h2><ul className="related-list">{related.map((a) => <li key={a.slug}><Link href={`/news/${a.slug}`}>{a.title}</Link></li>)}</ul></section> : null}

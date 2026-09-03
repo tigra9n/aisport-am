@@ -1,4 +1,5 @@
 import { shareImage, sizedImage } from "../../../lib/image-proxy";
+import { ShareRow } from "../../../components/share-row";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
@@ -95,6 +96,8 @@ export default async function OpinionPage({ params }: { params: Promise<{ slug: 
           <p style={{ marginBottom: 24 }}><a href={opinion.videoUrl} target="_blank" rel="noreferrer">🎬 Video դիտել</a></p>
         )}
         <div className="article-content" dangerouslySetInnerHTML={{ __html: formatOpinionContent(opinion.content) }} />
+
+        <ShareRow url={`https://aifootball.am/opinions/${slug}`} title={opinion.title} />
       </article>
       <SiteFooter />
     </main>

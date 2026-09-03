@@ -30,6 +30,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The bundler does not type-check, so an identifier that does not
+      # exist compiles cleanly and then throws at request time (Cloudflare
+      # error 1101) - that is how a crashing /opinions/ page once reached
+      # production. This step fails the deploy instead.
+      - name: Type-check
+        run: npm run typecheck
+
       - name: Deploy to Cloudflare
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
