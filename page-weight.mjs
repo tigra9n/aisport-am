@@ -56,23 +56,40 @@ const context = await browser.newContext({
 for (const [name, path] of PAGES) {
   const page = await context.newPage();
   const byType = new Map();
+  const encodings = new Set();
+  const thirdParties = new Set();
+  const script = { first: 0, third: 0 };
   let total = 0;
+  let totalParsed = 0;
 
   page.on("response", async (response) => {
     const type = response.request().resourceType();
-    // content-length is free and present on nearly every response; only
-    // fall back to reading the body when it is missing, and never let a
-    // failed read stop the measurement.
-    let size = Number(response.headers()["content-length"] ?? NaN);
-    if (!Number.isFinite(size)) {
-      try {
-        size = (await response.body()).length;
-      } catch {
-        size = 0;
-      }
+    // Two different numbers, and the difference matters. `wire` is what the
+    // phone actually downloads, compression included; `size` is what it has
+    // to parse afterwards. Reading content-length gives whichever the server
+    // happened to send and silently mixes the two, which is how a page that
+    // downloads 90 KB of script came to be reported as carrying 490 KB.
+    const sizes = await response.request().sizes().catch(() => null);
+    let size = 0;
+    try {
+      size = (await response.body()).length;
+    } catch {
+      size = Number(response.headers()["content-length"] ?? 0) || 0;
     }
-    total += size;
-    byType.set(type, (byType.get(type) ?? 0) + size);
+    const wire = sizes?.responseBodySize > 0 ? sizes.responseBodySize : size;
+    total += wire;
+    totalParsed += size;
+    byType.set(type, (byType.get(type) ?? 0) + wire);
+    // Third-party script is counted apart because it is a decision, not a
+    // bug: no amount of work on this codebase removes Google Analytics.
+    if (type === "script") {
+      const ours = new URL(response.url()).hostname.endsWith(new URL(BASE).hostname);
+      script[ours ? "first" : "third"] += wire;
+      if (!ours) thirdParties.add(new URL(response.url()).hostname);
+    }
+    if (!encodings.size || type === "script" || type === "stylesheet") {
+      encodings.add(response.headers()["content-encoding"] ?? "none");
+    }
   });
 
   const url = `${BASE}${path}`;
@@ -132,7 +149,8 @@ for (const [name, path] of PAGES) {
     .sort((a, b) => b[1] - a[1])
     .map(([type, size]) => `${type} ${kb(size)}`)
     .join(", ");
-  console.log(`  ${name.padEnd(18)} ${kb(total).padStart(7)}  height ${String(layout.height).padStart(5)}px  ${parts}`);
+  console.log(`  ${name.padEnd(18)} ${kb(total).padStart(7)} over the wire (${kb(totalParsed)} to parse)  height ${String(layout.height).padStart(5)}px  ${parts}`);
+  console.log(`    script: ${kb(script.first)} ours, ${kb(script.third)} third-party${thirdParties.size ? ` (${[...thirdParties].join(", ")})` : ""}  |  content-encoding seen: ${[...encodings].join(", ")}`);
   if (layout.overflow) {
     console.log(`    OVERFLOW ${layout.overflow}px past a 360px screen (body ${layout.bodyOverflow}px):`);
     for (const spill of layout.spills) console.log(`      ${spill}`);
