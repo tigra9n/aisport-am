@@ -69,13 +69,18 @@ export function imageSrcSet(src: string | null | undefined, widths: number[]): s
   if (!src || !PROXY_IMAGES || !isProxyable(src)) return undefined;
   return widths
     .map((width) => {
+      // No `default` here, unlike sizedImage. It repeats the whole source
+      // address a second time in every entry, and a page of forty cards
+      // pays for that twice over - once in the attribute, once in Next's
+      // serialised payload. The first measurement showed the HTML growing
+      // by more than the images shrank. The `src` alongside keeps the
+      // failsafe for anything that cannot read a srcset.
       const params = new URLSearchParams({
         url: src,
         w: String(width),
-        q: "72",
+        q: "68",
         output: "webp",
         we: "",
-        default: src,
       });
       return `${PROXY}?${params.toString()} ${width}w`;
     })

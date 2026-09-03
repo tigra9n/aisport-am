@@ -7,7 +7,7 @@ export function NewsCard({ article, compact = false }: { article: ArticlePreview
     <article className={`modern-news-card ${compact ? "compact" : ""}`}>
       <Link className="card-media" href={`/news/${article.slug}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={sizedImage(article.image, 420)} srcSet={imageSrcSet(article.image, [340, 420, 600, 800])} sizes="(max-width:700px) calc(100vw - 24px), (max-width:1100px) 50vw, 400px" alt={article.title} loading="lazy" decoding="async" referrerPolicy="no-referrer" />
+        <img src={sizedImage(article.image, 420)} srcSet={imageSrcSet(article.image, [340, 700, 900])} sizes="(max-width:700px) calc(100vw - 24px), (max-width:1100px) 50vw, 400px" alt={article.title} loading="lazy" decoding="async" referrerPolicy="no-referrer" />
         {article.local ? <span className="armenia-chip">Հայաստան</span> : null}
       </Link>
       <div className="card-copy">

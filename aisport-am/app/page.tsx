@@ -198,7 +198,7 @@ export default async function Home() {
                     // downloading roughly six times the pixels they show.
                     const featured = index === 0;
                     return <article className={featured ? "sport-news-card featured" : "sport-news-card"} key={article.slug}>
-                    <Link className="sport-news-image" href={`${sport.basePath}/${article.slug}`}><img src={sizedImage(article.image, featured ? 420 : 130)} srcSet={imageSrcSet(article.image, featured ? [360, 560, 840] : [130, 200, 300])} sizes={featured ? "(max-width:700px) calc(100vw - 24px), 400px" : "(max-width:700px) 105px, 130px"} alt={article.title} referrerPolicy="no-referrer" loading="lazy" decoding="async" /></Link>
+                    <Link className="sport-news-image" href={`${sport.basePath}/${article.slug}`}><img src={sizedImage(article.image, featured ? 420 : 130)} srcSet={imageSrcSet(article.image, featured ? [360, 840] : [130, 280])} sizes={featured ? "(max-width:700px) calc(100vw - 24px), 400px" : "(max-width:700px) 105px, 130px"} alt={article.title} referrerPolicy="no-referrer" loading="lazy" decoding="async" /></Link>
                     <div><span>{article.category}</span><h4><Link href={`${sport.basePath}/${article.slug}`}>{article.title}</Link></h4>{featured ? <p>{article.excerpt}</p> : null}<time>{article.time} · {article.readTime}</time></div>
                   </article>;
                   })}
