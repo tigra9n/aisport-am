@@ -71,6 +71,41 @@ jobs:
         env:
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
 
+      - name: Which player names does APITube not recognise
+        run: |
+          # The dashboard reports a 64% error rate. The code asks APITube's
+          # strict person.name registry first for every name, and only falls
+          # back to a plain title search when that errors - so every name the
+          # registry does not carry costs one failed request, on every single
+          # attempt, forever. Count how many of the names are like that.
+          npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT feed_url FROM sources WHERE feed_url LIKE '%apitube%' LIMIT 1" > src.json 2>&1 || true
+          KEY=$(node -e "
+            const fs=require('fs');let raw=fs.readFileSync('src.json','utf8');
+            const i=raw.indexOf('[');
+            try{const u=JSON.parse(raw.slice(i))[0].results[0].feed_url;
+              const m=u.match(/api_key=([^&]+)/);console.log(m?m[1]:'');}catch(e){console.log('');}
+          ")
+          if [ -z "$KEY" ]; then echo "  (could not read the APITube key from D1)" >> apitube.txt; else
+          NAMES="Henrikh_Mkhitaryan Eduard_Spertsyan Grant-Leon_Ranos Tigran_Barseghyan Vahan_Bichakhchyan Kylian_Mbappe Lamine_Yamal Erling_Haaland Vinicius_Junior Jude_Bellingham Mohamed_Salah Harry_Kane Lionel_Messi Bukayo_Saka Rodri Federico_Valverde Alexander_Isak Florian_Wirtz Jamal_Musiala Victor_Osimhen"
+          OK=0; ERR=0
+          for RAW in $NAMES; do
+            N=$(echo "$RAW" | tr '_' ' ')
+            BODY=$(curl -s -G "https://api.apitube.io/v1/news/everything" \
+              --data-urlencode "api_key=$KEY" --data-urlencode "person.name=$N" \
+              --data-urlencode "per_page=1" --data-urlencode "language.code=en")
+            if echo "$BODY" | grep -q "ER0216\|ER0220\|ER0228\|ER0151"; then
+              CODE=$(echo "$BODY" | grep -o "ER0[0-9]*" | head -1)
+              echo "  NOT IN REGISTRY ($CODE): $N" >> apitube.txt; ERR=$((ERR+1))
+            else
+              echo "  ok: $N" >> apitube.txt; OK=$((OK+1))
+            fi
+          done
+          echo "  --- $ERR of $((OK+ERR)) names cost a failed request on every attempt ---" >> apitube.txt
+          fi
+          cat apitube.txt
+
       - name: Can this account write to R2 at all
         run: |
           # Resizing images ourselves needs somewhere to put them. R2's free
@@ -93,6 +128,9 @@ jobs:
           cat rate.txt >> add-source-result.txt 2>/dev/null || echo "(rate query produced nothing)" >> add-source-result.txt
           echo "" >> add-source-result.txt
           cat apistatus.txt >> add-source-result.txt 2>/dev/null || true
+          echo "" >> add-source-result.txt
+          echo "=== APITube person.name registry ===" >> add-source-result.txt
+          cat apitube.txt >> add-source-result.txt 2>/dev/null || echo "(no output)" >> add-source-result.txt
           echo "" >> add-source-result.txt
           echo "=== can the deploy token use R2? ===" >> add-source-result.txt
           cat r2-head.txt >> add-source-result.txt 2>/dev/null || echo "(no output)" >> add-source-result.txt
