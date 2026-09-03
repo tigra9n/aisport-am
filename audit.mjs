@@ -130,12 +130,15 @@ log(`\n=== light mode contrast ===`);
     log(`  stylesheet ${href}: light-theme green present: ${css.includes("#0e6c3e") ? "yes" : "NO - the deploy did not carry it"}`);
   }
 }
-for (const [name, path] of [["home", "/"], ["standings", "/standings"], ["article", articlePath], ["live", "/live"]]) {
+for (const [theme, name, path] of [
+  ["dark", "home", "/"], ["dark", "article", articlePath], ["dark", "live", "/live"], ["dark", "search", "/search?q=%D5%84%D5%A5%D5%BD%D5%BD%D5%AB"],
+  ["light", "home", "/"], ["light", "standings", "/standings"], ["light", "article", articlePath], ["light", "live", "/live"],
+]) {
   await p.goto(BASE + path, { waitUntil: "load", timeout: 60000 }).catch(() => {});
-  await p.evaluate(() => {
-    document.documentElement.setAttribute("data-theme", "light");
-    try { localStorage.setItem("theme", "light"); } catch { /* ignore */ }
-  });
+  await p.evaluate((t) => {
+    document.documentElement.setAttribute("data-theme", t);
+    try { localStorage.setItem("theme", t); } catch { /* ignore */ }
+  }, theme);
   await p.waitForTimeout(900);
   const bad = await p.evaluate(() => {
     const parse = (c) => (c.match(/[\d.]+/g) ?? []).map(Number);
@@ -178,7 +181,7 @@ for (const [name, path] of [["home", "/"], ["standings", "/standings"], ["articl
     }
     return [...new Set(out)];
   });
-  log(`  ${name}: ${bad.length ? `${bad.length} unreadable` : "everything readable"}`);
+  log(`  ${theme} / ${name}: ${bad.length ? `${bad.length} unreadable` : "everything readable"}`);
   for (const b of bad.slice(0, 6)) log(`    ${b}`);
 }
 
