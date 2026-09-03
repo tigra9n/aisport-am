@@ -1,0 +1,84 @@
+name: Audit the live site
+
+# The three measuring scripts at the root of this repository all run a real
+# browser against the deployed site, so they cannot run anywhere that cannot
+# reach it. This runs them on demand and puts the report where it can be
+# read afterwards.
+#
+# It is deliberately separate from add-source.yml, which also runs audit.mjs
+# but carries a pile of one-off diagnostics beside it - including steps that
+# write to the production database. Nothing here writes anything: it opens
+# pages and reports what it finds.
+
+on:
+  workflow_dispatch:
+    inputs:
+      full:
+        description: 'Also measure page weight and Core Web Vitals (slower)'
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install a browser
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      # Every script is allowed to fail without failing the run: a report
+      # that is missing one section is still worth reading, and a check that
+      # throws is itself a finding.
+      - name: Audit every page type
+        run: node audit.mjs || true
+
+      - name: Page weight and overflow
+        if: ${{ inputs.full }}
+        run: node page-weight.mjs > weight.txt 2>&1 || true
+
+      - name: Core Web Vitals
+        if: ${{ inputs.full }}
+        run: node vitals.mjs > vitals.txt 2>&1 || true
+
+      - name: Collect the report
+        run: |
+          {
+            echo "# Audit of https://aifootball.am"
+            echo "# $(date -u +'%Y-%m-%d %H:%M UTC'), commit ${GITHUB_SHA:0:7}"
+            echo
+            cat add-source-result.txt 2>/dev/null || echo "(audit.mjs produced nothing)"
+            echo
+            echo "=============================================="
+            cat weight.txt 2>/dev/null || true
+            echo
+            echo "=============================================="
+            cat vitals.txt 2>/dev/null || true
+            echo
+            echo "--- screenshots produced ---"
+            ls -la audit 2>&1 || true
+          } > audit-result.txt
+          cat audit-result.txt
+
+      # Pushed to check-logs, the branch this repository already uses for
+      # diagnostic output, so the report can be read with git rather than
+      # downloaded from the run page.
+      - name: Publish the report
+        if: always()
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add -f audit-result.txt audit 2>/dev/null || git add -f audit-result.txt
+          git commit -m "Audit report [skip ci]" || true
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
