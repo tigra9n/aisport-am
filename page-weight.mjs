@@ -98,26 +98,32 @@ for (const [name, path] of PAGES) {
   const layout = await page.evaluate(() => {
     const width = window.innerWidth;
     const spills = [];
+    const describe = (element) =>
+      `${element.tagName.toLowerCase()}.${(element.className || "").toString().split(" ").filter(Boolean).slice(0, 2).join(".")}`;
+
     for (const element of document.querySelectorAll("*")) {
       const box = element.getBoundingClientRect();
       if (box.width === 0 || box.height === 0) continue;
-      // Only the element itself, not every ancestor that contains it: an
-      // element whose parent already spills is the same finding twice.
+
+      // Three different ways a page ends up wider than the screen, and the
+      // first pass only looked for one of them - which is how a 51px
+      // overflow got reported with no element named.
       if (box.right > width + 2) {
+        // Only the element itself, not every ancestor containing it.
         const parent = element.parentElement;
-        const parentSpills = parent ? parent.getBoundingClientRect().right > width + 2 : false;
-        if (!parentSpills) {
-          spills.push({
-            tag: element.tagName.toLowerCase(),
-            cls: (element.className || "").toString().slice(0, 50),
-            right: Math.round(box.right),
-          });
+        if (!parent || parent.getBoundingClientRect().right <= width + 2) {
+          spills.push(`${describe(element)} reaches ${Math.round(box.right)}px`);
         }
+      } else if (box.left < -2) {
+        spills.push(`${describe(element)} starts at ${Math.round(box.left)}px, off the left edge`);
+      } else if (element.scrollWidth > element.clientWidth + 2 && getComputedStyle(element).overflowX === "visible") {
+        spills.push(`${describe(element)} holds ${element.scrollWidth}px of content in ${element.clientWidth}px`);
       }
     }
     return {
       height: Math.round(document.documentElement.scrollHeight),
       overflow: Math.max(0, Math.round(document.documentElement.scrollWidth - width)),
+      bodyOverflow: Math.max(0, Math.round(document.body.scrollWidth - width)),
       spills: spills.slice(0, 8),
     };
   });
@@ -128,10 +134,9 @@ for (const [name, path] of PAGES) {
     .join(", ");
   console.log(`  ${name.padEnd(18)} ${kb(total).padStart(7)}  height ${String(layout.height).padStart(5)}px  ${parts}`);
   if (layout.overflow) {
-    console.log(`    OVERFLOW ${layout.overflow}px past a 360px screen:`);
-    for (const spill of layout.spills) {
-      console.log(`      <${spill.tag} class="${spill.cls}"> reaches ${spill.right}px`);
-    }
+    console.log(`    OVERFLOW ${layout.overflow}px past a 360px screen (body ${layout.bodyOverflow}px):`);
+    for (const spill of layout.spills) console.log(`      ${spill}`);
+    if (!layout.spills.length) console.log("      no element accounts for it");
   }
   await page.close();
 }
