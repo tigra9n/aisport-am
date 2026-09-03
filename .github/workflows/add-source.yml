@@ -79,14 +79,34 @@ jobs:
           # registry does not carry costs one failed request, on every single
           # attempt, forever. Count how many of the names are like that.
           npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
+          # Find where the key actually lives rather than assuming a column.
           npx wrangler d1 execute aisport-db --remote --json --command \
-            "SELECT feed_url FROM sources WHERE feed_url LIKE '%apitube%' LIMIT 1" > src.json 2>&1 || true
+            "SELECT name FROM sqlite_master WHERE type='table'" > tables.json 2>&1 || true
+          echo "  tables: $(tr -d '\n' < tables.json | grep -o '\"name\":\"[a-z_]*\"' | tr '\n' ' ')" >> apitube.txt
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT * FROM sources LIMIT 5" > src.json 2>&1 || true
           KEY=$(node -e "
-            const fs=require('fs');let raw=fs.readFileSync('src.json','utf8');
+            const fs=require('fs');
+            let raw='';try{raw=fs.readFileSync('src.json','utf8');}catch(e){}
             const i=raw.indexOf('[');
-            try{const u=JSON.parse(raw.slice(i))[0].results[0].feed_url;
-              const m=u.match(/api_key=([^&]+)/);console.log(m?m[1]:'');}catch(e){console.log('');}
-          ")
+            let key='';
+            if(i>=0){
+              try{
+                const rows=JSON.parse(raw.slice(i))[0].results||[];
+                for(const r of rows){
+                  for(const v of Object.values(r)){
+                    if(typeof v==='string'){
+                      const m=v.match(/api_key=([^&\\s\"]+)/)||v.match(/(api_live_[A-Za-z0-9]+)/);
+                      if(m){key=m[1];break;}
+                    }
+                  }
+                  if(key)break;
+                }
+              }catch(e){}
+            }
+            console.error('columns seen: '+(()=>{try{const rows=JSON.parse(raw.slice(i))[0].results||[];return rows.length?Object.keys(rows[0]).join(','):'no rows';}catch(e){return 'unparsed'}})());
+            console.log(key);
+          " 2>>apitube.txt)
           if [ -z "$KEY" ]; then echo "  (could not read the APITube key from D1)" >> apitube.txt; else
           NAMES="Henrikh_Mkhitaryan Eduard_Spertsyan Grant-Leon_Ranos Tigran_Barseghyan Vahan_Bichakhchyan Kylian_Mbappe Lamine_Yamal Erling_Haaland Vinicius_Junior Jude_Bellingham Mohamed_Salah Harry_Kane Lionel_Messi Bukayo_Saka Rodri Federico_Valverde Alexander_Isak Florian_Wirtz Jamal_Musiala Victor_Osimhen"
           OK=0; ERR=0
