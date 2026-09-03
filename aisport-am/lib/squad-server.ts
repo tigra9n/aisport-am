@@ -1,5 +1,6 @@
 import { armenianCountry } from "./names-hy";
 import { armenianPlayerName } from "./player-names-hy";
+import { COACH_OVERRIDES } from "./coach-overrides";
 import { armenianTeamName } from "./team-names-hy";
 
 export type SquadPlayer = { id: number; name: string; number: number | null; position: string; age: number | null; photo: string | null };
@@ -73,7 +74,7 @@ export async function getCoach(teamId: number): Promise<Coach | null> {
   if (!key) return null;
 
   const db = (env as unknown as { DB?: D1Database }).DB;
-  const cacheKey = `apifootball:v4:coach:${teamId}`;
+  const cacheKey = `apifootball:v5:coach:${teamId}`;
 
   if (db) {
     await ensureCacheTable(db);
@@ -84,6 +85,28 @@ export async function getCoach(teamId: number): Promise<Coach | null> {
   }
 
   try {
+    // A club we have been told the API is wrong about: find the named coach
+    // instead of reading the team's list. Their own entry carries the photo,
+    // nationality, age and career, so the page loses nothing.
+    const override = COACH_OVERRIDES[teamId];
+    if (override) {
+      const found = await fetchApi(`https://v3.football.api-sports.io/coachs?search=${encodeURIComponent(override)}`, key);
+      const searched = found ? (await found.json() as { response?: ApiFootballCoach[] }).response ?? [] : [];
+      // Prefer one whose career actually mentions this club, in case the
+      // search is ambiguous; otherwise the first match on the name.
+      const named = searched.filter((c) => c.name.toLowerCase().includes(override.toLowerCase()));
+      const best = named.find((c) => c.career.some((stint) => stint.team.id === teamId)) ?? named[0];
+      if (best) {
+        const coach = mapCoach(best);
+        if (db) {
+          await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey, JSON.stringify(coach), Date.now()).run();
+        }
+        return coach;
+      }
+      // Falling through is deliberate: a search that finds nobody should
+      // leave the club with the API's answer rather than with no coach.
+    }
+
     const response = await fetchApi(`https://v3.football.api-sports.io/coachs?team=${teamId}`, key);
     if (!response) throw new Error("unreachable");
     const data = await response.json() as { response?: ApiFootballCoach[] };
@@ -108,7 +131,7 @@ export async function getCoach(teamId: number): Promise<Coach | null> {
     if (db) {
       // Also read the previous key: bumping it empties the cache, and without
       // this the page answers 404 whenever the upstream API is unavailable.
-      for (const staleKey of [cacheKey, `apifootball:v3:coach:${teamId}`, `apifootball:v2:coach:${teamId}`]) {
+      for (const staleKey of [cacheKey, `apifootball:v4:coach:${teamId}`, `apifootball:v3:coach:${teamId}`]) {
         const stale = await db.prepare("SELECT payload FROM api_cache WHERE cache_key=?").bind(staleKey).first<{ payload: string }>();
         if (stale) { try { return JSON.parse(stale.payload) as Coach; } catch { /* try the next one */ } }
       }
