@@ -2,6 +2,17 @@ import { eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { articles, automationRuns, publicationLogs, sources } from "../db/schema";
 
+// Everything publishing needs, and nothing else: the cron pipeline has the
+// row it just wrote, the old automation has a full article record, and both
+// satisfy this.
+export type PublishableArticle = {
+  id: number;
+  imageUrl: string | null;
+  caption: string;
+  facebookText?: string | null;
+  telegramText?: string | null;
+};
+
 type FeedItem = {
   title: string;
   description: string;
@@ -140,23 +151,44 @@ async function postJson(url: string, payload: Record<string, unknown>, token?: s
   return result.id || String(result.result?.message_id ?? "ok");
 }
 
-async function publishEverywhere(article: typeof articles.$inferSelect, caption: string, articleUrl: string) {
+/**
+ * Posts one published article to every network that has credentials, and
+ * writes the outcome to publication_logs.
+ *
+ * This machinery has been here since the first automation, and until now
+ * nothing reached it: the only caller was /api/automation/run, which
+ * nothing schedules any more. The pipeline that actually publishes -
+ * /api/cron/content - saved the Facebook and Telegram copy the model
+ * writes for every article and then left it in the database. Exported so
+ * that pipeline can call it too.
+ *
+ * A network with no credentials is not an error, it is simply absent: with
+ * none configured this does nothing at all, records "not_configured", and
+ * the article is published to the site exactly as before.
+ */
+export async function publishEverywhere(article: PublishableArticle, articleUrl: string) {
   const runtimeEnv = await getRuntimeEnv();
   const targets: Array<[string, () => Promise<string>]> = [];
+  // The model writes a different text for each network - shorter for
+  // Telegram, a couple of sentences for Facebook - and both were being
+  // stored and thrown away. The caption is the fallback for anything it did
+  // not write.
+  const facebookText = article.facebookText?.trim() || article.caption;
+  const telegramText = article.telegramText?.trim() || article.caption;
 
   if (runtimeEnv.TELEGRAM_BOT_TOKEN && runtimeEnv.TELEGRAM_CHANNEL_ID) {
     targets.push(["telegram", () => postJson(
       `https://api.telegram.org/bot${runtimeEnv.TELEGRAM_BOT_TOKEN}/${article.imageUrl ? "sendPhoto" : "sendMessage"}`,
       article.imageUrl
-        ? { chat_id: runtimeEnv.TELEGRAM_CHANNEL_ID, photo: article.imageUrl, caption: `${caption}\n\n${articleUrl}` }
-        : { chat_id: runtimeEnv.TELEGRAM_CHANNEL_ID, text: `${caption}\n\n${articleUrl}` }
+        ? { chat_id: runtimeEnv.TELEGRAM_CHANNEL_ID, photo: article.imageUrl, caption: `${telegramText}\n\n${articleUrl}` }
+        : { chat_id: runtimeEnv.TELEGRAM_CHANNEL_ID, text: `${telegramText}\n\n${articleUrl}` }
     )]);
   }
 
   if (runtimeEnv.META_PAGE_ID && runtimeEnv.META_PAGE_ACCESS_TOKEN) {
     targets.push(["facebook", () => postJson(
       `https://graph.facebook.com/v26.0/${runtimeEnv.META_PAGE_ID}/feed`,
-      { message: caption, link: articleUrl },
+      { message: facebookText, link: articleUrl },
       runtimeEnv.META_PAGE_ACCESS_TOKEN
     )]);
   }
@@ -165,7 +197,7 @@ async function publishEverywhere(article: typeof articles.$inferSelect, caption:
     targets.push(["instagram", async () => {
       const container = await postJson(
         `https://graph.facebook.com/v26.0/${runtimeEnv.INSTAGRAM_USER_ID}/media`,
-        { image_url: article.imageUrl, caption: `${caption}\n\n${articleUrl}` },
+        { image_url: article.imageUrl, caption: `${facebookText}\n\n${articleUrl}` },
         runtimeEnv.META_PAGE_ACCESS_TOKEN
       );
       return postJson(
@@ -181,8 +213,8 @@ async function publishEverywhere(article: typeof articles.$inferSelect, caption:
       const container = await postJson(
         `https://graph.threads.net/v1.0/${runtimeEnv.THREADS_USER_ID}/threads`,
         article.imageUrl
-          ? { media_type: "IMAGE", image_url: article.imageUrl, text: `${caption}\n\n${articleUrl}` }
-          : { media_type: "TEXT", text: `${caption}\n\n${articleUrl}` },
+          ? { media_type: "IMAGE", image_url: article.imageUrl, text: `${facebookText}\n\n${articleUrl}` }
+          : { media_type: "TEXT", text: `${facebookText}\n\n${articleUrl}` },
         runtimeEnv.THREADS_ACCESS_TOKEN
       );
       return postJson(
@@ -243,7 +275,10 @@ export async function runAutomation(origin: string) {
           importance: prepared.importance,
         }).returning();
         publishedCount++;
-        await publishEverywhere(saved, prepared.social_caption, `${origin}/news/${saved.slug}`);
+        await publishEverywhere(
+          { id: saved.id, imageUrl: saved.imageUrl, caption: prepared.social_caption, facebookText: saved.facebookText, telegramText: saved.telegramText },
+          `${origin}/news/${saved.slug}`,
+        );
       }
     }
     await db.update(automationRuns).set({ status: "completed", foundCount, publishedCount, finishedAt: new Date().toISOString() }).where(eq(automationRuns.id, run.id));

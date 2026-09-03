@@ -227,6 +227,15 @@ async function alreadyToldThisStory(title: string, excerpt: string): Promise<str
 // Returns true if a new row was inserted, false if it already existed
 // (sourceUrl is unique, so re-processing the same match/feed item is safe)
 // or if the same story went out in the last day.
+/**
+ * Writes a generated article, and answers with what was written - or null
+ * when nothing was.
+ *
+ * It used to answer a plain boolean, which was all a caller needed while
+ * publishing ended at the database. Posting to Facebook needs to know which
+ * row was written, and reading it back by slug afterwards would be a second
+ * query for something the insert already returns.
+ */
 export async function saveGeneratedArticle(input: {
   title: string;
   excerpt: string;
@@ -243,21 +252,22 @@ export async function saveGeneratedArticle(input: {
   telegramText?: string | null;
   alternativeTitles?: string[];
   confidence?: number | null;
-}): Promise<boolean> {
+}): Promise<{ id: number; slug: string; imageUrl: string | null; facebookText: string | null; telegramText: string | null } | null> {
   try {
     lastSaveSkipReason = "";
     const duplicateOf = await alreadyToldThisStory(input.title, input.excerpt);
     if (duplicateOf) {
       lastSaveSkipReason = `same story as "${duplicateOf.slice(0, 60)}"`;
-      return false;
+      return null;
     }
 
     const db = await getDb();
     const league = detectLeague(input.title, input.content, input.category);
+    const slug = slugify(input.title, input.uniquePart);
     const result = await db
       .insert(articles)
       .values({
-        slug: slugify(input.title, input.uniquePart),
+        slug,
         title: input.title,
         excerpt: input.excerpt,
         content: input.content,
@@ -277,9 +287,16 @@ export async function saveGeneratedArticle(input: {
       })
       .onConflictDoNothing({ target: articles.sourceUrl })
       .returning({ id: articles.id });
-    return result.length > 0;
+    if (!result.length) return null;
+    return {
+      id: result[0].id,
+      slug,
+      imageUrl: input.imageUrl ?? null,
+      facebookText: input.facebookText ?? null,
+      telegramText: input.telegramText ?? null,
+    };
   } catch (err) {
     console.error(`[articles] save failed: ${String(err)}`);
-    return false;
+    return null;
   }
 }

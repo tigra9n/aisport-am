@@ -13,3 +13,8 @@ export const FOUNDER_NAME = "Տիգրան Կարապետյան";
 // today and the aifootball.am one is not routed yet. An address on the
 // contact page that bounces is worse than no contact page at all.
 export const CONTACT_EMAIL = "contact@aisport.am";
+
+// The site's own address, for the places that cannot ask the request for
+// it: a cron invocation may arrive on either domain, and a link posted to
+// Facebook has to be the canonical one either way.
+export const SITE_URL = "https://aifootball.am";

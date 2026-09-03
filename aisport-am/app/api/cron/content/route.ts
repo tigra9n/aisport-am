@@ -2,6 +2,8 @@ import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { sources } from "../../../../db/schema";
 import { articleExistsForSource, lastSaveSkipReason, saveGeneratedArticle } from "../../../../lib/articles";
+import { publishEverywhere } from "../../../../lib/automation";
+import { SITE_URL } from "../../../../lib/site-info";
 import { warmImageCache } from "../../../../lib/image-proxy";
 import { generateFromSourceSnippet, generateMatchPreview, generateMatchRecap, lastGenerationDebug } from "../../../../lib/content-generation";
 import { fetchArticlePage, fetchFeed, fetchApiTubePerson, fetchApiTubeTitle, validateImageUrl, type FeedItem } from "../../../../lib/feeds";
@@ -10,6 +12,28 @@ import { getLiveMatches } from "../../../../lib/live-football-server";
 import { getLiveMatchDetailsV2 } from "../../../../lib/live-match-details-v2";
 
 export const dynamic = "force-dynamic";
+
+// Every article the model writes comes with a Facebook and a Telegram post
+// already drafted, and until now both were saved to the database and left
+// there: the code that posts them existed, but its only caller was an
+// endpoint nothing schedules any more. This is that connection.
+//
+// It never throws. A network that is down, or a token that has expired,
+// must not cost the site the article it just wrote - the failure is
+// recorded in publication_logs and the run carries on. With no credentials
+// configured at all it does nothing, quietly, which is what it does today.
+async function announce(
+  saved: { id: number; slug: string; imageUrl: string | null; facebookText: string | null; telegramText: string | null },
+  title: string,
+  log: string[],
+) {
+  try {
+    await publishEverywhere({ ...saved, caption: title }, `${SITE_URL}/news/${saved.slug}`);
+  } catch (err) {
+    log.push(`social post failed: ${String(err).slice(0, 80)}`);
+  }
+}
+
 
 // Cloudflare Workers cap the number of subrequests (fetch calls + D1
 // queries) a single invocation can make. getLiveMatchDetailsV2 alone can
@@ -230,7 +254,7 @@ async function runRecaps(apiKey: string, log: string[], deadline: number): Promi
       const saved = await saveGeneratedArticle({
         ...article, imageUrl: null, sourceName: "AIFootball", sourceUrl, uniquePart: match.id,
       });
-      if (saved) { generated++; log.push(`recap: ${match.home} vs ${match.away}`); }
+      if (saved) { generated++; log.push(`recap: ${match.home} vs ${match.away}`); await announce(saved, article.title, log); }
     }
   } catch (err) {
     log.push(`recap error: ${String(err)}`);
@@ -287,7 +311,7 @@ async function runPreviews(apiKey: string, log: string[], deadline: number): Pro
       const saved = await saveGeneratedArticle({
         ...article, imageUrl: null, sourceName: "AIFootball", sourceUrl, uniquePart: `${match.id}-preview`,
       });
-      if (saved) { generated++; log.push(`preview: ${match.home} vs ${match.away}`); }
+      if (saved) { generated++; log.push(`preview: ${match.home} vs ${match.away}`); await announce(saved, article.title, log); }
     }
   } catch (err) {
     log.push(`preview error: ${String(err)}`);
@@ -500,6 +524,7 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
           // this article - and of the home page it is about to lead - does
           // not wait for the picture to be fetched and re-encoded.
           await warmImageCache(resolvedImage);
+          await announce(saved, article.title, log);
         }
         else if (lastSaveSkipReason) log.push(`skipped as a repeat: ${item.title.slice(0, 40)} | ${lastSaveSkipReason}`);
       }

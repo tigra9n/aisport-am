@@ -85,6 +85,20 @@ if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
   echo "$ANTHROPIC_API_KEY" | npx wrangler secret put ANTHROPIC_API_KEY --name "$WORKER_NAME"
 fi
 
+# The page id and its access token: with both present the content pipeline
+# posts every new article to the Facebook page, with neither it does not.
+# Nothing else changes either way, so an expired token degrades to the site
+# publishing exactly as it did before.
+if [ -n "${META_PAGE_ID:-}" ]; then
+  echo "== Setting META_PAGE_ID secret on the worker =="
+  echo "$META_PAGE_ID" | npx wrangler secret put META_PAGE_ID --name "$WORKER_NAME"
+fi
+
+if [ -n "${META_PAGE_ACCESS_TOKEN:-}" ]; then
+  echo "== Setting META_PAGE_ACCESS_TOKEN secret on the worker =="
+  echo "$META_PAGE_ACCESS_TOKEN" | npx wrangler secret put META_PAGE_ACCESS_TOKEN --name "$WORKER_NAME"
+fi
+
 if [ -n "${GEMINI_API_KEY:-}" ]; then
   echo "== Setting GEMINI_API_KEY secret on the worker =="
   echo "$GEMINI_API_KEY" | npx wrangler secret put GEMINI_API_KEY --name "$WORKER_NAME"
