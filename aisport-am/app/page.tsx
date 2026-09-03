@@ -158,7 +158,7 @@ export default async function Home() {
                 <div className="sport-news-head"><div><span /> <h3>{sport.name}</h3></div><Link href={sport.href}>Բոլոր լուրերը →</Link></div>
                 <div className="sport-news-grid">
                   {sport.items.map((article, index) => <article className={index === 0 ? "sport-news-card featured" : "sport-news-card"} key={article.slug}>
-                    <Link className="sport-news-image" href={`${sport.basePath}/${article.slug}`}><img src={article.image} alt="" referrerPolicy="no-referrer" /></Link>
+                    <Link className="sport-news-image" href={`${sport.basePath}/${article.slug}`}><img src={article.image} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async" /></Link>
                     <div><span>{article.category}</span><h4><Link href={`${sport.basePath}/${article.slug}`}>{article.title}</Link></h4>{index === 0 ? <p>{article.excerpt}</p> : null}<time>{article.time} · {article.readTime}</time></div>
                   </article>)}
                 </div>

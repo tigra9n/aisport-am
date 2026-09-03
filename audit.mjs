@@ -36,7 +36,12 @@ for (const id of [47323, 1485]) {
 await page.goto(BASE, { waitUntil: "load", timeout: 60000 });
 await page.waitForTimeout(1500);
 log(`\n=== header ===`);
-log(`  date line: ${await page.evaluate(() => document.querySelector(".site-header span")?.textContent?.trim() ?? "?")}`);
+log(`  date line: ${await page.evaluate(() => {
+  const hit = [...document.querySelectorAll("header span, .site-header span, .topbar span")]
+    .map((s) => s.textContent?.trim() ?? "")
+    .find((t) => /\d/.test(t) && t.length > 5);
+  return hit ?? "not found";
+})}`);
 
 // 3. A live-match modal: are the lineup names links now?
 const matchHref = await page.evaluate(() => {
@@ -46,11 +51,11 @@ const matchHref = await page.evaluate(() => {
 log(`\n=== match modal (${matchHref ?? "no match link on the home page"}) ===`);
 if (matchHref) {
   await page.goto(new URL(matchHref, BASE).toString(), { waitUntil: "load", timeout: 60000 });
-  await page.waitForTimeout(2500);
   const tab = page.locator("button", { hasText: "Կազմեր" }).first();
+  await tab.waitFor({ state: "visible", timeout: 30000 }).catch(() => {});
   if (await tab.count()) {
     await tab.click();
-    await page.waitForTimeout(2500);
+    await page.waitForTimeout(6000);
     const m = await page.evaluate(() => ({
       pitchPlayers: document.querySelectorAll(".pitch-player").length,
       pitchLinks: document.querySelectorAll("a.pitch-player-link").length,
@@ -77,6 +82,29 @@ for (const url of [`${BASE}/cdn-cgi/image/width=80,format=auto/${probe}`, probe]
   const res = await page.request.get(url).catch((e) => ({ status: () => `error ${e.message.slice(0, 60)}`, headers: () => ({}) }));
   const headers = typeof res.headers === "function" ? res.headers() : {};
   log(`\n  ${url.slice(0, 70)}\n    status ${res.status()} type ${headers["content-type"] ?? "?"} length ${headers["content-length"] ?? "?"}`);
+}
+
+{
+  const p2 = await ctx.newPage();
+  const res = [];
+  p2.on("response", async (r) => {
+    const type = (r.headers()["content-type"] ?? "").split(";")[0];
+    let size = Number(r.headers()["content-length"] ?? 0);
+    if (!size) { try { size = (await r.body()).length; } catch { size = 0; } }
+    if (size > 0) res.push({ size, type });
+  });
+  await p2.setViewportSize({ width: 390, height: 844 });
+  await p2.goto(BASE, { waitUntil: "load", timeout: 60000 });
+  await p2.waitForTimeout(3000);
+  const total = res.reduce((n, r) => n + r.size, 0);
+  const img = res.filter((r) => r.type.startsWith("image/"));
+  const counted = await p2.evaluate(() => {
+    const imgs = [...document.querySelectorAll("img")];
+    return { inDom: imgs.length, lazy: imgs.filter((i) => i.getAttribute("loading") === "lazy").length };
+  });
+  log(`\n=== home page weight after the lazy pass (phone) ===`);
+  log(`  ${(total / 1024 / 1024).toFixed(2)} MB total, images ${img.length} files / ${(img.reduce((n, r) => n + r.size, 0) / 1024 / 1024).toFixed(2)} MB (was 2.20 MB / 13 files / 1.13 MB)`);
+  log(`  <img> in the DOM: ${counted.inDom} | lazy: ${counted.lazy} (was 48 | 26)`);
 }
 
 await browser.close();

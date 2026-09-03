@@ -84,8 +84,12 @@ export async function getCoach(teamId: number): Promise<Coach | null> {
     return coach;
   } catch {
     if (db) {
-      const stale = await db.prepare("SELECT payload FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{ payload: string }>();
-      if (stale) { try { return JSON.parse(stale.payload) as Coach; } catch { /* fall through */ } }
+      // Also read the previous key: bumping it empties the cache, and without
+      // this the page answers 404 whenever the upstream API is unavailable.
+      for (const staleKey of [cacheKey, `apifootball:v2:coach:${teamId}`]) {
+        const stale = await db.prepare("SELECT payload FROM api_cache WHERE cache_key=?").bind(staleKey).first<{ payload: string }>();
+        if (stale) { try { return JSON.parse(stale.payload) as Coach; } catch { /* try the next one */ } }
+      }
     }
     return null;
   }
@@ -123,8 +127,10 @@ export async function getCoachById(coachId: number): Promise<Coach | null> {
     return coach;
   } catch {
     if (db) {
-      const stale = await db.prepare("SELECT payload FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{ payload: string }>();
-      if (stale) { try { return JSON.parse(stale.payload) as Coach; } catch { /* fall through */ } }
+      for (const staleKey of [cacheKey, `apifootball:v1:coachbyid:${coachId}`]) {
+        const stale = await db.prepare("SELECT payload FROM api_cache WHERE cache_key=?").bind(staleKey).first<{ payload: string }>();
+        if (stale) { try { return JSON.parse(stale.payload) as Coach; } catch { /* try the next one */ } }
+      }
     }
     return null;
   }

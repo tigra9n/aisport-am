@@ -20,7 +20,7 @@ export function HeroCarousel({ articles }: { articles: ArticlePreview[] }) {
 
   return <div className="featured-news-stack">
     <article className="main-lead hero-carousel-card" key={item.slug}>
-      <Link className="lead-image" href={`/news/${item.slug}`}><img src={item.image} alt="" /></Link>
+      <Link className="lead-image" href={`/news/${item.slug}`}><img src={item.image} alt="" decoding="async" fetchPriority="high" /></Link>
       <div className="lead-overlay">
         <span className="breaking-label"><i /> Գլխավոր լուր</span>
         <h1><Link href={`/news/${item.slug}`}>{item.title}</Link></h1>
@@ -31,7 +31,7 @@ export function HeroCarousel({ articles }: { articles: ArticlePreview[] }) {
     </article>
     <nav className="headline-thumbnails" aria-label="Գլխավոր թեմաներ">
       {articles.map((article, index) => <button className={index === active ? "active" : ""} type="button" onClick={() => setActive(index)} key={article.slug} title={article.title}>
-        <img src={article.image} alt="" referrerPolicy="no-referrer" /><span>{article.category}</span>
+        <img src={article.image} alt="" referrerPolicy="no-referrer" loading="lazy" decoding="async" /><span>{article.category}</span>
       </button>)}
     </nav>
   </div>;

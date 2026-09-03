@@ -38,7 +38,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
     <div className="page-toolbar">{categories.map((item) => <Link className={item.slug === slug ? "active" : ""} href={`/category/${item.slug}`} key={item.slug}>{item.name}</Link>)}</div>
     {lead ? <>
       <section className="category-hero">
-        <article className="main-lead"><Link className="lead-image" href={`/news/${lead.slug}`}><img src={lead.image} alt="" referrerPolicy="no-referrer" /></Link><div className="lead-overlay"><span className="breaking-label">{category.name}</span><h2><Link href={`/news/${lead.slug}`}>{lead.title}</Link></h2><p>{lead.excerpt}</p></div></article>
+        <article className="main-lead"><Link className="lead-image" href={`/news/${lead.slug}`}><img src={lead.image} alt="" referrerPolicy="no-referrer" decoding="async" fetchPriority="high" /></Link><div className="lead-overlay"><span className="breaking-label">{category.name}</span><h2><Link href={`/news/${lead.slug}`}>{lead.title}</Link></h2><p>{lead.excerpt}</p></div></article>
         <div className="category-list">{articles.slice(1, 4).map((article) => <NewsCard article={article} compact key={article.slug} />)}</div>
       </section>
       <div className="modern-section-head"><div><span>Վերջին հրապարակումները</span><h2>{category.name}․ բոլոր լուրերը</h2></div></div>

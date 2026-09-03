@@ -68,7 +68,14 @@ async function ensureCacheTable(db: D1Database) {
   await cacheTableReady;
 }
 
-async function cachedGet<T>(cacheKey: string, ttlMs: number, url: string, key: string, extract: (json: unknown) => T | null): Promise<T | null> {
+// `legacyKeys` are the cache keys this value used to be stored under. They
+// are only ever read, and only when a live fetch has just failed: bumping a
+// key empties the cache, and without this a page that had been serving a
+// cached profile for a day starts answering 404 the moment the upstream API
+// is out of quota. An older row is the wrong shape in some small way - that
+// is why the key moved - but it is a page instead of a dead end, and the
+// next successful fetch replaces it.
+async function cachedGet<T>(cacheKey: string, ttlMs: number, url: string, key: string, extract: (json: unknown) => T | null, legacyKeys: string[] = []): Promise<T | null> {
   const { env } = await import("cloudflare:workers");
   const db = (env as unknown as { DB?: D1Database }).DB;
 
@@ -92,8 +99,10 @@ async function cachedGet<T>(cacheKey: string, ttlMs: number, url: string, key: s
     return result;
   } catch {
     if (db) {
-      const stale = await db.prepare("SELECT payload FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{ payload: string }>();
-      if (stale) { try { return JSON.parse(stale.payload) as T; } catch { /* fall through */ } }
+      for (const staleKey of [cacheKey, ...legacyKeys]) {
+        const stale = await db.prepare("SELECT payload FROM api_cache WHERE cache_key=?").bind(staleKey).first<{ payload: string }>();
+        if (stale) { try { return JSON.parse(stale.payload) as T; } catch { /* try the next one */ } }
+      }
     }
     return null;
   }
@@ -167,6 +176,7 @@ export async function getPlayerProfile(playerId: number): Promise<PlayerProfile 
         statistics,
       };
     },
+    [`apifootball:v2:playerprofile:${playerId}`],
   );
 }
 
