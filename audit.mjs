@@ -203,7 +203,26 @@ log(`\n=== player names in Armenian ===`);
   }
 }
 
-// ---------- 8. Is the edge serving a stale home page? Articles are being
+// ---------- 8a. Is the live strip actually showing the newest article?
+// This is the check that was missing: every measurement was green while a
+// strip labelled "24/7, updating" sat two hours behind the site.
+log(`\n=== is the live strip current ===`);
+{
+  await p.goto(`${BASE}/?cachebust=${Date.now()}`, { waitUntil: "load", timeout: 60000 }).catch(() => {});
+  await p.waitForTimeout(1500);
+  const m = await p.evaluate(() => {
+    const times = [...document.querySelectorAll(".headline-feed-item time")].map((t) => t.textContent?.trim() ?? "");
+    const firstFeedTitle = document.querySelector(".headline-feed-item h3")?.textContent?.trim() ?? "?";
+    const heroTitle = document.querySelector(".main-lead h1")?.textContent?.trim() ?? "?";
+    const heroMeta = [...document.querySelectorAll(".lead-overlay div span")].map((x) => x.textContent?.trim() ?? "");
+    return { times: times.slice(0, 5), firstFeedTitle: firstFeedTitle.slice(0, 44), heroTitle: heroTitle.slice(0, 44), heroMeta: heroMeta.slice(0, 4) };
+  });
+  log(`  hero:  "${m.heroTitle}"  [${m.heroMeta.join(" ")}]`);
+  log(`  feed:  "${m.firstFeedTitle}"`);
+  log(`  first five times in the feed: ${m.times.join(", ")}`);
+}
+
+// ---------- 8b. Is the edge serving a stale home page? Articles are being
 // published every twenty minutes, but a reader reported seeing nothing new
 // for two hours - and an earlier run read an old share image from "/" while
 // the same page with a cache-busting parameter gave the new one. Ask for
