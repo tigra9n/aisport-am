@@ -12,8 +12,10 @@
 const PROXY_IMAGES = true;
 const PROXY = "https://wsrv.nl/";
 
-// Hosts whose images we serve unchanged: our own, and the API's team badges,
-// which are already small and are requested by dozens of pages at once.
+// Our own URLs are already the right size, and sending the proxy its own
+// output back would be a loop. Everything else is fair game: even a team
+// badge is worth it - api-sports serves them as 88 KB PNGs for a 24px slot,
+// and the proxy returns 9 KB of WebP.
 function isProxyable(src: string): boolean {
   if (!src.startsWith("http://") && !src.startsWith("https://")) return false;
   try {

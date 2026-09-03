@@ -1,3 +1,4 @@
+import { sizedImage } from "../../../lib/image-proxy";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
@@ -35,7 +36,7 @@ export default async function CoachPage({ params }: { params: Promise<{ id: stri
   return <main><SiteHeader /><div className="site-shell inner-page">
     <span className="page-kicker">Մարզչի պրոֆիլ</span>
     <div className="player-header">
-      {coach.photo ? <img src={coach.photo} alt="" className="player-header-photo" loading="lazy" /> : <div className="player-header-photo squad-photo-placeholder">{coach.name.slice(0, 1)}</div>}
+      {coach.photo ? <img src={sizedImage(coach.photo, 128)} alt="" className="player-header-photo" loading="lazy" /> : <div className="player-header-photo squad-photo-placeholder">{coach.name.slice(0, 1)}</div>}
       <div>
         <h1 className="page-title">{coach.name}</h1>
         <div className="player-facts">
@@ -53,7 +54,7 @@ export default async function CoachPage({ params }: { params: Promise<{ id: stri
             <div className="transfer-row" key={index}>
               <span className="transfer-date">{formatDate(entry.start)} – {formatDate(entry.end)}</span>
               <span className="transfer-teams">
-                <span className="team-with-logo">{entry.teamLogo && <img src={entry.teamLogo} alt="" className="team-logo" loading="lazy" />}{entry.team}</span>
+                <span className="team-with-logo">{entry.teamLogo && <img src={sizedImage(entry.teamLogo, 24)} alt="" className="team-logo" loading="lazy" />}{entry.team}</span>
               </span>
             </div>
           ))}

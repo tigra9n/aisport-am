@@ -1,3 +1,4 @@
+import { sizedImage } from "../../../lib/image-proxy";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -37,13 +38,13 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
   return <main><SiteHeader /><div className="site-shell inner-page">
     <span className="page-kicker">Ակումբի կազմ</span>
     <h1 className="page-title team-page-title">
-      {squad.teamLogo && <img src={squad.teamLogo} alt="" className="team-logo-lg" loading="lazy" />}
+      {squad.teamLogo && <img src={sizedImage(squad.teamLogo, 48)} alt="" className="team-logo-lg" loading="lazy" />}
       {squad.teamName}
     </h1>
     <p className="page-intro">Ակումբի ամբողջական խաղացողների կազմը՝ ըստ դիրքի, համարով և տարիքով։ Սեղմիր խաղացողի վրա՝ պրոֆիլն ու տրանսֆերները տեսնելու համար։</p>
     {coach && (
       <Link href={`/coach/${coach.id}`} className="coach-card">
-        {coach.photo ? <img src={coach.photo} alt="" className="squad-photo" loading="lazy" /> : <div className="squad-photo squad-photo-placeholder">{coach.name.slice(0, 1)}</div>}
+        {coach.photo ? <img src={sizedImage(coach.photo, 64)} alt="" className="squad-photo" loading="lazy" /> : <div className="squad-photo squad-photo-placeholder">{coach.name.slice(0, 1)}</div>}
         <div>
           <span>Գլխավոր մարզիչ</span>
           <strong>{coach.name}</strong>
@@ -58,7 +59,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
           <div className="squad-grid">
             {group.players.map((player) => (
               <Link href={`/player/${player.id}`} className="squad-card" key={player.id}>
-                {player.photo ? <img src={player.photo} alt="" className="squad-photo" loading="lazy" /> : <div className="squad-photo squad-photo-placeholder">{player.name.slice(0, 1)}</div>}
+                {player.photo ? <img src={sizedImage(player.photo, 64)} alt="" className="squad-photo" loading="lazy" /> : <div className="squad-photo squad-photo-placeholder">{player.name.slice(0, 1)}</div>}
                 <div>
                   <strong>{player.name}</strong>
                   <span>{player.number ? `#${player.number}` : "—"}{player.age ? ` · ${player.age} տարեկան` : ""}</span>
@@ -74,7 +75,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
           <div className="squad-grid">
             {other.map((player) => (
               <Link href={`/player/${player.id}`} className="squad-card" key={player.id}>
-                {player.photo ? <img src={player.photo} alt="" className="squad-photo" loading="lazy" /> : <div className="squad-photo squad-photo-placeholder">{player.name.slice(0, 1)}</div>}
+                {player.photo ? <img src={sizedImage(player.photo, 64)} alt="" className="squad-photo" loading="lazy" /> : <div className="squad-photo squad-photo-placeholder">{player.name.slice(0, 1)}</div>}
                 <div>
                   <strong>{player.name}</strong>
                   <span>{player.number ? `#${player.number}` : "—"}{player.age ? ` · ${player.age} տարեկան` : ""}</span>

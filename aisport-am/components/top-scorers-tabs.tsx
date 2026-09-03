@@ -1,5 +1,6 @@
 "use client";
 
+import { sizedImage } from "../lib/image-proxy";
 import Link from "next/link";
 import { useState } from "react";
 import { leagues } from "../lib/football";
@@ -33,19 +34,19 @@ export function TopScorersTabs({ tables }: { tables: Record<string, { rows: TopS
                   <td><span className="position-marker">{row.rank}</span></td>
                   <td>
                     <Link href={`/player/${row.id}`} className="player-with-photo team-cell-link">
-                      {row.photo && <img src={row.photo} alt="" className="player-photo" loading="lazy" />}
+                      {row.photo && <img src={sizedImage(row.photo, 32)} alt="" className="player-photo" loading="lazy" />}
                       <strong>{row.name}</strong>
                     </Link>
                   </td>
                   <td>
                     {row.teamId ? (
                       <Link href={`/team/${row.teamId}`} className="team-with-logo team-cell-link">
-                        {row.teamLogo && <img src={row.teamLogo} alt="" className="team-logo" loading="lazy" />}
+                        {row.teamLogo && <img src={sizedImage(row.teamLogo, 24)} alt="" className="team-logo" loading="lazy" />}
                         {row.team}
                       </Link>
                     ) : (
                       <span className="team-with-logo">
-                        {row.teamLogo && <img src={row.teamLogo} alt="" className="team-logo" loading="lazy" />}
+                        {row.teamLogo && <img src={sizedImage(row.teamLogo, 24)} alt="" className="team-logo" loading="lazy" />}
                         {row.team}
                       </span>
                     )}

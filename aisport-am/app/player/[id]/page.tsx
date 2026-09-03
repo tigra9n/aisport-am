@@ -1,3 +1,4 @@
+import { sizedImage } from "../../../lib/image-proxy";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
@@ -40,7 +41,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
   return <main><SiteHeader /><div className="site-shell inner-page">
     <span className="page-kicker">Խաղացողի պրոֆիլ</span>
     <div className="player-header">
-      {profile.photo ? <img src={profile.photo} alt="" className="player-header-photo" loading="lazy" /> : <div className="player-header-photo squad-photo-placeholder">{profile.name.slice(0, 1)}</div>}
+      {profile.photo ? <img src={sizedImage(profile.photo, 128)} alt="" className="player-header-photo" loading="lazy" /> : <div className="player-header-photo squad-photo-placeholder">{profile.name.slice(0, 1)}</div>}
       <div>
         <h1 className="page-title">{profile.name}</h1>
         <div className="player-facts">
@@ -68,8 +69,8 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
             <tbody>
               {profile.statistics.map((row, index) => (
                 <tr key={index}>
-                  <td><span className="team-with-logo">{row.leagueLogo && <img src={row.leagueLogo} alt="" className="team-logo" loading="lazy" />}{row.league}</span></td>
-                  <td><span className="team-with-logo">{row.teamLogo && <img src={row.teamLogo} alt="" className="team-logo" loading="lazy" />}{row.team}</span></td>
+                  <td><span className="team-with-logo">{row.leagueLogo && <img src={sizedImage(row.leagueLogo, 24)} alt="" className="team-logo" loading="lazy" />}{row.league}</span></td>
+                  <td><span className="team-with-logo">{row.teamLogo && <img src={sizedImage(row.teamLogo, 24)} alt="" className="team-logo" loading="lazy" />}{row.team}</span></td>
                   <td>{row.appearances}</td>
                   <td>{row.minutes}</td>
                   <td>{row.goals}</td>
@@ -105,9 +106,9 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
             <div className="transfer-row" key={index}>
               <span className="transfer-date">{formatDateHy(t.date)}</span>
               <span className="transfer-teams">
-                <span className="team-with-logo">{t.teamOutLogo && <img src={t.teamOutLogo} alt="" className="team-logo" loading="lazy" />}{t.teamOut}</span>
+                <span className="team-with-logo">{t.teamOutLogo && <img src={sizedImage(t.teamOutLogo, 24)} alt="" className="team-logo" loading="lazy" />}{t.teamOut}</span>
                 <span className="transfer-arrow">→</span>
-                <span className="team-with-logo">{t.teamInLogo && <img src={t.teamInLogo} alt="" className="team-logo" loading="lazy" />}{t.teamIn}</span>
+                <span className="team-with-logo">{t.teamInLogo && <img src={sizedImage(t.teamInLogo, 24)} alt="" className="team-logo" loading="lazy" />}{t.teamIn}</span>
               </span>
               {t.type && <span className="transfer-type">{t.type}</span>}
             </div>

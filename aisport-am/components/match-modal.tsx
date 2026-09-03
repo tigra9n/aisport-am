@@ -1,5 +1,6 @@
 "use client";
 
+import { sizedImage } from "../lib/image-proxy";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -214,18 +215,18 @@ export function MatchModal() {
             <h2 className="match-details-title match-modal-title">
               {details.match.homeId ? (
                 <Link href={`/team/${details.match.homeId}`} className="team-with-logo title-team" onClick={close}>
-                  {details.match.homeLogo && <img src={details.match.homeLogo} alt="" className="team-logo-lg" loading="lazy" />}{details.match.home}
+                  {details.match.homeLogo && <img src={sizedImage(details.match.homeLogo, 48)} alt="" className="team-logo-lg" loading="lazy" />}{details.match.home}
                 </Link>
               ) : (
-                <span className="team-with-logo title-team">{details.match.homeLogo && <img src={details.match.homeLogo} alt="" className="team-logo-lg" loading="lazy" />}{details.match.home}</span>
+                <span className="team-with-logo title-team">{details.match.homeLogo && <img src={sizedImage(details.match.homeLogo, 48)} alt="" className="team-logo-lg" loading="lazy" />}{details.match.home}</span>
               )}
               <b>{details.match.homeScore ?? "–"} : {details.match.awayScore ?? "–"}</b>
               {details.match.awayId ? (
                 <Link href={`/team/${details.match.awayId}`} className="team-with-logo title-team" onClick={close}>
-                  {details.match.awayLogo && <img src={details.match.awayLogo} alt="" className="team-logo-lg" loading="lazy" />}{details.match.away}
+                  {details.match.awayLogo && <img src={sizedImage(details.match.awayLogo, 48)} alt="" className="team-logo-lg" loading="lazy" />}{details.match.away}
                 </Link>
               ) : (
-                <span className="team-with-logo title-team">{details.match.awayLogo && <img src={details.match.awayLogo} alt="" className="team-logo-lg" loading="lazy" />}{details.match.away}</span>
+                <span className="team-with-logo title-team">{details.match.awayLogo && <img src={sizedImage(details.match.awayLogo, 48)} alt="" className="team-logo-lg" loading="lazy" />}{details.match.away}</span>
               )}
             </h2>
             <div className="match-facts">
@@ -408,11 +409,11 @@ export function MatchModal() {
                         <td><span className="position-marker">{row.position}</span></td>
                         <td>{row.teamId ? (
                           <Link href={`/team/${row.teamId}`} className="team-cell-link" onClick={close}>
-                            {row.teamLogo ? <img src={row.teamLogo} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}
+                            {row.teamLogo ? <img src={sizedImage(row.teamLogo, 24)} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}
                             <strong>{row.team}</strong>
                           </Link>
                         ) : (
-                          <span className="team-with-logo">{row.teamLogo ? <img src={row.teamLogo} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}<strong>{row.team}</strong></span>
+                          <span className="team-with-logo">{row.teamLogo ? <img src={sizedImage(row.teamLogo, 24)} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}<strong>{row.team}</strong></span>
                         )}</td>
                         <td>{row.played}</td>
                         <td>{row.goalDifference > 0 ? `+${row.goalDifference}` : row.goalDifference}</td>
@@ -432,11 +433,11 @@ export function MatchModal() {
                     {details.topScorers.slice(0, 10).map((row) => (
                       <tr key={row.name}>
                         <td><span className="position-marker">{row.rank}</span></td>
-                        <td><span className="player-with-photo"><Link href={`/player/${row.id}`} className="team-cell-link" onClick={close}>{row.photo && <img src={row.photo} alt="" className="player-photo" loading="lazy" />}<strong>{row.name}</strong></Link></span></td>
+                        <td><span className="player-with-photo"><Link href={`/player/${row.id}`} className="team-cell-link" onClick={close}>{row.photo && <img src={sizedImage(row.photo, 32)} alt="" className="player-photo" loading="lazy" />}<strong>{row.name}</strong></Link></span></td>
                         <td>{row.teamId ? (
-                          <Link href={`/team/${row.teamId}`} className="team-with-logo team-cell-link" onClick={close}>{row.teamLogo && <img src={row.teamLogo} alt="" className="team-logo" loading="lazy" />}{row.team}</Link>
+                          <Link href={`/team/${row.teamId}`} className="team-with-logo team-cell-link" onClick={close}>{row.teamLogo && <img src={sizedImage(row.teamLogo, 24)} alt="" className="team-logo" loading="lazy" />}{row.team}</Link>
                         ) : (
-                          <span className="team-with-logo">{row.teamLogo && <img src={row.teamLogo} alt="" className="team-logo" loading="lazy" />}{row.team}</span>
+                          <span className="team-with-logo">{row.teamLogo && <img src={sizedImage(row.teamLogo, 24)} alt="" className="team-logo" loading="lazy" />}{row.team}</span>
                         )}</td>
                         <td><b>{row.goals}</b></td>
                       </tr>
