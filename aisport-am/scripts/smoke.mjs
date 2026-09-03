@@ -117,6 +117,17 @@ await expectStatus("news feed api", "/api/articles?limit=1", 200);
 await expectStatus("missing article", "/news/this-slug-does-not-exist-smoke-test", 404);
 await expectStatus("missing opinion", "/opinions/this-slug-does-not-exist-smoke", 404);
 
+// The placeholder ad boxes ("Վերին գովազդային տարածք") are switched off by
+// ADS_ENABLED in components/ad-spaces.tsx. A reader met them above the
+// first headline and the site read as unfinished, so if that flag is ever
+// flipped back by accident this should fail rather than ship.
+{
+  const { body } = await get("/");
+  const placeholder = /գովազդային տարածք/i.test(body);
+  checked.push(`${placeholder ? "FAIL" : "ok  "}  ${"no ad placeholders".padEnd(22)} /`);
+  if (placeholder) failures.push("home (/): the empty ad placeholder boxes are being rendered");
+}
+
 console.log(checked.join("\n"));
 
 if (failures.length) {
