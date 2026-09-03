@@ -199,6 +199,39 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      - name: Does any article contradict itself between its title and its SEO title
+        run: |
+          npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
+          echo "=== the Kone article, in full ===" > titles.txt
+          npx wrangler d1 execute aisport-db --remote --json --command             "SELECT slug, title, seo_title, excerpt, substr(content,1,300) AS body FROM articles WHERE slug LIKE '%kone%' OR title LIKE '%Կոնե%' ORDER BY published_at DESC LIMIT 5"             > t1.json 2>&1 || true
+          # And whether any other article's SEO title says something the
+          # headline does not - the two are allowed to differ in wording,
+          # never in what they claim.
+          npx wrangler d1 execute aisport-db --remote --json --command             "SELECT slug, title FROM articles WHERE published_at > datetime('now','-3 days') AND title LIKE '%. %' LIMIT 25"             > t2.json 2>&1 || true
+          node -e "
+            const fs=require('fs');
+            const rows=(f)=>{try{const raw=fs.readFileSync(f,'utf8');const j=JSON.parse(raw.slice(raw.indexOf('[')));return j[0]?.results??[]}catch(e){return []}};
+            const kone=rows('t1.json');
+            console.log('  rows matching: '+kone.length);
+            if (!kone.length) console.log('  raw: '+fs.readFileSync('t1.json','utf8').slice(0,300).replace(/\n/g,' '));
+            for (const r of kone) {
+              console.log('  slug:      '+r.slug);
+              console.log('  title:     '+r.title);
+              console.log('  seo_title: '+(r.seo_title??'(none)'));
+              console.log('  excerpt:   '+(r.excerpt??'').slice(0,160));
+              console.log('  meta_desc: '+(r.meta_description??'(none)').slice(0,160));
+              console.log('  body:      '+(r.body??'').replace(/\n/g,' ').slice(0,300));
+            }
+            const twoSentence=rows('t2.json');
+            console.log('');
+            console.log('  titles of the last 3 days carrying a second sentence: '+twoSentence.length);
+            for (const r of twoSentence.slice(0,12)) console.log('    '+r.title);
+          " >> titles.txt 2>&1
+          cat titles.txt
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Who does API-Football say manages these clubs
         env:
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
@@ -239,8 +272,12 @@ jobs:
             echo ""
             echo "=== page weight and 360px overflow ==="
             node page-weight.mjs 2>&1 || echo "  (page-weight.mjs exited non-zero)"
+            echo ""
+            echo "=== core web vitals (360px, CPU throttled 4x) ==="
+            node vitals.mjs 2>&1 || echo "  (vitals.mjs exited non-zero)"
           } > weight.txt
           cat weight.txt
+          cat titles.txt >> add-source-result.txt 2>/dev/null || true
           cat coaches.txt >> add-source-result.txt 2>/dev/null || true
           cat weight.txt >> add-source-result.txt 2>/dev/null || true
           cat imagelog.txt >> add-source-result.txt 2>/dev/null || true
@@ -263,8 +300,15 @@ jobs:
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
+          # Commit the results onto an orphan tree that holds nothing else.
+          # Pushing the whole branch fails the moment this workflow file
+          # itself has changed on it: GitHub refuses to let an Actions token
+          # create or update a workflow file, and the audit run is then
+          # marked failed even though every measurement succeeded.
+          git checkout -q --orphan audit-result
+          git reset -q
           git add -f add-source-result.txt audit aisport-am/public/fb-profile.png aisport-am/public/fb-profile-alt.png aisport-am/public/fb-cover.png
-          git commit -m "audit result [skip ci]" || true
+          git commit -q -m "audit result [skip ci]" || true
           git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
