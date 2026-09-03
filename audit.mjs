@@ -35,7 +35,8 @@ for (const [name, path] of [["home", "/"], ["article", articlePath], ["league", 
   let imageStatus = "none";
   if (image) {
     const r = await page.request.get(image.startsWith("http") ? image : BASE + image, { timeout: 45000 }).catch(() => null);
-    imageStatus = r ? `${r.status()} ${(r.headers()["content-type"] ?? "?").split(";")[0]}` : "unreachable";
+    const body = r ? await r.body().catch(() => null) : null;
+    imageStatus = r ? `${r.status()} ${(r.headers()["content-type"] ?? "?").split(";")[0]} ${body ? Math.round(body.length / 1024) + "KB" : "?"}` : "unreachable";
   }
   log(`  ${name} (${path})`);
   log(`    og:title       ${meta("og:title") ?? "MISSING"}`);
