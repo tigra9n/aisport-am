@@ -9,6 +9,17 @@
 import { chromium } from "playwright";
 
 const BASE = process.env.WEIGH_BASE_URL ?? "https://aifootball.am";
+// Discovered from the live site so the dynamic routes are measured on real
+// content rather than a hardcoded slug that may have scrolled away.
+async function firstLink(path, pattern) {
+  try {
+    const html = await (await fetch(`${BASE}${path}`)).text();
+    return html.match(pattern)?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 const PAGES = [
   ["home", "/"],
   ["search", "/search?q=%D4%B2%D5%A1%D6%80%D5%BD%D5%A5%D5%AC%D5%B8%D5%B6%D5%A1"],
@@ -17,7 +28,20 @@ const PAGES = [
   ["live", "/live"],
   ["standings", "/standings"],
   ["topscorers", "/topscorers"],
-];
+  ["article", await firstLink("/", /\/news\/[a-z0-9-]+/)],
+  ["opinion", await firstLink("/opinions", /\/opinions\/[a-z0-9-]+/)],
+  ["team", await firstLink("/standings", /\/team\/\d+/)],
+  ["player", await firstLink("/topscorers", /\/player\/\d+/)],
+  ["match", await firstLink("/live", /\/live\/match\/[a-z0-9-]+/)],
+  ["armenia", "/armenia"],
+  ["opinions", "/opinions"],
+  ["podcasts", "/podcasts"],
+  ["about", "/about"],
+  ["contact", "/contact"],
+  ["privacy", "/privacy"],
+  ["terms", "/terms"],
+  ["404", "/this-page-does-not-exist-12345"],
+].filter(([, path]) => path);
 
 const kb = (bytes) => `${(bytes / 1024).toFixed(0)}KB`;
 

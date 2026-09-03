@@ -239,6 +239,9 @@ jobs:
             echo ""
             echo "=== page weight and 360px overflow ==="
             node page-weight.mjs 2>&1 || echo "  (page-weight.mjs exited non-zero)"
+            echo ""
+            echo "=== core web vitals (360px, CPU throttled 4x) ==="
+            node vitals.mjs 2>&1 || echo "  (vitals.mjs exited non-zero)"
           } > weight.txt
           cat weight.txt
           cat coaches.txt >> add-source-result.txt 2>/dev/null || true
