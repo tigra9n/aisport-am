@@ -73,7 +73,7 @@ export async function getCoach(teamId: number): Promise<Coach | null> {
   if (!key) return null;
 
   const db = (env as unknown as { DB?: D1Database }).DB;
-  const cacheKey = `apifootball:v3:coach:${teamId}`;
+  const cacheKey = `apifootball:v4:coach:${teamId}`;
 
   if (db) {
     await ensureCacheTable(db);
@@ -87,9 +87,17 @@ export async function getCoach(teamId: number): Promise<Coach | null> {
     const response = await fetchApi(`https://v3.football.api-sports.io/coachs?team=${teamId}`, key);
     if (!response) throw new Error("unreachable");
     const data = await response.json() as { response?: ApiFootballCoach[] };
-    // The endpoint returns every coach who's managed the team; the current
-    // one is whichever entry has no end date on their stint with this team.
-    const current = data.response?.find((c) => c.career.some((stint) => stint.team.id === teamId && !stint.end)) ?? data.response?.[0];
+    // The endpoint returns every coach who has managed the team, and more
+    // than one of them can be missing an end date: Liverpool comes back
+    // with Slot (2024), Iraola (2026) and Bertoldi (2017) all still open,
+    // and taking the first one named Slot as the current manager. So among
+    // the open stints, the current manager is the one who started last.
+    const openStints = (data.response ?? []).flatMap((coach) => {
+      const stint = coach.career.find((s) => s.team.id === teamId && !s.end);
+      return stint ? [{ coach, start: stint.start ?? "" }] : [];
+    });
+    openStints.sort((a, b) => b.start.localeCompare(a.start));
+    const current = openStints[0]?.coach ?? data.response?.[0];
     if (!current) throw new Error("empty");
     const coach = mapCoach(current);
     if (db) {
@@ -100,7 +108,7 @@ export async function getCoach(teamId: number): Promise<Coach | null> {
     if (db) {
       // Also read the previous key: bumping it empties the cache, and without
       // this the page answers 404 whenever the upstream API is unavailable.
-      for (const staleKey of [cacheKey, `apifootball:v2:coach:${teamId}`]) {
+      for (const staleKey of [cacheKey, `apifootball:v3:coach:${teamId}`, `apifootball:v2:coach:${teamId}`]) {
         const stale = await db.prepare("SELECT payload FROM api_cache WHERE cache_key=?").bind(staleKey).first<{ payload: string }>();
         if (stale) { try { return JSON.parse(stale.payload) as Coach; } catch { /* try the next one */ } }
       }
