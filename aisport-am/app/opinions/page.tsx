@@ -4,6 +4,9 @@ import { SiteHeader } from "../../components/site-header";
 import { getOpinions, OPINION_CATEGORIES } from "../../lib/opinions";
 import Link from "next/link";
 
+import type { Metadata } from "next";
+export const metadata: Metadata = { alternates: { canonical: "https://aifootball.am/opinions" } };
+
 export const dynamic = "force-dynamic";
 
 export default async function OpinionsPage({ searchParams }: { searchParams: Promise<{ category?: string }> }) {

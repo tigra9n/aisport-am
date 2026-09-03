@@ -11,6 +11,12 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Որոնում | AIFootball.am",
   description: "Փնտրիր թիմ, մարզիկ կամ մրցաշար AIFootball.am-ի հրապարակած նյութերում։",
+  // A search result page is not a page of the site; it is a view of it.
+  // Indexing one URL per query fills the index with near-identical pages
+  // and, worse, competes with the articles themselves. follow is kept so
+  // the crawler still uses these pages as a route to the articles.
+  robots: { index: false, follow: true },
+  alternates: { canonical: "https://aifootball.am/search" },
 };
 
 export default async function SearchPage({ searchParams }: { searchParams: Promise<{ q?: string; category?: string }> }) {

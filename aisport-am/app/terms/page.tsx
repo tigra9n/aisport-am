@@ -3,6 +3,7 @@ import { SiteFooter } from "../../components/site-footer";
 import { SiteHeader } from "../../components/site-header";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "https://aifootball.am/terms" },
   title: "Օգտագործման կանոններ — AIFootball.am",
   description: "AIFootball.am-ի օգտագործման կանոնները և պայմանները։",
 };

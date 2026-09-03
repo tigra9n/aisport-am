@@ -3,6 +3,7 @@ import { SiteFooter } from "../../components/site-footer";
 import { SiteHeader } from "../../components/site-header";
 
 export const metadata: Metadata = {
+  alternates: { canonical: "https://aifootball.am/privacy" },
   title: "Գաղտնիության քաղաքականություն — AIFootball.am",
   description: "AIFootball.am-ի գաղտնիության քաղաքականությունը՝ տվյալների հավաքման, օգտագործման և պահպանման վերաբերյալ։",
 };

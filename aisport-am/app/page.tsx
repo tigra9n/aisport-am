@@ -17,6 +17,12 @@ import { getLiveMatches } from "../lib/live-football-server";
 import { getPublishedArticles, getArticlesByCategory, toPreview } from "../lib/articles";
 import { getOpinions, type Opinion } from "../lib/opinions";
 
+import type { Metadata } from "next";
+
+// Without this the old domain's home page and this one look to a crawler
+// like two unrelated copies of the same thing.
+export const metadata: Metadata = { alternates: { canonical: "https://aifootball.am/" } };
+
 // The live-score request must run in the production Worker. Without this,
 // the page can be prerendered at deploy time and never reach the live API.
 export const dynamic = "force-dynamic";

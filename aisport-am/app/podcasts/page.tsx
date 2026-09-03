@@ -2,6 +2,9 @@ import { PodcastPlayer, type PodcastEpisode } from "../../components/podcast-pla
 import { SiteFooter } from "../../components/site-footer";
 import { SiteHeader } from "../../components/site-header";
 
+import type { Metadata } from "next";
+export const metadata: Metadata = { alternates: { canonical: "https://aifootball.am/podcasts" } };
+
 const episodes: PodcastEpisode[] = [
   { id: "today", date: "Այսօր · 21 օգոստոսի", title: "Օրվա խաղերը և ամենակարևոր մարզական թեմաները", summary: "AIFootball-ի 10-րոպեանոց արագ ամփոփումը՝ գլխավոր լուրը, կարևոր թվերն ու առաջիկա խաղերը մեկ թողարկման մեջ։", duration: "10:00" },
   { id: "aug-20", date: "20 օգոստոսի", title: "Եվրոպական գավաթների երեկոն՝ մեկ փոդքաստում", summary: "Գլխավոր արդյունքները, շրջադարձային պահերը և հայկական ակումբների ելույթները։", duration: "09:42" },
