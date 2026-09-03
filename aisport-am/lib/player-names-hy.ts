@@ -43,11 +43,11 @@ const playerNames: Record<string, string> = {
   "moise kean": "Մոիզ Կին", "mateo retegui": "Մատեո Ռետեգի",
   // Bundesliga
   "florian wirtz": "Ֆլորիան Վիրց", "jamal musiala": "Ջամալ Մուսիալա",
-  "harry kane bayern": "Հարրի Քեյն", "serge gnabry": "Սերժ Գնաբրի",
+  "serge gnabry": "Սերժ Գնաբրի",
   "leroy sane": "Լերոյ Սանե", "michael olise": "Միքայել Օլիզե",
   "victor boniface": "Վիկտոր Բոնիֆաս", "patrik schick": "Պատրիկ Շիկ",
   "omar marmoush": "Օմար Մարմուշ", "loic bade": "Լոիկ Բադե",
-  "joshua kimmich": "Յոշուա Կիմմիխ", "jamal musiala bayern": "Ջամալ Մուսիալա",
+  "joshua kimmich": "Յոշուա Կիմմիխ",
   // Ligue 1
   "ousmane dembele": "Ուսման Դեմբելե", "bradley barcola": "Բրեդլի Բարկոլա",
   "warren zaire-emery": "Ուորեն Զաիր-Էմերի", "mason greenwood": "Մեյսոն Գրինվուդ",
@@ -58,6 +58,53 @@ const playerNames: Record<string, string> = {
   "neymar": "Նեյմար", "karim benzema": "Կարիմ Բենզեմա",
   "sadio mane": "Սադիո Մանե", "riyad mahrez": "Ռիյադ Մահրեզ",
   "luis suarez": "Լուիս Սուարես", "sergio busquets": "Սերխիո Բուսկետս",
+
+  // Added after measuring: only seven of the twenty names in the
+  // top-scorer table were coming out in Armenian. These are the ones the
+  // table was actually showing in Latin, plus the rest of each league's
+  // regular scorers, so the table reads in one language rather than two.
+  "joao pedro": "Ժոաո Պեդրու", "danny welbeck": "Դենի Ուելբեք",
+  "jack hinshelwood": "Ջեք Հինշելվուդ", "cody gakpo": "Կոդի Գակպո",
+  "josko gvardiol": "Յոշկո Գվարդիոլ", "morgan rogers": "Մորգան Ռոջերս",
+  "keane lewis-potter": "Քին Լյուիս-Փոթեր", "wilson isidor": "Ուիլսոն Իսիդոր",
+  "matheus cunha": "Մատեուս Կունյա", "eberechi eze": "Էբերեչի Էզե",
+  "james maddison": "Ջեյմս Մեդիսոն",
+  "hugo ekitike": "Հյուգո Էկիտիկե", "igor thiago": "Իգոր Թիագու",
+  "richarlison": "Ռիշարլիսոն", "raul jimenez": "Ռաուլ Խիմենես",
+  "jorgen strand larsen": "Յորգեն Ստրանդ Լարսեն", "beto": "Բետո",
+  "kevin schade": "Քևին Շադե", "brennan johnson": "Բրենան Ջոնսոն",
+  "antoine semenyo": "Անտուան Սեմենյո", "justin kluivert": "Ջասթին Կլյուիվերտ",
+  "mikel oyarzabal": "Միկել Օյարսաբալ", "alexander sorloth": "Ալեքսանդեր Սյորլոթ",
+  "ayoze perez": "Այոզե Պերես", "kike garcia": "Կիկե Գարսիա",
+  "budimir": "Բուդիմիր", "ante budimir": "Անտե Բուդիմիր",
+  "borja mayoral": "Բորխա Մայորալ", "samu aghehowa": "Սամու Աղեհովա",
+  "vedat muriqi": "Վեդատ Մուրիկի", "sandro ramirez": "Սանդրո Ռամիրես",
+  "gabriel jesus": "Գաբրիել Ժեզուս", "arda guler": "Արդա Գյուլեր",
+  "nico williams": "Նիկո Ուիլյամս", "inaki williams": "Ինյակի Ուիլյամս",
+  "mikel merino": "Միկել Մերինո", "martin zubimendi": "Մարտին Սուբիմենդի",
+  "alvaro morata": "Ալվարո Մորատա", "iago aspas": "Յագո Ասպաս",
+  // Serie A
+  "ademola lookman": "Ադեմոլա Լուքման", "mattia zaccagni": "Մատտիա Զակկանյի",
+  "gianluca scamacca": "Ջանլուկա Սկամակկա", "andrea belotti": "Անդրեա Բելոտտի",
+  "domenico berardi": "Դոմենիկո Բերարդի",
+  "santiago gimenez": "Սանտյագո Խիմենես", "artem dovbyk": "Արտեմ Դովբիկ",
+  "riccardo orsolini": "Ռիկարդո Օրսոլինի", "lorenzo lucca": "Լորենցո Լուկկա",
+  "federico chiesa": "Ֆեդերիկո Կիեզա", "nicolo zaniolo": "Նիկոլո Զանյոլո",
+  // Bundesliga
+  "serhou guirassy": "Սերու Գիրասսի", "deniz undav": "Դենիզ Ունդավ",
+  "tim kleindienst": "Թիմ Կլայնդինստ", "ermedin demirovic": "Էրմեդին Դեմիրովիչ",
+  "jonathan burkardt": "Ջոնաթան Բուրկարդտ", "maximilian beier": "Մաքսիմիլիան Բայեր",
+  "nick woltemade": "Նիկ Վոլտեմադե", "karim adeyemi": "Քարիմ Ադեյեմի",
+  // Ligue 1
+  "arnaud kalimuendo": "Առնո Կալիմուենդո", "gaetan perrin": "Գաետան Պերրեն",
+  "amine gouiri": "Ամին Գուիրի", "goncalo ramos": "Գոնսալու Ռամուշ",
+  "achraf hakimi": "Աշրաֆ Հակիմի", "marquinhos": "Մարկինյոս",
+  "vitinha": "Վիտինյա", "nuno mendes": "Նունու Մենդեշ",
+  // Goalkeepers and defenders that come up often
+  "alisson": "Ալիսոն", "ederson": "Էդերսոն", "gianluigi donnarumma": "Ջանլուիջի Դոննարումմա",
+  "ruben dias": "Ռուբեն Դիաշ", "trent alexander-arnold": "Թրենթ Ալեքսանդր-Առնոլդ",
+  "antonio rudiger": "Անտոնիո Ռյուդիգեր",
+  "david raya": "Դեյվիդ Ռայա", "andre onana": "Անդրե Օնանա",
   // Armenians
   "henrikh mkhitaryan": "Հենրիխ Մխիթարյան", "eduard spertsyan": "Էդուարդ Սպերցյան",
   "grant-leon ranos": "Գրանտ-Լեոն Ռանոս", "tigran barseghyan": "Տիգրան Բարսեղյան",
