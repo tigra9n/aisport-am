@@ -84,6 +84,21 @@ export default async function Home() {
     ...articleRows.map((a) => ({ publishedAt: a.publishedAt, preview: toPreview(a) })),
     ...opinionRowsForFeed.map((o) => ({ publishedAt: o.publishedAt, preview: opinionToPreview(o) })),
   ].sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : a.publishedAt > b.publishedAt ? -1 : 0));
+  // The headline feed starts from the newest article, full stop.
+  //
+  // It briefly did not. An audit counted the same headline twice on the
+  // home page - once in the hero carousel, once at the top of the feed -
+  // and I removed the hero's six from the feed to make that number zero.
+  // But the carousel shows one story at a time, and six articles at twenty
+  // minutes apart is two hours, so a strip labelled "24/7, updating" began
+  // two hours in the past. Tigran noticed within the hour: the site looked
+  // like it had stopped publishing.
+  //
+  // The overlap was the design, not a defect - a lead story above a live
+  // strip is how a news page works. The by-sport sections below still skip
+  // what has already appeared, because there the repetition is real: the
+  // same four articles listed twice on one screen with nothing to
+  // distinguish them.
   const headlineStream = combinedFeed.slice(0, 9).map((entry) => entry.preview);
   // Infinite-scroll pagination (HeadlineFeed's "load more") only continues
   // from the articles table via /api/articles?offset=N, so the starting

@@ -25,7 +25,7 @@ const matchId = (homeHtml.match(/af-\d{5,}/) ?? [])[0];
 
 // ---------- 1. Sharing cards. This is what a Telegram or Facebook post shows.
 log(`=== sharing cards (Open Graph) ===`);
-for (const [name, path] of [["home", "/"], ["article", articlePath], ["league", "/league/PL"], ["opinion", opinionPath]]) {
+for (const [name, path] of [["home", `/?cachebust=${Date.now()}`], ["article", articlePath], ["league", "/league/PL"], ["opinion", opinionPath]]) {
   const res = await page.request.get(BASE + path, { timeout: 45000 }).catch(() => null);
   if (!res || !res.ok()) { log(`  ${name}: HTTP ${res ? res.status() : "unreachable"}`); continue; }
   const html = await res.text();
@@ -99,8 +99,12 @@ log(`  ${await p.evaluate(() => {
 log(`\n=== duplicate coverage on the home page ===`);
 await p.goto(BASE, { waitUntil: "load", timeout: 60000 }).catch(() => {});
 await p.waitForTimeout(1500);
+// Only within the by-sport grid. The hero carousel repeating the top story
+// in the headline strip is the design of a news page, not a defect - I
+// "fixed" that once and pushed the live feed two hours into the past.
 const titles = await p.evaluate(() =>
-  [...document.querySelectorAll("h1, h2, h3, h4")].map((h) => h.textContent?.trim() ?? "").filter((t) => t.length > 25));
+  [...document.querySelectorAll(".sport-news-grid h4, .sport-news-grid h3")]
+    .map((h) => h.textContent?.trim() ?? "").filter((t) => t.length > 25));
 const words = (t) => new Set(t.toLowerCase().split(/\s+/).filter((w) => w.length > 3));
 let pairs = 0;
 for (let i = 0; i < titles.length; i++) {
@@ -112,6 +116,145 @@ for (let i = 0; i < titles.length; i++) {
   }
 }
 if (!pairs) log(`  no near-duplicate headlines among ${titles.length} on the page`);
+
+// ---------- 6. Light mode. The league picker was invisible there - a
+// hard-coded dark background under theme-coloured text - and nothing had
+// ever checked the light theme at all. Walk the visible text and report
+// anything whose contrast against its own background is too low to read.
+log(`\n=== light mode contrast ===`);
+{
+  const html = await (await page.request.get(BASE + "/", { timeout: 45000 })).text();
+  const href = (html.match(/href="(\/assets\/index-[^"]+\.css)"/) ?? [])[1];
+  if (href) {
+    const css = await (await page.request.get(BASE + href, { timeout: 45000 })).text();
+    log(`  stylesheet ${href}: light-theme green present: ${css.includes("#0e6c3e") ? "yes" : "NO - the deploy did not carry it"}`);
+  }
+}
+for (const [theme, name, path] of [
+  ["dark", "home", "/"], ["dark", "article", articlePath], ["dark", "live", "/live"], ["dark", "search", "/search?q=%D5%84%D5%A5%D5%BD%D5%BD%D5%AB"],
+  ["light", "home", "/"], ["light", "standings", "/standings"], ["light", "article", articlePath], ["light", "live", "/live"],
+]) {
+  await p.goto(BASE + path, { waitUntil: "load", timeout: 60000 }).catch(() => {});
+  await p.evaluate((t) => {
+    document.documentElement.setAttribute("data-theme", t);
+    try { localStorage.setItem("theme", t); } catch { /* ignore */ }
+  }, theme);
+  await p.waitForTimeout(900);
+  const bad = await p.evaluate(() => {
+    const parse = (c) => (c.match(/[\d.]+/g) ?? []).map(Number);
+    const lum = ([r, g, b]) => {
+      const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+      return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+    };
+    const backdrop = (el) => {
+      for (let node = el; node; node = node.parentElement) {
+        const bg = getComputedStyle(node).backgroundColor;
+        const parts = parse(bg);
+        if (parts.length >= 3 && (parts[3] === undefined || parts[3] > 0.5)) return parts;
+      }
+      return [255, 255, 255];
+    };
+    const out = [];
+    for (const el of document.querySelectorAll("body *")) {
+      const text = (el.textContent ?? "").trim();
+      if (!text || el.children.length > 0) continue;
+      const box = el.getBoundingClientRect();
+      if (box.width < 8 || box.height < 8) continue;
+      const style = getComputedStyle(el);
+      if (style.visibility === "hidden" || style.opacity === "0") continue;
+      const fg = parse(style.color);
+      if (fg.length < 3) continue;
+      const l1 = lum(fg) + 0.05;
+      const l2 = lum(backdrop(el)) + 0.05;
+      const ratio = l1 > l2 ? l1 / l2 : l2 / l1;
+      if (ratio < 3) out.push(`${ratio.toFixed(1)}:1  <${el.tagName.toLowerCase()}${el.className ? "." + String(el.className).split(" ")[0] : ""}> "${text.slice(0, 26)}"  color ${style.color} on ${backdrop(el).join(",")}`);
+    }
+    // The select is not caught by the walk above: its text is drawn by the
+    // browser, not by a child node.
+    for (const el of document.querySelectorAll("select")) {
+      const style = getComputedStyle(el);
+      const fg = parse(style.color); const bg = parse(style.backgroundColor);
+      if (fg.length < 3 || bg.length < 3) continue;
+      const l1 = lum(fg) + 0.05; const l2 = lum(bg) + 0.05;
+      const ratio = l1 > l2 ? l1 / l2 : l2 / l1;
+      if (ratio < 3) out.push(`${ratio.toFixed(1)}:1  <select.${String(el.className).split(" ")[0]}>`);
+    }
+    return [...new Set(out)];
+  });
+  log(`  ${theme} / ${name}: ${bad.length ? `${bad.length} unreadable` : "everything readable"}`);
+  for (const b of bad.slice(0, 6)) log(`    ${b}`);
+}
+
+// ---------- 7. How many player names actually come out in Armenian? The
+// table holds about ninety, everything else is left as the API sent it, so
+// the honest number is the share of the names a reader actually meets.
+log(`\n=== player names in Armenian ===`);
+{
+  const isArmenian = (t) => /[\u0530-\u058F]/.test(t);
+  for (const [name, path, selector] of [
+    ["top scorers", "/topscorers", ".topscorers-table tbody tr td:nth-child(2)"],
+    ["squad (Man City)", "/team/50", ".squad-card strong"],
+    ["squad (Ararat-Armenia)", "/team/3838", ".squad-card strong"],
+  ]) {
+    await p.goto(BASE + path, { waitUntil: "load", timeout: 60000 }).catch(() => {});
+    await p.waitForTimeout(1500);
+    const names = await p.evaluate((sel) =>
+      [...document.querySelectorAll(sel)].map((n) => n.textContent?.trim() ?? "").filter(Boolean), selector);
+    const hy = names.filter(isArmenian);
+    log(`  ${name}: ${hy.length} of ${names.length} in Armenian`);
+    const latin = names.filter((n) => !isArmenian(n)).slice(0, 6);
+    if (latin.length) log(`    still latin: ${latin.join(", ")}`);
+  }
+  // And the player pages themselves.
+  for (const id of [1485, 47323, 276, 874]) {
+    await p.goto(`${BASE}/player/${id}`, { waitUntil: "load", timeout: 60000 }).catch(() => {});
+    await p.waitForTimeout(900);
+    const title = await p.evaluate(() => document.querySelector("h1")?.textContent?.trim() ?? "?");
+    log(`  /player/${id}: ${title}${isArmenian(title) ? "" : "  <- latin"}`);
+  }
+}
+
+// ---------- 8a. Is the live strip actually showing the newest article?
+// This is the check that was missing: every measurement was green while a
+// strip labelled "24/7, updating" sat two hours behind the site.
+log(`\n=== is the live strip current ===`);
+{
+  await p.goto(`${BASE}/?cachebust=${Date.now()}`, { waitUntil: "load", timeout: 60000 }).catch(() => {});
+  await p.waitForTimeout(1500);
+  const m = await p.evaluate(() => {
+    const times = [...document.querySelectorAll(".headline-feed-item time")].map((t) => t.textContent?.trim() ?? "");
+    const firstFeedTitle = document.querySelector(".headline-feed-item h3")?.textContent?.trim() ?? "?";
+    const heroTitle = document.querySelector(".main-lead h1")?.textContent?.trim() ?? "?";
+    const heroMeta = [...document.querySelectorAll(".lead-overlay div span")].map((x) => x.textContent?.trim() ?? "");
+    return { times: times.slice(0, 5), firstFeedTitle: firstFeedTitle.slice(0, 44), heroTitle: heroTitle.slice(0, 44), heroMeta: heroMeta.slice(0, 4) };
+  });
+  log(`  hero:  "${m.heroTitle}"  [${m.heroMeta.join(" ")}]`);
+  log(`  feed:  "${m.firstFeedTitle}"`);
+  log(`  first five times in the feed: ${m.times.join(", ")}`);
+}
+
+// ---------- 8b. Is the edge serving a stale home page? Articles are being
+// published every twenty minutes, but a reader reported seeing nothing new
+// for two hours - and an earlier run read an old share image from "/" while
+// the same page with a cache-busting parameter gave the new one. Ask for
+// both and compare what they say the newest article is.
+log(`\n=== is the home page served from cache ===`);
+{
+  const newest = async (url) => {
+    const res = await page.request.get(url, { timeout: 45000 }).catch(() => null);
+    if (!res || !res.ok()) return { title: `HTTP ${res ? res.status() : "?"}`, headers: {} };
+    const html = await res.text();
+    const m = html.match(/<h1[^>]*>(?:<a[^>]*>)?([^<]{12,})/) ?? html.match(/href="\/news\/[a-z0-9-]+"[^>]*>([^<]{12,})/);
+    return { title: (m?.[1] ?? "?").trim().slice(0, 46), headers: res.headers() };
+  };
+  const plain = await newest(BASE + "/");
+  const fresh = await newest(`${BASE}/?cachebust=${Date.now()}`);
+  log(`  plain  /            newest headline: "${plain.title}"`);
+  log(`    cf-cache-status: ${plain.headers["cf-cache-status"] ?? "none"} | age: ${plain.headers["age"] ?? "none"} | cache-control: ${plain.headers["cache-control"] ?? "none"}`);
+  log(`  /?cachebust=...     newest headline: "${fresh.title}"`);
+  log(`    cf-cache-status: ${fresh.headers["cf-cache-status"] ?? "none"} | age: ${fresh.headers["age"] ?? "none"}`);
+  log(`  same content: ${plain.title === fresh.title ? "yes" : "NO - the plain URL is stale"}`);
+}
 
 await browser.close();
 fs.writeFileSync("add-source-result.txt", report.join("\n"));

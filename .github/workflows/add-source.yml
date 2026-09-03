@@ -39,6 +39,51 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      - name: Why has nothing been published for two hours
+        run: |
+          npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
+          echo "=== now, and the last ten articles ===" > halt.txt
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT datetime('now') AS utc_now, (SELECT COUNT(*) FROM articles WHERE published_at > datetime('now','-2 hours')) AS last_2h" > q1.json 2>&1 || true
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT published_at, substr(title,1,52) AS title FROM articles ORDER BY published_at DESC LIMIT 10" > q2.json 2>&1 || true
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT id, ts, mode, generated, substr(reason,1,90) AS reason FROM cron_invocations ORDER BY id DESC LIMIT 10" > q3.json 2>&1 || true
+          node -e "
+            const fs=require('fs');
+            const rows=(f)=>{try{const r=fs.readFileSync(f,'utf8');return JSON.parse(r.slice(r.indexOf('[')))[0].results||[]}catch(e){return []}};
+            const out=[];
+            for(const r of rows('q1.json')) out.push('  now (UTC): '+r.utc_now+' | articles in the last 2 hours: '+r.last_2h);
+            out.push('  --- last ten articles ---');
+            for(const r of rows('q2.json')) out.push('    '+r.published_at+'  '+r.title);
+            out.push('  --- last ten cron runs ---');
+            for(const r of rows('q3.json')) out.push('    '+r.ts+'  '+r.mode+' gen='+r.generated+'  '+(r.reason||''));
+            console.log(out.join('\n'));
+            fs.appendFileSync('halt.txt', out.join('\n')+'\n');
+          "
+          echo "" >> halt.txt
+          echo "=== does the stored APITube key still work? ===" >> halt.txt
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT feed_url FROM sources LIMIT 5" > src2.json 2>&1 || true
+          KEY=$(node -e "
+            const fs=require('fs');let raw='';try{raw=fs.readFileSync('src2.json','utf8')}catch(e){}
+            const i=raw.indexOf('[');let key='';
+            if(i>=0){try{for(const r of (JSON.parse(raw.slice(i))[0].results||[])){
+              for(const v of Object.values(r)){if(typeof v==='string'){const m=v.match(/api_key=([^&\\s\"]+)/);if(m){key=m[1];break}}}
+              if(key)break}}catch(e){}}
+            console.log(key);
+          ")
+          if [ -z "$KEY" ]; then echo "  no key found in D1" >> halt.txt; else
+            echo "  key ends with ...${KEY: -6}" >> halt.txt
+            curl -s -G "https://api.apitube.io/v1/news/everything" --data-urlencode "api_key=$KEY" \
+              --data-urlencode "title=Arsenal" --data-urlencode "per_page=1" \
+              | head -c 400 >> halt.txt
+          fi
+          cat halt.txt
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: What is the API-Football plan and how much of it is spent
         run: |
           # I have been asserting "100 requests a day" from general
@@ -149,6 +194,9 @@ jobs:
           npx playwright install --with-deps chromium
           node audit.mjs || true
           cat rate.txt >> add-source-result.txt 2>/dev/null || echo "(rate query produced nothing)" >> add-source-result.txt
+          echo "" >> add-source-result.txt
+          echo "" >> add-source-result.txt
+          cat halt.txt >> add-source-result.txt 2>/dev/null || true
           echo "" >> add-source-result.txt
           cat apistatus.txt >> add-source-result.txt 2>/dev/null || true
           echo "" >> add-source-result.txt
