@@ -224,15 +224,32 @@ jobs:
           echo "--- applying ---" >> withdraw.txt
           npx wrangler d1 execute aisport-db --remote --file=fix.sql >> withdraw.txt 2>&1 \
             || echo "  (wrangler reported a failure - its output is above)" >> withdraw.txt
-          printf '%s\n' \
-            "SELECT status, substr(title,1,58) AS title FROM articles WHERE slug LIKE 'chempionnery-dzakhoghvetsin%' OR slug LIKE 'lautaro-martines%' ORDER BY published_at DESC;" \
-            > check.sql
+          # --file returns only a summary ("3 queries, 614 rows written"),
+          # never the rows, so checking with it is checking nothing. --command
+          # prints the rows, and these patterns are short ASCII slugs, well
+          # inside the limit that broke the earlier attempts.
           echo "--- after ---" >> withdraw.txt
-          npx wrangler d1 execute aisport-db --remote --file=check.sql >> withdraw.txt 2>&1 || true
-          printf '%s\n' \
-            "SELECT COUNT(*) AS still_calling_him_real FROM articles WHERE instr(content, 'Մադրիդի» գլխավոր մարզիչ Խաբի Ալոնսո') > 0;" \
-            > alonso.sql
-          npx wrangler d1 execute aisport-db --remote --file=alonso.sql >> withdraw.txt 2>&1 || true
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT status, substr(title,1,52) AS title FROM articles WHERE slug LIKE 'chempionnery-dzakhoghvetsin%' OR slug LIKE 'lautaro-martines%' ORDER BY published_at DESC" \
+            > wcheck.json 2>&1 || true
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT COUNT(*) AS n FROM articles WHERE instr(content, 'Մադրիդի» գլխավոր մարզիչ Խաբի Ալոնսո') > 0" \
+            > acheck.json 2>&1 || true
+          node -e "
+            const fs=require('fs');
+            const rows=(f)=>{try{const r=fs.readFileSync(f,'utf8');return JSON.parse(r.slice(r.indexOf('[')))[0].results||[]}catch(e){return null}};
+            const st=rows('wcheck.json');
+            if(st===null) console.log('  status check failed: '+fs.readFileSync('wcheck.json','utf8').slice(0,300));
+            else for(const r of st) console.log('  ['+r.status+']  '+r.title);
+            const al=rows('acheck.json');
+            if(al) console.log('  articles still calling Alonso a Real manager: '+al[0].n);
+          " >> withdraw.txt 2>&1
+          # And the only proof that matters to a reader: the withdrawn piece
+          # must answer 404 on the live site, not merely carry a flag in a
+          # table.
+          for SLUG in chempionnery-dzakhoghvetsin-konei-pokhadrutyan-hartsum-mbapei-49577827; do
+            echo "  https://aifootball.am/news/$SLUG -> $(curl -s -o /dev/null -w '%{http_code}' "https://aifootball.am/news/$SLUG")" >> withdraw.txt
+          done
           cat withdraw.txt
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
