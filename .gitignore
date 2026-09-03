@@ -4,3 +4,6 @@ dist/
 *.tsbuildinfo
 .next/
 .DS_Store
+
+# Claude Code's per-machine settings - personal, not shared with the repo
+.claude/settings.local.json
