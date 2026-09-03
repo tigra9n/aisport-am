@@ -1,3 +1,4 @@
+import { sizedImage } from "../../../lib/image-proxy";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -96,7 +97,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
     <header className="article-header"><span className="section-label">{category}</span><h1>{title}</h1><p>{excerpt}</p><div className="article-byline"><strong>{author}</strong><span>•</span><time>{published}</time><span>•</span><span>3 րոպե ընթերցում</span></div></header>
     {/* eslint-disable-next-line @next/next/no-img-element */}
-    {image ? <img className="article-image" src={image} alt="" referrerPolicy="no-referrer" decoding="async" fetchPriority="high" /> : <div className="article-placeholder" aria-hidden="true">AI</div>}
+    {image ? <img className="article-image" src={sizedImage(image, 900)} alt="" referrerPolicy="no-referrer" decoding="async" fetchPriority="high" /> : <div className="article-placeholder" aria-hidden="true">AI</div>}
     <div className="article-content">{paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</div>
     {tags.length > 0 ? <div className="article-tags">{tags.map((tag) => <Link key={tag} href={`/search?q=${encodeURIComponent(tag)}`} className="article-tag">#{tag}</Link>)}</div> : null}
     <aside className="source-box"><strong>Սկզբնաղբյուր</strong><p>Նյութը պատրաստվել է հրապարակված սկզբնաղբյուրի հիման վրա։</p><a href={sourceUrl} target="_blank" rel="noreferrer">Բացել սկզբնաղբյուրը ↗</a></aside>

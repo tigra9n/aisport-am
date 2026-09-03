@@ -55,7 +55,32 @@ log(`  date line: ${await page.evaluate(() => {
   log(`  ${starters.filter((p) => p.id).length} of ${starters.length} starters carry a player id`);
 }
 
-// 4. Can Cloudflare resize a remote image for us? This decides whether the
+// 4. Does the image proxy actually work, and how much does it save? This
+// runs before the change is deployed: pointing every image on the site at a
+// third-party resizer is not something to ship on the strength of its
+// documentation.
+{
+  log(`\n=== image proxy ===`);
+  const samples = [
+    ["home hero (Getty)", "https://media.gettyimages.com/id/2291748685/photo/fc-ararat-armenia-v-cs-universitatea-craiova-uefa-europa-conference.jpg", 1400],
+    ["bundesliga", "https://assets.bundesliga.com/contender/2026/8/imago1082300419.jpg", 840],
+    ["team badge", "https://media.api-sports.io/football/teams/33.png", 280],
+  ];
+  for (const [label, url, width] of samples) {
+    const proxied = `https://wsrv.nl/?${new URLSearchParams({ url, w: String(width), q: "72", output: "webp", we: "", default: url }).toString()}`;
+    const sizeOf = async (u) => {
+      const r = await page.request.get(u, { timeout: 45000 }).catch(() => null);
+      if (!r) return "unreachable";
+      const body = await r.body().catch(() => null);
+      return `${r.status()} ${r.headers()["content-type"] ?? "?"} ${body ? Math.round(body.length / 1024) + " KB" : "?"}`;
+    };
+    log(`  ${label}`);
+    log(`    original: ${await sizeOf(url)}`);
+    log(`    proxied : ${await sizeOf(proxied)}`);
+  }
+}
+
+// 5. Can Cloudflare resize a remote image for us? This decides whether the
 // page-weight fix is "defer the images" or "serve them smaller".
 const probe = "https://media.api-sports.io/football/teams/33.png";
 for (const url of [`${BASE}/cdn-cgi/image/width=80,format=auto/${probe}`, probe]) {
