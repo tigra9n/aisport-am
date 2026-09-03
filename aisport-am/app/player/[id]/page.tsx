@@ -20,6 +20,15 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
+// API-Football reports the position in English; these are the four values it
+// uses, and anything unrecognised is shown as received rather than dropped.
+const POSITION_HY: Record<string, string> = {
+  Goalkeeper: "Դարպասապահ",
+  Defender: "Պաշտպան",
+  Midfielder: "Կիսապաշտպան",
+  Attacker: "Հարձակվող",
+};
+
 function formatDate(value: string) {
   try {
     return new Intl.DateTimeFormat("hy-AM", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value));
@@ -42,13 +51,58 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
       <div>
         <h1 className="page-title">{profile.name}</h1>
         <div className="player-facts">
+          {profile.currentTeam && <span>⚽ {profile.currentTeam}{profile.shirtNumber ? ` · #${profile.shirtNumber}` : ""}</span>}
+          {profile.position && <span>📋 {POSITION_HY[profile.position] ?? profile.position}</span>}
           {profile.nationality && <span>🌍 {profile.nationality}</span>}
-          {profile.birthDate && <span>🎂 {formatDate(profile.birthDate)}{profile.birthPlace ? `, ${profile.birthPlace}` : ""}</span>}
+          {profile.birthDate && <span>🎂 {formatDate(profile.birthDate)}{profile.age ? ` (${profile.age} տ.)` : ""}{profile.birthPlace ? `, ${profile.birthPlace}` : ""}</span>}
           {profile.height && <span>📏 {profile.height}</span>}
           {profile.weight && <span>⚖️ {profile.weight}</span>}
         </div>
       </div>
     </div>
+
+    {profile.statistics.length > 0 ? (
+      <section className="transfers-section">
+        <h2>{profile.season}/{String(profile.season + 1).slice(2)} մրցաշրջանի վիճակագրություն</h2>
+        {/* Wrapped in .standings-scroll like every other table on the site:
+            without it the table widens the whole document on a phone, which
+            is exactly the defect just fixed on the category pages. */}
+        <div className="standings-scroll">
+          <table className="standings-table">
+            <thead><tr>
+              <th>Մրցաշար</th><th>Թիմ</th><th>Խաղ</th><th>Րոպե</th><th>Գոլ</th><th>Փոխ.</th><th>ԴՔ</th><th>ԿՔ</th><th>Ռեյտ.</th>
+            </tr></thead>
+            <tbody>
+              {profile.statistics.map((row, index) => (
+                <tr key={index}>
+                  <td><span className="team-with-logo">{row.leagueLogo && <img src={row.leagueLogo} alt="" className="team-logo" loading="lazy" />}{row.league}</span></td>
+                  <td><span className="team-with-logo">{row.teamLogo && <img src={row.teamLogo} alt="" className="team-logo" loading="lazy" />}{row.team}</span></td>
+                  <td>{row.appearances}</td>
+                  <td>{row.minutes}</td>
+                  <td>{row.goals}</td>
+                  <td>{row.assists}</td>
+                  <td>{row.yellow}</td>
+                  <td>{row.red}</td>
+                  <td>{row.rating ?? "—"}</td>
+                </tr>
+              ))}
+              {profile.statistics.length > 1 ? (
+                <tr className="stats-total">
+                  <td colSpan={2}>Ընդամենը</td>
+                  <td>{profile.statistics.reduce((n, r) => n + r.appearances, 0)}</td>
+                  <td>{profile.statistics.reduce((n, r) => n + r.minutes, 0)}</td>
+                  <td>{profile.statistics.reduce((n, r) => n + r.goals, 0)}</td>
+                  <td>{profile.statistics.reduce((n, r) => n + r.assists, 0)}</td>
+                  <td>{profile.statistics.reduce((n, r) => n + r.yellow, 0)}</td>
+                  <td>{profile.statistics.reduce((n, r) => n + r.red, 0)}</td>
+                  <td>—</td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    ) : null}
 
     <section className="transfers-section">
       <h2>Տրանսֆերների պատմություն</h2>

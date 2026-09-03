@@ -1,5 +1,19 @@
 import { armenianTeamName } from "./team-names-hy";
 
+export type PlayerSeasonStat = {
+  league: string;
+  leagueLogo: string | null;
+  team: string;
+  teamLogo: string | null;
+  appearances: number;
+  minutes: number;
+  goals: number;
+  assists: number;
+  yellow: number;
+  red: number;
+  rating: string | null;
+};
+
 export type PlayerProfile = {
   id: number;
   name: string;
@@ -9,9 +23,21 @@ export type PlayerProfile = {
   birthPlace: string | null;
   height: string | null;
   weight: string | null;
+  age: number | null;
+  position: string | null;
+  currentTeam: string | null;
+  currentTeamLogo: string | null;
+  shirtNumber: number | null;
+  season: number;
+  statistics: PlayerSeasonStat[];
 };
 export type TransferEntry = { date: string; teamOut: string; teamOutLogo: string | null; teamIn: string; teamInLogo: string | null; type: string | null };
 
+// The players endpoint returns the season's statistics alongside the
+// biography, broken down per competition. All of it arrives in the same
+// response the profile already fetches, so reading it costs no extra API
+// call and no extra latency - it was simply being discarded.
+// "appearences" is API-Football's own spelling and has to be matched.
 type ApiFootballPlayerProfile = {
   player: {
     id: number;
@@ -21,7 +47,15 @@ type ApiFootballPlayerProfile = {
     birth?: { date?: string | null; place?: string | null };
     height?: string | null;
     weight?: string | null;
+    age?: number | null;
   };
+  statistics?: {
+    team?: { name?: string | null; logo?: string | null };
+    league?: { name?: string | null; logo?: string | null };
+    games?: { appearences?: number | null; minutes?: number | null; position?: string | null; rating?: string | null; number?: number | null };
+    goals?: { total?: number | null; assists?: number | null };
+    cards?: { yellow?: number | null; red?: number | null };
+  }[];
 };
 type ApiFootballTransfer = {
   transfers: { date: string; type: string | null; teams: { in: { name: string; logo?: string | null }; out: { name: string; logo?: string | null } } }[];
@@ -76,8 +110,10 @@ export async function getPlayerProfile(playerId: number): Promise<PlayerProfile 
   const key = runtime.API_FOOTBALL_KEY;
   if (!key) return null;
   const season = currentSeasonYear();
+  // Cache key bumped to v2: the stored shape now carries statistics, and a
+  // v1 row would deserialise into a profile whose table is silently empty.
   return cachedGet<PlayerProfile>(
-    `apifootball:v1:playerprofile:${playerId}`,
+    `apifootball:v2:playerprofile:${playerId}`,
     24 * 60 * 60 * 1000,
     `https://v3.football.api-sports.io/players?id=${playerId}&season=${season}`,
     key,
@@ -85,6 +121,32 @@ export async function getPlayerProfile(playerId: number): Promise<PlayerProfile 
       const entry = (json as { response?: ApiFootballPlayerProfile[] })?.response?.[0];
       if (!entry) return null;
       const p = entry.player;
+
+      const statistics: PlayerSeasonStat[] = (entry.statistics ?? [])
+        .map((row) => ({
+          league: row.league?.name ?? "—",
+          leagueLogo: row.league?.logo ?? null,
+          team: armenianTeamName(row.team?.name ?? ""),
+          teamLogo: row.team?.logo ?? null,
+          appearances: row.games?.appearences ?? 0,
+          minutes: row.games?.minutes ?? 0,
+          goals: row.goals?.total ?? 0,
+          assists: row.goals?.assists ?? 0,
+          yellow: row.cards?.yellow ?? 0,
+          red: row.cards?.red ?? 0,
+          rating: row.games?.rating ? Number(row.games.rating).toFixed(2) : null,
+        }))
+        // A player registered for a competition he never played in comes back
+        // as a row of zeroes, which pads the table without saying anything.
+        .filter((row) => row.appearances > 0)
+        .sort((a, b) => b.appearances - a.appearances);
+
+      // No single "current team" field exists - the API reports one entry per
+      // competition. The competition he has played most is the best proxy.
+      const primary = statistics[0];
+      const withPosition = (entry.statistics ?? []).find((row) => row.games?.position);
+      const withNumber = (entry.statistics ?? []).find((row) => typeof row.games?.number === "number");
+
       return {
         id: p.id,
         name: p.name,
@@ -94,6 +156,13 @@ export async function getPlayerProfile(playerId: number): Promise<PlayerProfile 
         birthPlace: p.birth?.place ?? null,
         height: p.height ?? null,
         weight: p.weight ?? null,
+        age: p.age ?? null,
+        position: withPosition?.games?.position ?? null,
+        currentTeam: primary?.team ?? null,
+        currentTeamLogo: primary?.teamLogo ?? null,
+        shirtNumber: withNumber?.games?.number ?? null,
+        season,
+        statistics,
       };
     },
   );
