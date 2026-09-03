@@ -63,13 +63,22 @@ for (const [name, path] of [
     overflow: Math.max(0, document.documentElement.scrollWidth - window.innerWidth),
     text: (document.body.innerText ?? "").trim().length,
     imgs: document.querySelectorAll("img").length,
-    noAlt: [...document.querySelectorAll("img")].filter((i) => !i.getAttribute("alt")).length,
+    // An image with no alt attribute at all is the fault. An image with
+    // alt="" is not: that is how you mark one decorative, and every badge
+    // and player photograph on this site sits directly beside the name it
+    // belongs to, so an empty alt is exactly right - a screen reader says
+    // "Arsenal" once instead of "Arsenal badge Arsenal" forty times in one
+    // table. This check counted both, because "" is falsy, and reported
+    // ninety-six faults on pages that have none. Counted apart now, so the
+    // number that means something is the first one.
+    noAlt: [...document.querySelectorAll("img")].filter((i) => i.getAttribute("alt") === null).length,
+    decorative: [...document.querySelectorAll("img")].filter((i) => i.getAttribute("alt") === "").length,
     broken: [...document.querySelectorAll("img")].filter((i) => i.complete && i.naturalWidth === 0 && i.currentSrc).length,
     latin: ((document.body.innerText ?? "").match(/\b[A-Za-z]{4,}\b/g) ?? [])
       .filter((w) => !["FOOTBALL", "Esport", "Live", "Facebook", "Instagram", "Telegram", "Threads", "AIFootball"].includes(w))
       .slice(0, 8),
   }));
-  log(`  ${name} (${path}): HTTP ${res.status()} | ${m.height}px | text ${m.text} | img ${m.imgs} (no alt ${m.noAlt}, broken ${m.broken})${m.overflow ? ` | OVERFLOW ${m.overflow}px` : ""}`);
+  log(`  ${name} (${path}): HTTP ${res.status()} | ${m.height}px | text ${m.text} | img ${m.imgs} (missing alt ${m.noAlt}, decorative ${m.decorative}, broken ${m.broken})${m.overflow ? ` | OVERFLOW ${m.overflow}px` : ""}`);
   if (m.latin.length) log(`    latin words: ${m.latin.join(", ")}`);
 }
 
