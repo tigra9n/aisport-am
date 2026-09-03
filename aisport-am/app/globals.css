@@ -411,3 +411,12 @@ img{display:block;max-width:100%}
 /* White on the accent orange measures about 2.4:1 - it reads as a colour,
    not as a word. Dark text on the same orange is over 8:1 and keeps the
    chip looking like a chip. */
+
+/* Share row on articles: plain links to the networks' own endpoints, no
+   third-party widget to load and no tracker riding along. */
+.share-row{max-width:700px;margin:34px auto 24px;display:flex;flex-wrap:wrap;align-items:center;gap:9px}
+.share-label{color:var(--muted);font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.1em}
+.share-button{padding:8px 14px;border:1px solid var(--line);border-radius:99px;background:var(--surface);color:var(--ink);font:inherit;font-size:11px;font-weight:800;text-decoration:none;cursor:pointer;transition:border-color .15s,color .15s}
+.share-button:hover{border-color:var(--blue);color:var(--blue)}
+.share-button.facebook:hover{border-color:#1877f2;color:#1877f2}
+.share-button.telegram:hover{border-color:#2aabee;color:#2aabee}

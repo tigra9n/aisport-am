@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import { sizedImage } from "../lib/image-proxy";
+import { SOCIAL } from "../lib/social";
 import Link from "next/link";
 import { Suspense } from "react";
 import { LeagueTabs } from "../components/league-tabs";
@@ -208,7 +209,7 @@ export default async function Home() {
               <div className="sidebar-title"><div>Թոփ 5 առաջնություններ</div><Link href="/standings">Լրիվ</Link></div>
               <LeagueTabs tables={tables} topScorerTables={scorerTables} compact />
             </section>
-            <section className="telegram-card"><span>➤</span><div><strong>AIFootball-ը Telegram-ում</strong><p>Թարմ լուրերը ստացեք առաջինը</p></div><button type="button">Միանալ</button></section>
+            {SOCIAL.telegram ? <section className="telegram-card"><span>➤</span><div><strong>AIFootball-ը Telegram-ում</strong><p>Թարմ լուրերը ստացեք առաջինը</p></div><a href={SOCIAL.telegram} target="_blank" rel="noopener noreferrer">Միանալ</a></section> : null}
           </aside>
         </div>
 
