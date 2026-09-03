@@ -189,7 +189,10 @@ for (const [theme, name, path] of [
 // table holds about ninety, everything else is left as the API sent it, so
 // the honest number is the share of the names a reader actually meets.
 log(`\n=== player names in Armenian ===`);
-{
+// Wrapped: this section printed its heading and nothing else on the last
+// run, which told me it had failed but not where. A silent check is worse
+// than no check - it reads as "nothing to report".
+try {
   const isArmenian = (t) => /[\u0530-\u058F]/.test(t);
   for (const [name, path, selector] of [
     ["top scorers", "/topscorers", ".topscorers-table tbody tr td:nth-child(2)"],
@@ -212,6 +215,8 @@ log(`\n=== player names in Armenian ===`);
     const title = await p.evaluate(() => document.querySelector("h1")?.textContent?.trim() ?? "?");
     log(`  /player/${id}: ${title}${isArmenian(title) ? "" : "  <- latin"}`);
   }
+} catch (err) {
+  log(`  this check failed: ${String(err).slice(0, 160)}`);
 }
 
 // ---------- 8a. Is the live strip actually showing the newest article?
