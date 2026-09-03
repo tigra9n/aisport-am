@@ -15,21 +15,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Date the articles carrying non-Latin slugs
+      - name: Dump the seven non-Latin slugs in full
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
-          # slugify() strips everything outside [a-z0-9-], and previews go
-          # through it like every other article, so today's code cannot
-          # produce an Armenian-script slug. That points at these being old
-          # rows from before transliteration existed - which decides whether
-          # anything needs fixing in code or only, optionally, in the data.
-          echo "=== ARTICLES WITH A NON-LATIN SLUG: how many, and how old ===" > ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT COUNT(*) AS n, MIN(published_at) AS oldest, MAX(published_at) AS newest FROM articles WHERE slug GLOB '*[^a-zA-Z0-9-]*';" >> ../add-source-result.txt 2>&1 || true
-          echo "=== THE NEWEST FEW OF THEM ===" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT id, substr(published_at,1,16) AS at, substr(slug,1,60) AS slug FROM articles WHERE slug GLOB '*[^a-zA-Z0-9-]*' ORDER BY published_at DESC LIMIT 5;" >> ../add-source-result.txt 2>&1 || true
-          echo "=== FOR COMPARISON: newest articles overall ===" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT id, substr(published_at,1,16) AS at, substr(slug,1,60) AS slug FROM articles ORDER BY id DESC LIMIT 5;" >> ../add-source-result.txt 2>&1 || true
+          # Needed in full, untruncated, to compute each Latin replacement
+          # and the redirect that has to keep the old URL working.
+          echo "=== THE SEVEN NON-LATIN SLUGS ===" > ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT id, slug, substr(title,1,70) AS title FROM articles WHERE slug GLOB '*[^a-zA-Z0-9-]*' ORDER BY id;" >> ../add-source-result.txt 2>&1 || true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
