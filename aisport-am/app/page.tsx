@@ -9,6 +9,7 @@ import { SiteHeader } from "../components/site-header";
 import { HeroCarousel } from "../components/hero-carousel";
 import { HeadlineFeed } from "../components/headline-feed";
 import { AdSpaces } from "../components/ad-spaces";
+import { readTimeLabel } from "../lib/reading-time";
 import { MatchModalLazy } from "../components/match-modal-lazy";
 import { trendingTopics, type ArticlePreview } from "../lib/content";
 import { leagues } from "../lib/football";
@@ -51,7 +52,7 @@ function opinionToPreview(o: Opinion): ArticlePreview {
     excerpt: text.slice(0, 160),
     author: `${o.role} · ${o.author}`,
     time: new Date(o.publishedAt + "Z").toLocaleString("hy-AM", { timeZone: "Asia/Yerevan", hour: "2-digit", minute: "2-digit", hour12: false }),
-    readTime: "3 րոպե",
+    readTime: readTimeLabel(text),
     image: o.imageUrl || "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=1200&q=85",
     local: true,
     featured: false,

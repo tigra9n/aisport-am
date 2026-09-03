@@ -11,6 +11,8 @@ import { CommentForm } from "../../../components/comment-form";
 import { CommentList } from "../../../components/comment-list";
 import { getArticleBySlug, getArticlesByCategory } from "../../../lib/articles";
 import { resolveArticleImage } from "../../../lib/article-image";
+import { FOUNDER_NAME } from "../../../lib/site-info";
+import { readingMinutes as minutesToRead } from "../../../lib/reading-time";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -70,6 +72,8 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
   const published = new Date(stored.publishedAt + "Z").toLocaleString("hy-AM", { timeZone: "Asia/Yerevan", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit", hour12: false });
   const paragraphs = stored.content.split(/\n+/).filter(Boolean);
 
+  const readingMinutes = minutesToRead(stored.content);
+
   // Same-category related articles - internal linking so search engines
   // (and readers) can discover other relevant coverage instead of the
   // article page being a dead end.
@@ -95,7 +99,9 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
     publisher: {
       "@type": "Organization",
       name: "AIFootball",
+      url: "https://aifootball.am",
       logo: { "@type": "ImageObject", url: "https://aifootball.am/favicon.svg" },
+      founder: { "@type": "Person", name: FOUNDER_NAME },
     },
     mainEntityOfPage: { "@type": "WebPage", "@id": `https://aifootball.am/news/${slug}` },
     articleSection: category,
@@ -117,7 +123,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
     <nav className="article-breadcrumb" aria-label="Նավարկություն"><Link href="/">Գլխավոր</Link><span>›</span>{categorySlug ? <Link href={`/category/${categorySlug}`}>{category}</Link> : <span>{category}</span>}</nav>
-    <header className="article-header"><span className="section-label">{category}</span><h1>{title}</h1><p>{excerpt}</p><div className="article-byline"><strong>{author}</strong><span>•</span><time>{published}</time><span>•</span><span>3 րոպե ընթերցում</span></div></header>
+    <header className="article-header"><span className="section-label">{category}</span><h1>{title}</h1><p>{excerpt}</p><div className="article-byline"><strong><Link href="/about" className="byline-link">{author}</Link></strong><span>•</span><time>{published}</time><span>•</span><span>{readingMinutes} րոպե ընթերցում</span></div></header>
     {/* eslint-disable-next-line @next/next/no-img-element */}
     {image ? <img className="article-image" src={sizedImage(image, 900)} alt={title} referrerPolicy="no-referrer" decoding="async" fetchPriority="high" /> : <div className="article-placeholder" aria-hidden="true">AI</div>}
     <div className="article-content">{paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</div>
