@@ -110,7 +110,38 @@ log(`  date line: ${await page.evaluate(() => {
   }
 }
 
-// 6. Can Cloudflare resize a remote image for us? This decides whether the
+// 6. Broken internal links. Search Console reports three 404s and does not
+// say which; the ones that matter are the ones the site links to itself,
+// because those are what a crawler walks into.
+{
+  log(`\n=== internal links ===`);
+  const seeds = ["/", "/category/football", "/league/PL", "/standings", "/live", "/opinions", "/armenia", "/topscorers"];
+  const links = new Set();
+  for (const seed of seeds) {
+    const res = await page.request.get(BASE + seed, { timeout: 45000 }).catch(() => null);
+    if (!res || !res.ok()) { log(`  seed ${seed}: HTTP ${res ? res.status() : "unreachable"}`); continue; }
+    const html = await res.text();
+    for (const m of html.matchAll(/href="(\/[^"#?]*)"/g)) {
+      const href = m[1];
+      if (href.startsWith("/_") || href.startsWith("/assets/") || href.endsWith(".svg") || href.endsWith(".xml") || href.endsWith(".txt")) continue;
+      links.add(href);
+    }
+  }
+  log(`  ${links.size} distinct internal links found across ${seeds.length} pages`);
+  const bad = [];
+  const list = [...links];
+  for (let i = 0; i < list.length; i += 8) {
+    await Promise.all(list.slice(i, i + 8).map(async (href) => {
+      const r = await page.request.get(BASE + href, { timeout: 45000, maxRedirects: 0 }).catch(() => null);
+      const status = r ? r.status() : 0;
+      if (status >= 400 || status === 0) bad.push(`${status} ${href}`);
+    }));
+  }
+  if (!bad.length) log(`  every one of them answers`);
+  else { log(`  BROKEN: ${bad.length}`); for (const b of bad.slice(0, 15)) log(`    ${b}`); }
+}
+
+// 7. Can Cloudflare resize a remote image for us? This decides whether the
 // page-weight fix is "defer the images" or "serve them smaller".
 const probe = "https://media.api-sports.io/football/teams/33.png";
 for (const url of [`${BASE}/cdn-cgi/image/width=80,format=auto/${probe}`, probe]) {
