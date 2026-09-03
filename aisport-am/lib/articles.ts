@@ -92,7 +92,16 @@ export async function searchArticles(query: string, category: string, limit = 20
     const conditions = [eq(articles.status, "published")];
     if (query.trim()) {
       const term = `%${query.trim()}%`;
-      conditions.push(or(like(articles.title, term), like(articles.excerpt, term))!);
+      // The body and the tags count too. Searching only the headline and
+      // the summary meant "Մխիթարյան" returned nothing while articles that
+      // discuss him at length sat in the archive - the site's own search
+      // could not find its own coverage.
+      conditions.push(or(
+        like(articles.title, term),
+        like(articles.excerpt, term),
+        like(articles.content, term),
+        like(articles.tags, term),
+      )!);
     }
     if (category) conditions.push(eq(articles.category, category));
     return await db
