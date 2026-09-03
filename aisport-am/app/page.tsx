@@ -8,7 +8,7 @@ import { SiteHeader } from "../components/site-header";
 import { HeroCarousel } from "../components/hero-carousel";
 import { HeadlineFeed } from "../components/headline-feed";
 import { AdSpaces } from "../components/ad-spaces";
-import { MatchModal } from "../components/match-modal";
+import { MatchModalLazy } from "../components/match-modal-lazy";
 import { trendingTopics, type ArticlePreview } from "../lib/content";
 import { leagues } from "../lib/football";
 import { getStandings } from "../lib/football-server";
@@ -192,7 +192,7 @@ export default async function Home() {
       </div>
       <AdSpaces bottom />
       <SiteFooter />
-      <Suspense fallback={null}><MatchModal /></Suspense>
+      <Suspense fallback={null}><MatchModalLazy /></Suspense>
     </main>
   );
 }

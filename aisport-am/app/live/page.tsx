@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { MatchModal } from "../../components/match-modal";
+import { MatchModalLazy } from "../../components/match-modal-lazy";
 import { MatchRow } from "../../components/match-row";
 import { SiteFooter } from "../../components/site-footer";
 import { SiteHeader } from "../../components/site-header";
@@ -36,5 +36,5 @@ export default async function LivePage({searchParams}:{searchParams:Promise<{dat
  <div className="live-date-picker">{previous?<Link prefetch={false} className="date-arrow" href={dateHref(previous.offset,previous.date)}>‹</Link>:<span className="date-arrow disabled">‹</span>}<details className="live-calendar"><summary><span className="calendar-icon">▦</span><strong>{relativeLabel(selected.offset)} · {shortDate(selected.date)}</strong><small>{weekday(selected.date)}</small></summary><div className="live-calendar-panel">{dates.map(i=><Link prefetch={false} className={i.date===selected.date?"active":""} href={dateHref(i.offset,i.date)} key={i.date}><span>{relativeLabel(i.offset)}</span><strong>{shortDate(i.date)}</strong><small>{weekday(i.date)}</small></Link>)}</div></details>{next?<Link prefetch={false} className="date-arrow" href={dateHref(next.offset,next.date)}>›</Link>:<span className="date-arrow disabled">›</span>}</div>
  <div className="live-page-grid"><section className="matchday-card"><div className="matchday-head"><span>{relativeLabel(selected.offset)} · {shortDate(selected.date)}</span><small className={live.unavailable?"data-source demo":"data-source real"}>{live.unavailable?"Անհասանելի է":"Live"}</small></div>
  {live.matches.length?competitions.map(c=><section className="match-competition-group" key={c}><h2>{c}</h2>{live.matches.filter(m=>m.competition===c).map(m=><MatchRow match={m} date={selected.date} key={m.id} />)}</section>):<div className="no-matches">{live.unavailable?"Տվյալները հասանելի չեն, փորձիր մի փոքր ուշ։":`${shortDate(selected.date)}-ին ընտրված մրցաշարերում հանդիպումներ չկան։`}</div>}</section><aside className="live-note"><h3>Ամեն ինչ մեկ տեղից</h3><p>Հաշիվ, live կարգավիճակ, գոլեր, կազմեր և վիճակագրություն՝ մեկ միասնական աղբյուրից։</p></aside></div>
- </div><AdSpaces bottom/><SiteFooter/><Suspense fallback={null}><MatchModal/></Suspense></main>;
+ </div><AdSpaces bottom/><SiteFooter/><Suspense fallback={null}><MatchModalLazy/></Suspense></main>;
 }
