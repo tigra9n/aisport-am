@@ -170,5 +170,34 @@ for (const [name, path] of [["home", "/"], ["standings", "/standings"], ["articl
   for (const b of bad.slice(0, 6)) log(`    ${b}`);
 }
 
+// ---------- 7. How many player names actually come out in Armenian? The
+// table holds about ninety, everything else is left as the API sent it, so
+// the honest number is the share of the names a reader actually meets.
+log(`\n=== player names in Armenian ===`);
+{
+  const isArmenian = (t) => /[\u0530-\u058F]/.test(t);
+  for (const [name, path, selector] of [
+    ["top scorers", "/topscorers", ".topscorers-table tbody tr td:nth-child(2)"],
+    ["squad (Man City)", "/team/50", ".squad-card strong"],
+    ["squad (Ararat-Armenia)", "/team/3838", ".squad-card strong"],
+  ]) {
+    await p.goto(BASE + path, { waitUntil: "load", timeout: 60000 }).catch(() => {});
+    await p.waitForTimeout(1500);
+    const names = await p.evaluate((sel) =>
+      [...document.querySelectorAll(sel)].map((n) => n.textContent?.trim() ?? "").filter(Boolean), selector);
+    const hy = names.filter(isArmenian);
+    log(`  ${name}: ${hy.length} of ${names.length} in Armenian`);
+    const latin = names.filter((n) => !isArmenian(n)).slice(0, 6);
+    if (latin.length) log(`    still latin: ${latin.join(", ")}`);
+  }
+  // And the player pages themselves.
+  for (const id of [1485, 47323, 276, 874]) {
+    await p.goto(`${BASE}/player/${id}`, { waitUntil: "load", timeout: 60000 }).catch(() => {});
+    await p.waitForTimeout(900);
+    const title = await p.evaluate(() => document.querySelector("h1")?.textContent?.trim() ?? "?");
+    log(`  /player/${id}: ${title}${isArmenian(title) ? "" : "  <- latin"}`);
+  }
+}
+
 await browser.close();
 fs.writeFileSync("add-source-result.txt", report.join("\n"));
