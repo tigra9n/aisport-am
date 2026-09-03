@@ -315,8 +315,12 @@ jobs:
                       return s(b).localeCompare(s(a));
                     });
                     const picked=byStart[0]||rows[0];
-                    if(picked) console.log("      site shows: "+picked.name);
+                    if(picked) console.log("      the rule picks: "+picked.name);
                   })' "$TEAM"
+            done
+            echo "  --- what the site actually shows, overrides included ---"
+            for T in 50 40 529; do
+              echo "      team $T: $(curl -s "https://aifootball.am/team/$T" | grep -o 'Գլխավոր մարզիչ</span><strong>[^<]*' | head -1 | sed 's/.*<strong>//')"
             done
           } > coaches.txt 2>&1
           cat coaches.txt
