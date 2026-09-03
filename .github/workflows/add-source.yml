@@ -201,16 +201,21 @@ jobs:
 
       - name: Withdraw the repeats and correct Alonso's club
         run: |
-          # Both of these failed last time with a bare "A request to the
-          # Cloudflare API failed", and the statement that failed was the one
-          # carrying Armenian guillemets - so the SQL goes into a file rather
-          # than through the shell, written with printf so the file has no
-          # heredoc indentation to fight YAML over, and the whole error is
-          # printed instead of the first two lines.
+          # Printing wrangler's whole output finally gave the real reason:
+          # "LIKE or GLOB pattern too complex: SQLITE_ERROR". D1 caps how
+          # long a LIKE pattern may be, and Armenian costs two bytes a
+          # letter, so "Լաուտարո Մարտինես մեկնաբանել%" is 57 bytes and over
+          # the limit while the same length in Latin is not. Every query that
+          # failed today carried a long Armenian pattern; every one that
+          # worked carried a short one.
+          #
+          # So: match rows by their ASCII slug, and use instr() rather than
+          # LIKE where the text really must be Armenian - it takes a plain
+          # string and has no pattern limit. REPLACE has no limit either.
           npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
           echo "=== withdrawals and corrections ===" > withdraw.txt
           printf '%s\n' \
-            "UPDATE articles SET status='withdrawn' WHERE status='published' AND (slug LIKE 'chempionnery-dzakhoghvetsin-konei-pokhadrutyan%' OR title LIKE 'Լաուտարո Մարտինես մեկնաբանել%');" \
+            "UPDATE articles SET status='withdrawn' WHERE status='published' AND (slug LIKE 'chempionnery-dzakhoghvetsin%' OR slug LIKE 'lautaro-martines-meknabanel%');" \
             "UPDATE articles SET content = REPLACE(content, '«Ռեալ Մադրիդի» գլխավոր մարզիչ Խաբի Ալոնսոն', '«Չելսիի» գլխավոր մարզիչ Խաբի Ալոնսոն');" \
             "UPDATE articles SET content = REPLACE(content, '«Ռեալի» գլխավոր մարզիչ Խաբի Ալոնսոն', '«Չելսիի» գլխավոր մարզիչ Խաբի Ալոնսոն');" \
             > fix.sql
@@ -220,12 +225,12 @@ jobs:
           npx wrangler d1 execute aisport-db --remote --file=fix.sql >> withdraw.txt 2>&1 \
             || echo "  (wrangler reported a failure - its output is above)" >> withdraw.txt
           printf '%s\n' \
-            "SELECT status, substr(title,1,58) AS title FROM articles WHERE slug LIKE 'chempionnery-dzakhoghvetsin-konei-pokhadrutyan%' OR title LIKE 'Լաուտարո Մարտինես%' ORDER BY published_at DESC;" \
+            "SELECT status, substr(title,1,58) AS title FROM articles WHERE slug LIKE 'chempionnery-dzakhoghvetsin%' OR slug LIKE 'lautaro-martines%' ORDER BY published_at DESC;" \
             > check.sql
           echo "--- after ---" >> withdraw.txt
           npx wrangler d1 execute aisport-db --remote --file=check.sql >> withdraw.txt 2>&1 || true
           printf '%s\n' \
-            "SELECT COUNT(*) AS still_calling_him_real FROM articles WHERE content LIKE '%Մադրիդի» գլխավոր մարզիչ Խաբի Ալոնսո%';" \
+            "SELECT COUNT(*) AS still_calling_him_real FROM articles WHERE instr(content, 'Մադրիդի» գլխավոր մարզիչ Խաբի Ալոնսո') > 0;" \
             > alonso.sql
           npx wrangler d1 execute aisport-db --remote --file=alonso.sql >> withdraw.txt 2>&1 || true
           cat withdraw.txt
