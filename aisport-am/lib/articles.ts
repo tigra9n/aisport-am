@@ -4,6 +4,7 @@ import { articles } from "../db/schema";
 import type { ArticlePreview } from "./content";
 import { resolveArticleImage } from "./article-image";
 import { detectLeague } from "./league-tags";
+import { readTimeLabel } from "./reading-time";
 
 export type NewsArticle = typeof articles.$inferSelect;
 
@@ -17,7 +18,7 @@ export function toPreview(a: NewsArticle): ArticlePreview {
     excerpt: a.excerpt,
     author: "AIFootball խմբագրություն",
     time: new Date(a.publishedAt + "Z").toLocaleString("hy-AM", { timeZone: "Asia/Yerevan", hour: "2-digit", minute: "2-digit", hour12: false }),
-    readTime: "3 րոպե",
+    readTime: readTimeLabel(a.content),
     image: a.imageUrl || resolveArticleImage(a.category, a.slug),
     local: a.category.includes("Հայաստան"),
     featured: false,

@@ -209,6 +209,13 @@ jobs:
           API_FOOTBALL_KEY="${API_FOOTBALL_KEY}" node make-social-images.mjs >> imagelog.txt 2>&1 || echo "  (the script exited non-zero)" >> imagelog.txt
           cat imagelog.txt
           node audit.mjs || true
+          {
+            echo ""
+            echo "=== page weight and 360px overflow ==="
+            node page-weight.mjs 2>&1 || echo "  (page-weight.mjs exited non-zero)"
+          } > weight.txt
+          cat weight.txt
+          cat weight.txt >> add-source-result.txt 2>/dev/null || true
           cat imagelog.txt >> add-source-result.txt 2>/dev/null || true
           cat rate.txt >> add-source-result.txt 2>/dev/null || echo "(rate query produced nothing)" >> add-source-result.txt
           echo "" >> add-source-result.txt

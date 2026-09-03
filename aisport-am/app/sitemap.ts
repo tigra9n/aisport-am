@@ -25,6 +25,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE_URL}/podcasts`, lastModified: now, changeFrequency: "weekly", priority: 0.5 },
     { url: `${BASE_URL}/opinions`, lastModified: now, changeFrequency: "weekly", priority: 0.5 },
     { url: `${BASE_URL}/topscorers`, lastModified: now, changeFrequency: "daily", priority: 0.5 },
+    // An ad network's reviewer looks for these two first, so they are
+    // worth more than the legal pages to a crawler as well.
+    { url: `${BASE_URL}/about`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
+    { url: `${BASE_URL}/contact`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
     { url: `${BASE_URL}/privacy`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },
     { url: `${BASE_URL}/terms`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },
   ];

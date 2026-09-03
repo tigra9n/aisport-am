@@ -52,6 +52,41 @@ export function sizedImage(src: string | null | undefined, width: number): strin
   return `${PROXY}?${params.toString()}`;
 }
 
+/**
+ * A `srcset` for the same image at several real widths.
+ *
+ * `sizedImage` has to guess: it asks for twice the widest slot the image
+ * ever occupies, which is right for a 2x desktop and roughly twice too much
+ * for a phone. A 360px screen was downloading the 1400px copy of a lead
+ * photograph to paint it 360px wide.
+ *
+ * With a `srcset` the browser decides instead, and it knows both the real
+ * slot width (from `sizes`) and its own pixel density - so the widths here
+ * are real pixels, NOT doubled. Pair it with `sizes`; without one the
+ * browser assumes the image fills the viewport and picks too large a copy.
+ */
+export function imageSrcSet(src: string | null | undefined, widths: number[]): string | undefined {
+  if (!src || !PROXY_IMAGES || !isProxyable(src)) return undefined;
+  return widths
+    .map((width) => {
+      // No `default` here, unlike sizedImage. It repeats the whole source
+      // address a second time in every entry, and a page of forty cards
+      // pays for that twice over - once in the attribute, once in Next's
+      // serialised payload. The first measurement showed the HTML growing
+      // by more than the images shrank. The `src` alongside keeps the
+      // failsafe for anything that cannot read a srcset.
+      const params = new URLSearchParams({
+        url: src,
+        w: String(width),
+        q: "68",
+        output: "webp",
+        we: "",
+      });
+      return `${PROXY}?${params.toString()} ${width}w`;
+    })
+    .join(", ");
+}
+
 // The picture Telegram, Facebook and WhatsApp show when a link is posted.
 //
 // It has a harder job than an image on a page. A social crawler fetches it

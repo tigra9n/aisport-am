@@ -1,5 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
-import { sizedImage } from "../lib/image-proxy";
+import { imageSrcSet, sizedImage } from "../lib/image-proxy";
 import { SOCIAL } from "../lib/social";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -9,6 +9,7 @@ import { SiteHeader } from "../components/site-header";
 import { HeroCarousel } from "../components/hero-carousel";
 import { HeadlineFeed } from "../components/headline-feed";
 import { AdSpaces } from "../components/ad-spaces";
+import { readTimeLabel } from "../lib/reading-time";
 import { MatchModalLazy } from "../components/match-modal-lazy";
 import { trendingTopics, type ArticlePreview } from "../lib/content";
 import { leagues } from "../lib/football";
@@ -51,7 +52,7 @@ function opinionToPreview(o: Opinion): ArticlePreview {
     excerpt: text.slice(0, 160),
     author: `${o.role} · ${o.author}`,
     time: new Date(o.publishedAt + "Z").toLocaleString("hy-AM", { timeZone: "Asia/Yerevan", hour: "2-digit", minute: "2-digit", hour12: false }),
-    readTime: "3 րոպե",
+    readTime: readTimeLabel(text),
     image: o.imageUrl || "https://images.unsplash.com/photo-1522778119026-d647f0596c20?auto=format&fit=crop&w=1200&q=85",
     local: true,
     featured: false,
@@ -189,10 +190,18 @@ export default async function Home() {
               {sportSections.filter((sport) => sport.items.length > 0).map((sport) => <section className="sport-news-block" key={sport.slug}>
                 <div className="sport-news-head"><div><span /> <h3>{sport.name}</h3></div><Link href={sport.href}>Բոլոր լուրերը →</Link></div>
                 <div className="sport-news-grid">
-                  {sport.items.map((article, index) => <article className={index === 0 ? "sport-news-card featured" : "sport-news-card"} key={article.slug}>
-                    <Link className="sport-news-image" href={`${sport.basePath}/${article.slug}`}><img src={sizedImage(article.image, 420)} alt={article.title} referrerPolicy="no-referrer" loading="lazy" decoding="async" /></Link>
-                    <div><span>{article.category}</span><h4><Link href={`${sport.basePath}/${article.slug}`}>{article.title}</Link></h4>{index === 0 ? <p>{article.excerpt}</p> : null}<time>{article.time} · {article.readTime}</time></div>
-                  </article>)}
+                  {sport.items.map((article, index) => {
+                    // The first card in each block runs the full width of
+                    // its column; every other one is a 130px thumbnail
+                    // (105px on a phone). They used to share one request
+                    // for an 840px-wide photograph, so the thumbnails were
+                    // downloading roughly six times the pixels they show.
+                    const featured = index === 0;
+                    return <article className={featured ? "sport-news-card featured" : "sport-news-card"} key={article.slug}>
+                    <Link className="sport-news-image" href={`${sport.basePath}/${article.slug}`}><img src={sizedImage(article.image, featured ? 420 : 130)} srcSet={imageSrcSet(article.image, featured ? [360, 840] : [130, 280])} sizes={featured ? "(max-width:700px) calc(100vw - 24px), 400px" : "(max-width:700px) 105px, 130px"} alt={article.title} referrerPolicy="no-referrer" loading="lazy" decoding="async" /></Link>
+                    <div><span>{article.category}</span><h4><Link href={`${sport.basePath}/${article.slug}`}>{article.title}</Link></h4>{featured ? <p>{article.excerpt}</p> : null}<time>{article.time} · {article.readTime}</time></div>
+                  </article>;
+                  })}
                 </div>
               </section>)}
             </div>

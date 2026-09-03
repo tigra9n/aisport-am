@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import { RevealGrid } from "../../../components/reveal-grid";
-import { shareImage, sizedImage } from "../../../lib/image-proxy";
+import { imageSrcSet, shareImage, sizedImage } from "../../../lib/image-proxy";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -47,7 +47,7 @@ export default async function LeaguePage({ params }: { params: Promise<{ code: s
     <div className="page-toolbar">{LEAGUE_TAGS.map((item) => <Link className={item.code === league.code ? "active" : ""} href={`/league/${item.code}`} key={item.code}>{item.label}</Link>)}</div>
     {lead ? <>
       <section className="category-hero">
-        <article className="main-lead"><Link className="lead-image" href={`/news/${lead.slug}`}><img src={sizedImage(lead.image, 700)} alt={lead.title} referrerPolicy="no-referrer" decoding="async" fetchPriority="high" /></Link><div className="lead-overlay"><span className="breaking-label">{league.label}</span><h2><Link href={`/news/${lead.slug}`}>{lead.title}</Link></h2><p>{lead.excerpt}</p></div></article>
+        <article className="main-lead"><Link className="lead-image" href={`/news/${lead.slug}`}><img src={sizedImage(lead.image, 700)} srcSet={imageSrcSet(lead.image, [360, 760, 1400])} sizes="(max-width:700px) calc(100vw - 24px), 700px" alt={lead.title} referrerPolicy="no-referrer" decoding="async" fetchPriority="high" /></Link><div className="lead-overlay"><span className="breaking-label">{league.label}</span><h2><Link href={`/news/${lead.slug}`}>{lead.title}</Link></h2><p>{lead.excerpt}</p></div></article>
         <div className="category-list">{articles.slice(1, 4).map((article) => <NewsCard article={article} compact key={article.slug} />)}</div>
       </section>
       <div className="modern-section-head"><div><span>Վերջին հրապարակումները</span><h2>{league.label}․ բոլոր լուրերը</h2></div></div>
