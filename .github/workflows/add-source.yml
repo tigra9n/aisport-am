@@ -12,29 +12,63 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - name: Rewrite the seven Armenian slugs to their Latin form
-        working-directory: aisport-am
+      - name: Verify the old Armenian URLs still resolve
         run: |
-          npm install --no-audit --no-fund
-          # The redirects for these went live with the previous deploy, so the
-          # old URLs already point here - which means until this runs they
-          # point at a slug that does not exist yet. Each replacement was
-          # produced by reproducing slugify() against the stored title, and is
-          # applied by id so quoting of the Armenian text cannot affect it.
-          echo "=== BEFORE ===" > ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT id, substr(slug,1,58) AS slug FROM articles WHERE id BETWEEN 1 AND 7 ORDER BY id;" >> ../add-source-result.txt 2>&1 || true
-          echo "=== APPLYING ===" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET slug='araks-ararat-y-yndunum-e-kilikiayin-gavatayin-af-1588810-preview' WHERE id=1; UPDATE articles SET slug='fulhem-chelsi-premier-ligayi-karevor-handipum-af-1557376-preview' WHERE id=2; UPDATE articles SET slug='osasuna---levante-la-ligayi-handipum-af-1570350-preview' WHERE id=3; UPDATE articles SET slug='malagan-yndunum-e-deportivoyin-la-ligayi-af-1570349-preview' WHERE id=4; UPDATE articles SET slug='bolonian-hyurynkalum-e-latsioyin-seria-a-um-af-1550089-preview' WHERE id=5; UPDATE articles SET slug='roman-hyurynkalum-e-fiorentinayin-af-1550087-preview' WHERE id=6; UPDATE articles SET slug='angliayi-havaqakani-gisherayin-arkatsnery-nor-glkhatsavanq-66997343' WHERE id=7;" >> ../add-source-result.txt 2>&1 || true
-          echo "=== AFTER ===" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT id, slug FROM articles WHERE id BETWEEN 1 AND 7 ORDER BY id;" >> ../add-source-result.txt 2>&1 || true
-          echo "=== ANY NON-LATIN SLUG LEFT IN THE WHOLE TABLE? (want 0) ===" >> ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT COUNT(*) AS remaining FROM articles WHERE slug GLOB '*[^a-zA-Z0-9-]*';" >> ../add-source-result.txt 2>&1 || true
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # The seven slugs have been rewritten, so their original URLs now
+          # exist only as redirects. Both entry points have to work: the old
+          # slug on the new domain, and the old slug on the old domain, which
+          # must reach the final destination in a single hop rather than
+          # bouncing host-first and slug-second.
+          OLDNEW=(
+            "արակս-արարատ-ը-ընդունում-է-կիլիկիային-գավաթային-af-1588810-preview|araks-ararat-y-yndunum-e-kilikiayin-gavatayin-af-1588810-preview"
+            "ֆուլհեմ-չելսի-պրեմիեր-լիգայի-կարևոր-հանդիպում-af-1557376-preview|fulhem-chelsi-premier-ligayi-karevor-handipum-af-1557376-preview"
+            "օսասունա---լևանտե-լա-լիգայի-հանդիպում-af-1570350-preview|osasuna---levante-la-ligayi-handipum-af-1570350-preview"
+            "մալագան-ընդունում-է-դեպորտիվոյին-լա-լիգայի-af-1570349-preview|malagan-yndunum-e-deportivoyin-la-ligayi-af-1570349-preview"
+            "բոլոնիան-հյուրընկալում-է-լացիոյին-սերիա-ա-ում-af-1550089-preview|bolonian-hyurynkalum-e-latsioyin-seria-a-um-af-1550089-preview"
+            "ռոման-հյուրընկալում-է-ֆիորենտինային-af-1550087-preview|roman-hyurynkalum-e-fiorentinayin-af-1550087-preview"
+            "անգլիայի-հավաքականի-գիշերային-արկածները-նոր-գլխացավանք-66997343|angliayi-havaqakani-gisherayin-arkatsnery-nor-glkhatsavanq-66997343"
+          )
+          {
+            PASS=0; FAIL=0
+            for ENTRY in "${OLDNEW[@]}"; do
+              OLD="${ENTRY%%|*}"; NEW="${ENTRY##*|}"
+              ENC=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$OLD")
+              WANT="https://aifootball.am/news/$NEW"
+
+              C1=$(curl -s -m 30 -o /dev/null -w '%{http_code}' "https://aifootball.am/news/$ENC")
+              T1=$(curl -s -m 30 -o /dev/null -w '%{redirect_url}' "https://aifootball.am/news/$ENC")
+              F1=$(curl -s -m 30 -L -o /dev/null -w '%{http_code}' "https://aifootball.am/news/$ENC")
+
+              C2=$(curl -s -m 30 -o /dev/null -w '%{http_code}' "https://aisport.am/news/$ENC")
+              T2=$(curl -s -m 30 -o /dev/null -w '%{redirect_url}' "https://aisport.am/news/$ENC")
+
+              NEWCODE=$(curl -s -m 30 -o /dev/null -w '%{http_code}' "$WANT")
+
+              SHORT=$(printf '%s' "$NEW" | cut -c1-40)
+              OK=yes
+              [ "$C1" = "301" ] && [ "$T1" = "$WANT" ] && [ "$F1" = "200" ] || OK=no
+              [ "$C2" = "301" ] && [ "$T2" = "$WANT" ] || OK=no
+              [ "$NEWCODE" = "200" ] || OK=no
+              if [ "$OK" = yes ]; then
+                PASS=$((PASS+1)); echo "OK    $SHORT"
+              else
+                FAIL=$((FAIL+1))
+                echo "FAIL  $SHORT"
+                echo "        new domain + old slug: $C1 -> $T1 (final $F1)"
+                echo "        old domain + old slug: $C2 -> $T2"
+                echo "        new URL direct: $NEWCODE"
+              fi
+            done
+            echo
+            echo "passed: $PASS / 7   failed: $FAIL"
+            echo
+            echo "=== the sitemap should now carry only Latin article URLs ==="
+            curl -s -m 60 -o /tmp/s.xml https://aifootball.am/sitemap.xml
+            echo "total URLs: $(grep -c '<loc>' /tmp/s.xml)"
+            echo "URLs containing a percent-escape (want 0): $(grep -o '<loc>[^<]*%[^<]*</loc>' /tmp/s.xml | wc -l)"
+            echo "URLs containing a non-ASCII byte (want 0): $(grep -oP '<loc>[^<]*[^\x00-\x7F][^<]*</loc>' /tmp/s.xml | wc -l)"
+          } > add-source-result.txt 2>&1 || true
+          cat add-source-result.txt
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
