@@ -241,7 +241,10 @@ try {
   for (const [name, path, selector] of [
     ["top scorers", "/topscorers", ".topscorers-table tbody tr td:nth-child(2)"],
     ["squad (Man City)", "/team/50", ".squad-card strong"],
-    ["squad (Ararat-Armenia)", "/team/3838", ".squad-card strong"],
+    // 3683, not 3838. The old id belongs to no Armenian club, so this
+    // check reported an empty squad for weeks and I passed that on as a
+    // fault in the site. API-Football lists Ararat-Armenia as 3683.
+    ["squad (Ararat-Armenia)", "/team/3683", ".squad-card strong"],
   ]) {
     await p.goto(BASE + path, { waitUntil: "load", timeout: 60000 }).catch(() => {});
     await p.waitForTimeout(1500);
