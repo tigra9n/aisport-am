@@ -1,5 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
-import { sizedImage } from "../lib/image-proxy";
+import { imageSrcSet, sizedImage } from "../lib/image-proxy";
 import { SOCIAL } from "../lib/social";
 import Link from "next/link";
 import { Suspense } from "react";
@@ -190,10 +190,18 @@ export default async function Home() {
               {sportSections.filter((sport) => sport.items.length > 0).map((sport) => <section className="sport-news-block" key={sport.slug}>
                 <div className="sport-news-head"><div><span /> <h3>{sport.name}</h3></div><Link href={sport.href}>Բոլոր լուրերը →</Link></div>
                 <div className="sport-news-grid">
-                  {sport.items.map((article, index) => <article className={index === 0 ? "sport-news-card featured" : "sport-news-card"} key={article.slug}>
-                    <Link className="sport-news-image" href={`${sport.basePath}/${article.slug}`}><img src={sizedImage(article.image, 420)} alt={article.title} referrerPolicy="no-referrer" loading="lazy" decoding="async" /></Link>
-                    <div><span>{article.category}</span><h4><Link href={`${sport.basePath}/${article.slug}`}>{article.title}</Link></h4>{index === 0 ? <p>{article.excerpt}</p> : null}<time>{article.time} · {article.readTime}</time></div>
-                  </article>)}
+                  {sport.items.map((article, index) => {
+                    // The first card in each block runs the full width of
+                    // its column; every other one is a 130px thumbnail
+                    // (105px on a phone). They used to share one request
+                    // for an 840px-wide photograph, so the thumbnails were
+                    // downloading roughly six times the pixels they show.
+                    const featured = index === 0;
+                    return <article className={featured ? "sport-news-card featured" : "sport-news-card"} key={article.slug}>
+                    <Link className="sport-news-image" href={`${sport.basePath}/${article.slug}`}><img src={sizedImage(article.image, featured ? 420 : 130)} srcSet={imageSrcSet(article.image, featured ? [360, 560, 840] : [130, 200, 300])} sizes={featured ? "(max-width:700px) calc(100vw - 24px), 400px" : "(max-width:700px) 105px, 130px"} alt={article.title} referrerPolicy="no-referrer" loading="lazy" decoding="async" /></Link>
+                    <div><span>{article.category}</span><h4><Link href={`${sport.basePath}/${article.slug}`}>{article.title}</Link></h4>{featured ? <p>{article.excerpt}</p> : null}<time>{article.time} · {article.readTime}</time></div>
+                  </article>;
+                  })}
                 </div>
               </section>)}
             </div>

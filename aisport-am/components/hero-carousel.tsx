@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { sizedImage } from "../lib/image-proxy";
+import { imageSrcSet, sizedImage } from "../lib/image-proxy";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { ArticlePreview } from "../lib/content";
@@ -21,7 +21,7 @@ export function HeroCarousel({ articles }: { articles: ArticlePreview[] }) {
 
   return <div className="featured-news-stack">
     <article className="main-lead hero-carousel-card" key={item.slug}>
-      <Link prefetch={false} className="lead-image" href={`/news/${item.slug}`}><img src={sizedImage(item.image, 700)} alt={item.title} decoding="async" fetchPriority="high" /></Link>
+      <Link prefetch={false} className="lead-image" href={`/news/${item.slug}`}><img src={sizedImage(item.image, 700)} srcSet={imageSrcSet(item.image, [360, 700, 1000, 1400])} sizes="(max-width:700px) calc(100vw - 24px), 700px" alt={item.title} decoding="async" fetchPriority="high" /></Link>
       <div className="lead-overlay">
         <span className="breaking-label"><i /> Գլխավոր լուր</span>
         <h1><Link href={`/news/${item.slug}`}>{item.title}</Link></h1>
