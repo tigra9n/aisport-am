@@ -197,8 +197,19 @@ export default async function Home() {
                     // for an 840px-wide photograph, so the thumbnails were
                     // downloading roughly six times the pixels they show.
                     const featured = index === 0;
+                    // The small cards' `sizes` says 300px for a slot that is
+                    // 130px wide, and that is not a mistake. The image fills a
+                    // box far taller than its own shape and is cropped to the
+                    // slot by object-fit:cover, so it is painted about 300px
+                    // wide before the crop takes it back to 130. Asked for
+                    // 130, the browser fetched a 130px copy and stretched it
+                    // two and a half times - which is why these three
+                    // thumbnails looked soft while every other image on the
+                    // page was sharp. `sizes` has to describe the width the
+                    // image is painted at, not the width of the window it is
+                    // seen through.
                     return <article className={featured ? "sport-news-card featured" : "sport-news-card"} key={article.slug}>
-                    <Link className="sport-news-image" href={`${sport.basePath}/${article.slug}`}><img src={sizedImage(article.image, featured ? 420 : 130)} srcSet={imageSrcSet(article.image, featured ? [360, 840] : [130, 280])} sizes={featured ? "(max-width:700px) calc(100vw - 24px), 400px" : "(max-width:700px) 105px, 130px"} alt={article.title} referrerPolicy="no-referrer" loading="lazy" decoding="async" /></Link>
+                    <Link className="sport-news-image" href={`${sport.basePath}/${article.slug}`}><img src={sizedImage(article.image, featured ? 420 : 300)} srcSet={imageSrcSet(article.image, featured ? [360, 840] : [190, 300, 600])} sizes={featured ? "(max-width:700px) calc(100vw - 24px), 400px" : "(max-width:700px) 190px, 300px"} alt={article.title} referrerPolicy="no-referrer" loading="lazy" decoding="async" /></Link>
                     <div><span>{article.category}</span><h4><Link href={`${sport.basePath}/${article.slug}`}>{article.title}</Link></h4>{featured ? <p>{article.excerpt}</p> : null}<time>{article.time} · {article.readTime}</time></div>
                   </article>;
                   })}
