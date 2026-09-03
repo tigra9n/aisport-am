@@ -319,8 +319,9 @@ jobs:
                   })' "$TEAM"
             done
             echo "  --- what the site actually shows, overrides included ---"
-            for T in 50 40 529; do
-              echo "      team $T: $(curl -s "https://aifootball.am/team/$T" | grep -o 'Գլխավոր մարզիչ</span><strong>[^<]*' | head -1 | sed 's/.*<strong>//')"
+            for T in 50 40 529 33 42 541 505 157; do
+              NAME=$(curl -s "https://aifootball.am/team/$T" | grep -o 'Գլխավոր մարզիչ</span><strong>[^<]*' | head -1 | sed 's/.*<strong>//')
+              echo "      team $T: ${NAME:-NO MANAGER SHOWN}"
             done
           } > coaches.txt 2>&1
           cat coaches.txt

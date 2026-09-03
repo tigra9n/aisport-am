@@ -23,14 +23,24 @@ type ApiFootballSquad = {
 // were transient - the same URL answered a second later - and a single
 // extra attempt costs one API call only when something has already gone
 // wrong. Retrying more than once would turn a real outage into a stall.
+// Three attempts, backing off. Two was not enough: Barcelona's team page
+// came back with no manager at all, because that club's coach had never been
+// cached, the cache key had just been bumped, and the one live call it fell
+// back on failed. A page that quietly drops a section is worse than a slow
+// one - the reader cannot tell the difference between "no manager" and
+// "we could not ask".
+const RETRY_DELAYS_MS = [250, 750];
+
 async function fetchApi(url: string, key: string): Promise<Response | null> {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt += 1) {
     try {
       const response = await fetch(url, { headers: { "x-apisports-key": key, Accept: "application/json" } });
       if (response.ok) return response;
     } catch { /* fall through to the retry */ }
-    if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 250));
+    const delay = RETRY_DELAYS_MS[attempt];
+    if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
   }
+  console.error(`[squad-server] gave up on ${url.split("?")[0]} after ${RETRY_DELAYS_MS.length + 1} attempts`);
   return null;
 }
 
