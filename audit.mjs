@@ -80,7 +80,37 @@ log(`  date line: ${await page.evaluate(() => {
   }
 }
 
-// 5. Can Cloudflare resize a remote image for us? This decides whether the
+// 5. Did the indexing signals actually reach the served HTML? Search
+// Console named the cause - 83 pages "duplicate, no canonical chosen" -
+// and a deploy reporting success is not evidence that the tags are there.
+{
+  log(`\n=== indexing signals in the served HTML ===`);
+  const pages = [
+    ["home", "/", "https://aifootball.am/", false],
+    ["search", "/search?q=%D4%B2%D5%A1%D6%80%D5%BD%D5%A5%D5%AC%D5%B8%D5%B6%D5%A1", "https://aifootball.am/search", true],
+    ["opinions", "/opinions", "https://aifootball.am/opinions", false],
+    ["podcasts", "/podcasts", "https://aifootball.am/podcasts", false],
+    ["league PL", "/league/PL", "https://aifootball.am/league/PL", false],
+  ];
+  for (const [name, path, expectCanonical, expectNoindex] of pages) {
+    const res = await page.request.get(BASE + path, { timeout: 45000 }).catch(() => null);
+    if (!res || !res.ok()) { log(`  ${name}: HTTP ${res ? res.status() : "unreachable"}`); continue; }
+    const html = await res.text();
+    const canonical = html.match(/<link[^>]+rel="canonical"[^>]+href="([^"]+)"/)?.[1]
+      ?? html.match(/<link[^>]+href="([^"]+)"[^>]+rel="canonical"/)?.[1] ?? null;
+    const robots = html.match(/<meta[^>]+name="robots"[^>]+content="([^"]+)"/)?.[1] ?? null;
+    const okCanonical = canonical === expectCanonical;
+    const okRobots = expectNoindex ? /noindex/.test(robots ?? "") : !/noindex/.test(robots ?? "");
+    log(`  ${name}: canonical ${okCanonical ? "OK" : "WRONG"} (${canonical ?? "missing"}) | robots ${okRobots ? "OK" : "WRONG"} (${robots ?? "none"})`);
+  }
+  const sm = await page.request.get(`${BASE}/sitemap.xml`, { timeout: 45000 }).catch(() => null);
+  if (sm && sm.ok()) {
+    const xml = await sm.text();
+    log(`  sitemap: ${(xml.match(/<url>/g) ?? []).length} urls | league pages ${(xml.match(/\/league\//g) ?? []).length} | contains /search: ${xml.includes("aifootball.am/search")}`);
+  }
+}
+
+// 6. Can Cloudflare resize a remote image for us? This decides whether the
 // page-weight fix is "defer the images" or "serve them smaller".
 const probe = "https://media.api-sports.io/football/teams/33.png";
 for (const url of [`${BASE}/cdn-cgi/image/width=80,format=auto/${probe}`, probe]) {
