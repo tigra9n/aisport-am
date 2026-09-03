@@ -15,14 +15,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Dump the seven non-Latin slugs in full
+      - name: Rewrite the seven Armenian slugs to their Latin form
         working-directory: aisport-am
         run: |
           npm install --no-audit --no-fund
-          # Needed in full, untruncated, to compute each Latin replacement
-          # and the redirect that has to keep the old URL working.
-          echo "=== THE SEVEN NON-LATIN SLUGS ===" > ../add-source-result.txt
-          npx wrangler d1 execute aisport-db --remote --command "SELECT id, slug, substr(title,1,70) AS title FROM articles WHERE slug GLOB '*[^a-zA-Z0-9-]*' ORDER BY id;" >> ../add-source-result.txt 2>&1 || true
+          # The redirects for these went live with the previous deploy, so the
+          # old URLs already point here - which means until this runs they
+          # point at a slug that does not exist yet. Each replacement was
+          # produced by reproducing slugify() against the stored title, and is
+          # applied by id so quoting of the Armenian text cannot affect it.
+          echo "=== BEFORE ===" > add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT id, substr(slug,1,58) AS slug FROM articles WHERE id BETWEEN 1 AND 7 ORDER BY id;" >> add-source-result.txt 2>&1 || true
+          echo "=== APPLYING ===" >> add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "UPDATE articles SET slug='araks-ararat-y-yndunum-e-kilikiayin-gavatayin-af-1588810-preview' WHERE id=1; UPDATE articles SET slug='fulhem-chelsi-premier-ligayi-karevor-handipum-af-1557376-preview' WHERE id=2; UPDATE articles SET slug='osasuna---levante-la-ligayi-handipum-af-1570350-preview' WHERE id=3; UPDATE articles SET slug='malagan-yndunum-e-deportivoyin-la-ligayi-af-1570349-preview' WHERE id=4; UPDATE articles SET slug='bolonian-hyurynkalum-e-latsioyin-seria-a-um-af-1550089-preview' WHERE id=5; UPDATE articles SET slug='roman-hyurynkalum-e-fiorentinayin-af-1550087-preview' WHERE id=6; UPDATE articles SET slug='angliayi-havaqakani-gisherayin-arkatsnery-nor-glkhatsavanq-66997343' WHERE id=7;" >> add-source-result.txt 2>&1 || true
+          echo "=== AFTER ===" >> add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT id, slug FROM articles WHERE id BETWEEN 1 AND 7 ORDER BY id;" >> add-source-result.txt 2>&1 || true
+          echo "=== ANY NON-LATIN SLUG LEFT IN THE WHOLE TABLE? (want 0) ===" >> add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT COUNT(*) AS remaining FROM articles WHERE slug GLOB '*[^a-zA-Z0-9-]*';" >> add-source-result.txt 2>&1 || true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
