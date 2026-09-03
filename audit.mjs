@@ -117,6 +117,50 @@ for (let i = 0; i < titles.length; i++) {
 }
 if (!pairs) log(`  no near-duplicate headlines among ${titles.length} on the page`);
 
+// The home page only ever shows a handful. The repeat that actually reached
+// readers - two pieces about Manu Koné ninety minutes apart - was never both
+// on screen at once, so this asks the API for the whole day instead.
+//
+// The rule is deliberately the same one lib/story-signature.ts applies
+// before publishing: stems of the title and summary together, cut to five
+// characters so Armenian case endings collapse, and both a proportion and a
+// count have to clear their threshold. Kept in step with that file by hand -
+// if one changes, change the other.
+log(`\n=== the same story twice, across the last 24 hours ===`);
+try {
+  const response = await fetch(`${BASE}/api/articles?limit=80`);
+  const payload = await response.json();
+  const recent = (Array.isArray(payload) ? payload : payload.articles ?? []).map((a) => ({
+    title: a.title ?? "",
+    excerpt: a.excerpt ?? "",
+  }));
+  const STOP = new Set(["որպես","համար","մասին","հետո","առաջ","բայց","սակայն","ըստ","հետ","մինչև","կողմից","ակումբը","ակումբի","թիմը","թիմի","մարզիչը","գլխավոր","հրապարակման","աղբյուրների","փոխանցմամբ","տեղեկություններով"]);
+  const stems = (a) => {
+    const out = new Set();
+    for (const w of `${a.title} ${a.excerpt}`.toLowerCase().split(/[^\p{L}\p{N}]+/u)) {
+      if (w.length >= 4 && !STOP.has(w)) out.add(w.slice(0, 5));
+    }
+    return out;
+  };
+  const signatures = recent.map(stems);
+  let repeats = 0;
+  for (let i = 0; i < recent.length; i++) {
+    for (let j = i + 1; j < recent.length; j++) {
+      const a = signatures[i], b = signatures[j];
+      if (!a.size || !b.size) continue;
+      const shared = [...a].filter((w) => b.has(w)).length;
+      const overlap = (2 * shared) / (a.size + b.size);
+      if (overlap >= 0.42 && shared >= 6 && repeats < 6) {
+        log(`  ${overlap.toFixed(2)} / ${shared} stems: "${recent[i].title.slice(0, 52)}" / "${recent[j].title.slice(0, 52)}"`);
+        repeats++;
+      }
+    }
+  }
+  if (!repeats) log(`  no repeated stories among the last ${recent.length} published`);
+} catch (error) {
+  log(`  could not check: ${String(error).slice(0, 120)}`);
+}
+
 // ---------- 6. Light mode. The league picker was invisible there - a
 // hard-coded dark background under theme-coloured text - and nothing had
 // ever checked the light theme at all. Walk the visible text and report

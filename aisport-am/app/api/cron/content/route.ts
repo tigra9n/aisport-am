@@ -1,7 +1,7 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { sources } from "../../../../db/schema";
-import { articleExistsForSource, saveGeneratedArticle } from "../../../../lib/articles";
+import { articleExistsForSource, lastSaveSkipReason, saveGeneratedArticle } from "../../../../lib/articles";
 import { generateFromSourceSnippet, generateMatchPreview, generateMatchRecap, lastGenerationDebug } from "../../../../lib/content-generation";
 import { fetchArticlePage, fetchFeed, fetchApiTubePerson, fetchApiTubeTitle, validateImageUrl, type FeedItem } from "../../../../lib/feeds";
 import { pickCombinedChain } from "../../../../lib/football-entities";
@@ -493,6 +493,7 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
           ...article, imageUrl: resolvedImage, sourceName: source.name, sourceUrl: item.link, uniquePart: String(Date.now()).slice(-8),
         });
         if (saved) { generated++; log.push(`rewrite: ${item.title.slice(0, 40)}`); }
+        else if (lastSaveSkipReason) log.push(`skipped as a repeat: ${item.title.slice(0, 40)} | ${lastSaveSkipReason}`);
       }
     }
   } catch (err) {
