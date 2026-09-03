@@ -16,11 +16,35 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: How many articles has the site published per hour since the parallel search went in
+        run: |
+          npm install --no-save wrangler@4.92.0
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT strftime('%Y-%m-%d %H:00', published_at) AS hour, COUNT(*) AS articles FROM articles WHERE published_at > datetime('now','-30 hours') GROUP BY hour ORDER BY hour DESC" \
+            > rate.json 2>&1 || true
+          node -e "
+            const fs=require('fs');
+            let raw=fs.readFileSync('rate.json','utf8');
+            const start=raw.indexOf('[');
+            let rows=[];
+            try{rows=JSON.parse(raw.slice(start))[0].results;}catch(e){console.log(raw.slice(0,900));}
+            const lines=['=== articles published per hour (UTC), last 30 hours ==='];
+            for(const r of rows) lines.push('  '+r.hour+'  '+'#'.repeat(r.articles)+' '+r.articles);
+            const total=rows.reduce((n,r)=>n+r.articles,0);
+            lines.push('  total '+total+' over '+rows.length+' hours with output, average '+(total/Math.max(rows.length,1)).toFixed(2)+' per active hour');
+            console.log(lines.join('\n'));
+            fs.writeFileSync('rate.txt',lines.join('\n'));
+          "
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Verify the Armenian names, the lineup links and the image proxy
         run: |
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium
           node audit.mjs || true
+          cat rate.txt >> add-source-result.txt 2>/dev/null || echo "(rate query produced nothing)" >> add-source-result.txt
           echo "" >> add-source-result.txt
           echo "--- screenshots produced ---" >> add-source-result.txt
           ls -la audit >> add-source-result.txt 2>&1 || true
