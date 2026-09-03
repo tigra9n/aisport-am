@@ -12,44 +12,27 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Check that inner pages redirect to their equivalent, not the homepage
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Date the articles carrying non-Latin slugs
+        working-directory: aisport-am
         run: |
-          # Search Console warned that only some pages redirect with 301.
-          # A site move loses the value of every old URL that does not land
-          # on its equivalent, so test real article URLs rather than trust
-          # a generic warning: each must answer 301 from the old host, name
-          # the SAME path on the new host (not the homepage, which would
-          # throw away the page's specific ranking), and that target must
-          # then return 200.
-          curl -s -m 60 -o /tmp/sitemap.xml https://aifootball.am/sitemap.xml
-          {
-            echo "sitemap URLs: $(grep -o '<loc>' /tmp/sitemap.xml | wc -l)"
-            echo
-            PASS=0; TOHOME=0; BAD=0
-            # A spread across the sitemap: newest, oldest and the middle.
-            URLS=$( { grep -o '<loc>[^<]*/news/[^<]*</loc>' /tmp/sitemap.xml | head -4;
-                      grep -o '<loc>[^<]*/news/[^<]*</loc>' /tmp/sitemap.xml | tail -4;
-                      grep -o '<loc>[^<]*/opinions/[^<]*</loc>' /tmp/sitemap.xml | head -2; } \
-                    | sed 's|<loc>||; s|</loc>||' | sort -u )
-            for NEW in $URLS; do
-              PATH_ONLY="${NEW#https://aifootball.am}"
-              OLD="https://aisport.am${PATH_ONLY}"
-              CODE=$(curl -s -m 30 -o /dev/null -w '%{http_code}' "$OLD")
-              TARGET=$(curl -s -m 30 -o /dev/null -w '%{redirect_url}' "$OLD")
-              FINAL=$(curl -s -m 30 -L -o /dev/null -w '%{http_code}' "$OLD")
-              SHORT=$(printf '%s' "$PATH_ONLY" | cut -c1-46)
-              if [ "$CODE" = "301" ] && [ "$TARGET" = "$NEW" ] && [ "$FINAL" = "200" ]; then
-                PASS=$((PASS+1)); echo "OK    $CODE -> same path, final 200   $SHORT"
-              elif [ "$TARGET" = "https://aifootball.am/" ]; then
-                TOHOME=$((TOHOME+1)); echo "HOME  $CODE -> homepage, page value lost   $SHORT"
-              else
-                BAD=$((BAD+1)); echo "BAD   $CODE -> $TARGET (final $FINAL)   $SHORT"
-              fi
-            done
-            echo
-            echo "same-path 301 then 200: $PASS | redirected to homepage: $TOHOME | other problem: $BAD"
-          } > add-source-result.txt 2>&1 || true
-          cat add-source-result.txt
+          npm install --no-audit --no-fund
+          # slugify() strips everything outside [a-z0-9-], and previews go
+          # through it like every other article, so today's code cannot
+          # produce an Armenian-script slug. That points at these being old
+          # rows from before transliteration existed - which decides whether
+          # anything needs fixing in code or only, optionally, in the data.
+          echo "=== ARTICLES WITH A NON-LATIN SLUG: how many, and how old ===" > ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT COUNT(*) AS n, MIN(published_at) AS oldest, MAX(published_at) AS newest FROM articles WHERE slug GLOB '*[^a-zA-Z0-9-]*';" >> ../add-source-result.txt 2>&1 || true
+          echo "=== THE NEWEST FEW OF THEM ===" >> ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT id, substr(published_at,1,16) AS at, substr(slug,1,60) AS slug FROM articles WHERE slug GLOB '*[^a-zA-Z0-9-]*' ORDER BY published_at DESC LIMIT 5;" >> ../add-source-result.txt 2>&1 || true
+          echo "=== FOR COMPARISON: newest articles overall ===" >> ../add-source-result.txt
+          npx wrangler d1 execute aisport-db --remote --command "SELECT id, substr(published_at,1,16) AS at, substr(slug,1,60) AS slug FROM articles ORDER BY id DESC LIMIT 5;" >> ../add-source-result.txt 2>&1 || true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
