@@ -52,22 +52,20 @@ const dayOffset = (n) => {
   const d = new Date(Date.now() + n * 86400000);
   return d.toISOString().slice(0, 10);
 };
+// On /live a match row is a div with a router.push, not an anchor, so
+// there is nothing for a href selector to find - which is why the earlier
+// runs only ever saw the eight links on the home page. Read the ids out of
+// the served HTML instead.
 const candidates = [];
-// Early September is an international break, so the last club weekend is
-// where a published lineup will be found. The live page only accepts dates
-// within a week either way.
-for (const path of ["/live", `/live?date=${dayOffset(-4)}`, `/live?date=${dayOffset(-5)}`, `/live?date=${dayOffset(-3)}`, `/live?date=${dayOffset(-6)}`, `/live?date=${dayOffset(-1)}`, "/"]) {
-  await page.goto(BASE + path, { waitUntil: "load", timeout: 60000 }).catch(() => {});
-  await page.waitForTimeout(1200);
-  const found = await page.evaluate(() =>
-    [...document.querySelectorAll('a[href*="match="]')].map((x) => x.getAttribute("href")));
-  for (const h of found) if (!candidates.includes(h)) candidates.push(h);
+for (const path of ["/live", `/live?date=${dayOffset(-4)}`, `/live?date=${dayOffset(-5)}`, `/live?date=${dayOffset(-3)}`, `/live?date=${dayOffset(-6)}`, "/"]) {
+  const res = await page.request.get(BASE + path, { timeout: 60000 }).catch(() => null);
+  if (!res || !res.ok()) continue;
+  const html = await res.text();
+  for (const id of new Set(html.match(/af-\d{5,}/g) ?? [])) if (!candidates.includes(id)) candidates.push(id);
 }
-log(`\n=== match modal — ${candidates.length} matches found ===`);
+log(`\n=== match modal — ${candidates.length} match ids found ===`);
 let withLineup = null;
-for (const href of candidates.slice(0, 40)) {
-  const id = new URL(href, BASE).searchParams.get("match");
-  if (!id) continue;
+for (const id of candidates.slice(0, 40)) {
   const res = await page.request.get(`${BASE}/api/live/match/${id}`, { timeout: 60000 }).catch(() => null);
   if (!res || !res.ok()) continue;
   const data = await res.json().catch(() => null);
@@ -76,7 +74,7 @@ for (const href of candidates.slice(0, 40)) {
   const withId = starters.filter((p) => p.id).length;
   log(`  ${id}: ${data.lineups.length} lineups, ${starters.length} starters, ${withId} of them carry a player id`);
   log(`    first starter: ${JSON.stringify(starters[0])}`);
-  if (withId > 0) { withLineup = href; break; }
+  if (withId > 0) { withLineup = `/live?match=${id}`; break; }
 }
 if (!withLineup) {
   log(`  no match with a published lineup in that window - the links cannot be checked in the page yet`);
