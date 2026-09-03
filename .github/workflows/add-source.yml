@@ -1,6 +1,7 @@
 name: Add RSS Source
 
 on:
+  workflow_dispatch: {}
   push:
     branches: [main]
     paths: ['.github/workflows/add-source.yml']
@@ -15,7 +16,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Break down the page weight, and check the player stats table
+      - name: Verify the Armenian names, the lineup links and the image proxy
         run: |
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium

@@ -1,86 +1,82 @@
-// Before touching images, find out what the weight actually consists of.
-// /search, /category/football and /league/PL each transfer over 3MB, but
-// "too heavy" has two different cures: many images that should be deferred,
-// or a few enormous ones that should be resized. Guessing between them is
-// how the wrong fix gets shipped, so list the resources by size.
-//
-// Also confirms the player page now renders its statistics table.
+// Verify the Armenian-names and clickable-lineup deploy, and probe whether
+// Cloudflare can resize images for us before deciding how to cut page weight.
 import { chromium } from "playwright";
 import fs from "node:fs";
 
 const BASE = "https://aifootball.am";
 const OUT = "audit";
 fs.mkdirSync(OUT, { recursive: true });
-
 const report = [];
 const log = (s) => { console.log(s); report.push(s); };
 
 const browser = await chromium.launch();
+const ctx = await browser.newContext({ viewport: { width: 1366, height: 950 } });
+const page = await ctx.newPage();
 
-for (const [name, path] of [["category-football", "/category/football"], ["home", "/"]]) {
-  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
-  const page = await ctx.newPage();
-  const res = [];
-  page.on("response", async (r) => {
-    const type = (r.headers()["content-type"] ?? "").split(";")[0];
-    let size = Number(r.headers()["content-length"] ?? 0);
-    if (!size) { try { size = (await r.body()).length; } catch { size = 0; } }
-    if (size > 0) res.push({ size, type, url: r.url() });
-  });
-
-  await page.goto(BASE + path, { waitUntil: "load", timeout: 60000 });
-  await page.waitForTimeout(3000);
-
-  const total = res.reduce((n, r) => n + r.size, 0);
-  const images = res.filter((r) => r.type.startsWith("image/"));
-  const imgTotal = images.reduce((n, r) => n + r.size, 0);
-
-  log(`\n=== ${name} (phone) — ${(total / 1024 / 1024).toFixed(2)} MB in ${res.length} requests ===`);
-  log(`  images: ${images.length} files, ${(imgTotal / 1024 / 1024).toFixed(2)} MB (${Math.round((imgTotal / total) * 100)}% of the page)`);
-  log(`  everything else: ${((total - imgTotal) / 1024).toFixed(0)} KB`);
-
-  const counted = await page.evaluate(() => {
-    const imgs = [...document.querySelectorAll("img")];
-    return {
-      inDom: imgs.length,
-      lazy: imgs.filter((i) => i.getAttribute("loading") === "lazy").length,
-      sized: imgs.filter((i) => i.getAttribute("width") && i.getAttribute("height")).length,
-      oversized: imgs.filter((i) => i.naturalWidth > i.clientWidth * 2 && i.clientWidth > 0).length,
-      worst: imgs
-        .filter((i) => i.clientWidth > 0)
-        .map((i) => ({ nat: i.naturalWidth, shown: Math.round(i.clientWidth), src: i.currentSrc.slice(0, 80) }))
-        .sort((a, b) => b.nat / Math.max(b.shown, 1) - a.nat / Math.max(a.shown, 1))
-        .slice(0, 5),
-    };
-  });
-  log(`  <img> in the DOM: ${counted.inDom} | lazy: ${counted.lazy} | with width+height: ${counted.sized}`);
-  log(`  loaded at more than twice the size they are displayed: ${counted.oversized}`);
-  for (const w of counted.worst) log(`    ${w.nat}px wide, shown at ${w.shown}px  ${w.src}`);
-
-  log(`  ten largest downloads:`);
-  for (const r of res.sort((a, b) => b.size - a.size).slice(0, 10)) {
-    log(`    ${String(Math.round(r.size / 1024)).padStart(5)} KB  ${r.type.padEnd(12)} ${r.url.slice(0, 88)}`);
-  }
-  await ctx.close();
+// 1. The player page the complaint came from.
+for (const id of [47323, 1485]) {
+  await page.goto(`${BASE}/player/${id}`, { waitUntil: "load", timeout: 60000 });
+  await page.waitForTimeout(1500);
+  const m = await page.evaluate(() => ({
+    title: document.querySelector("h1")?.textContent?.trim(),
+    facts: [...document.querySelectorAll(".player-facts span")].map((s) => s.textContent?.trim()),
+    leagues: [...document.querySelectorAll(".standings-table tbody tr td:first-child")].map((t) => t.textContent?.trim()),
+    dates: [...document.querySelectorAll(".transfer-date")].slice(0, 3).map((t) => t.textContent?.trim()),
+    latin: (document.body.innerText.match(/[A-Za-z]{3,}/g) ?? []).filter((w) => !["MLS","FA","UEFA","AIFootball","am"].includes(w)).slice(0, 15),
+  }));
+  log(`\n=== /player/${id} — ${m.title} ===`);
+  log(`  facts: ${m.facts.join(" | ")}`);
+  log(`  competitions: ${m.leagues.join(" | ")}`);
+  log(`  transfer dates: ${m.dates.join(" | ")}`);
+  log(`  latin words still on the page: ${m.latin.join(", ")}`);
+  await page.screenshot({ path: `${OUT}/player-${id}.jpg`, type: "jpeg", quality: 70, fullPage: false });
 }
 
-// Does the player page carry its statistics table now?
-{
-  const ctx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
-  const page = await ctx.newPage();
-  await page.goto(BASE + "/player/1485", { waitUntil: "load", timeout: 45000 });
-  await page.waitForTimeout(2000);
-  const m = await page.evaluate(() => ({
-    text: (document.body.innerText ?? "").trim().length,
-    tables: document.querySelectorAll(".standings-table").length,
-    rows: document.querySelectorAll(".standings-table tbody tr").length,
-    heads: [...document.querySelectorAll("h2")].map((h) => h.textContent?.trim()).slice(0, 4),
-  }));
-  log(`\n=== /player/1485 ===`);
-  log(`  text ${m.text} chars (was 891) | stat tables ${m.tables} | rows ${m.rows}`);
-  log(`  sections: ${m.heads.join(" / ")}`);
-  await page.screenshot({ path: `${OUT}/player-after.jpg`, type: "jpeg", quality: 70 });
-  await ctx.close();
+// 2. Header date, which used to print in English.
+await page.goto(BASE, { waitUntil: "load", timeout: 60000 });
+await page.waitForTimeout(1500);
+log(`\n=== header ===`);
+log(`  date line: ${await page.evaluate(() => document.querySelector(".site-header span")?.textContent?.trim() ?? "?")}`);
+
+// 3. A live-match modal: are the lineup names links now?
+const matchHref = await page.evaluate(() => {
+  const a = [...document.querySelectorAll('a[href*="match="]')].map((x) => x.getAttribute("href"));
+  return a[0] ?? null;
+});
+log(`\n=== match modal (${matchHref ?? "no match link on the home page"}) ===`);
+if (matchHref) {
+  await page.goto(new URL(matchHref, BASE).toString(), { waitUntil: "load", timeout: 60000 });
+  await page.waitForTimeout(2500);
+  const tab = page.locator("button", { hasText: "Կազմեր" }).first();
+  if (await tab.count()) {
+    await tab.click();
+    await page.waitForTimeout(2500);
+    const m = await page.evaluate(() => ({
+      pitchPlayers: document.querySelectorAll(".pitch-player").length,
+      pitchLinks: document.querySelectorAll("a.pitch-player-link").length,
+      subs: document.querySelectorAll(".subs-chip").length,
+      subLinks: document.querySelectorAll("a.subs-chip-link").length,
+      teams: [...document.querySelectorAll(".pitch-team-label strong")].map((t) => t.textContent?.trim()),
+      firstHref: document.querySelector("a.pitch-player-link")?.getAttribute("href") ?? null,
+      empty: document.querySelector(".detail-empty")?.textContent?.trim() ?? null,
+    }));
+    log(`  teams: ${m.teams.join(" vs ")}`);
+    log(`  pitch: ${m.pitchLinks}/${m.pitchPlayers} names are links | subs: ${m.subLinks}/${m.subs}`);
+    log(`  first link: ${m.firstHref}`);
+    if (m.empty) log(`  note: ${m.empty}`);
+    await page.screenshot({ path: `${OUT}/lineup.jpg`, type: "jpeg", quality: 70 });
+  } else {
+    log(`  the Կազմեր tab was not found`);
+  }
+}
+
+// 4. Can Cloudflare resize a remote image for us? This decides whether the
+// page-weight fix is "defer the images" or "serve them smaller".
+const probe = "https://media.api-sports.io/football/teams/33.png";
+for (const url of [`${BASE}/cdn-cgi/image/width=80,format=auto/${probe}`, probe]) {
+  const res = await page.request.get(url).catch((e) => ({ status: () => `error ${e.message.slice(0, 60)}`, headers: () => ({}) }));
+  const headers = typeof res.headers === "function" ? res.headers() : {};
+  log(`\n  ${url.slice(0, 70)}\n    status ${res.status()} type ${headers["content-type"] ?? "?"} length ${headers["content-length"] ?? "?"}`);
 }
 
 await browser.close();
