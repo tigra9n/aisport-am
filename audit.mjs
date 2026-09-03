@@ -53,7 +53,10 @@ const dayOffset = (n) => {
   return d.toISOString().slice(0, 10);
 };
 const candidates = [];
-for (const path of ["/", `/live?date=${dayOffset(-1)}`, `/live?date=${dayOffset(-2)}`, "/live"]) {
+// Early September is an international break, so the last club weekend is
+// where a published lineup will be found. The live page only accepts dates
+// within a week either way.
+for (const path of ["/live", `/live?date=${dayOffset(-4)}`, `/live?date=${dayOffset(-5)}`, `/live?date=${dayOffset(-3)}`, `/live?date=${dayOffset(-6)}`, `/live?date=${dayOffset(-1)}`, "/"]) {
   await page.goto(BASE + path, { waitUntil: "load", timeout: 60000 }).catch(() => {});
   await page.waitForTimeout(1200);
   const found = await page.evaluate(() =>
@@ -62,7 +65,7 @@ for (const path of ["/", `/live?date=${dayOffset(-1)}`, `/live?date=${dayOffset(
 }
 log(`\n=== match modal — ${candidates.length} matches found ===`);
 let withLineup = null;
-for (const href of candidates.slice(0, 25)) {
+for (const href of candidates.slice(0, 40)) {
   const id = new URL(href, BASE).searchParams.get("match");
   if (!id) continue;
   const res = await page.request.get(`${BASE}/api/live/match/${id}`, { timeout: 60000 }).catch(() => null);
