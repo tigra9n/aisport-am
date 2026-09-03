@@ -11,7 +11,11 @@
 // footer and on every article's share row at once - one edit, no hunting
 // through components.
 export const SOCIAL = {
-  facebook: "",
+  // The page ID rather than a pretty name: Facebook does not hand a new
+  // page a username until it has some content and activity behind it, and
+  // this address works from the day the page exists. It is a one-line
+  // change to facebook.com/aifootball.am once that is claimable.
+  facebook: "https://www.facebook.com/1310712632124635",
   telegram: "",
   instagram: "",
   threads: "",
