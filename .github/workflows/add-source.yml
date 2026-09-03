@@ -228,6 +228,9 @@ jobs:
             for (const r of twoSentence.slice(0,12)) console.log('    '+r.title);
           " >> titles.txt 2>&1
           cat titles.txt
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Who does API-Football say manages these clubs
         env:
