@@ -1,4 +1,5 @@
 import { armenianCountry } from "./names-hy";
+import { armenianPlayerName } from "./player-names-hy";
 import { armenianTeamName } from "./team-names-hy";
 
 export type SquadPlayer = { id: number; name: string; number: number | null; position: string; age: number | null; photo: string | null };
@@ -154,7 +155,7 @@ export async function getSquad(teamId: number): Promise<Squad | null> {
   if (!key) return null;
 
   const db = (env as unknown as { DB?: D1Database }).DB;
-  const cacheKey = `apifootball:v1:squad:${teamId}`;
+  const cacheKey = `apifootball:v2:squad:${teamId}`;
 
   if (db) {
     await ensureCacheTable(db);
@@ -176,7 +177,7 @@ export async function getSquad(teamId: number): Promise<Squad | null> {
     const squad: Squad = {
       teamName: armenianTeamName(entry.team.name),
       teamLogo: entry.team.logo ?? null,
-      players: entry.players.map((p) => ({ id: p.id, name: p.name, number: p.number, position: p.position, age: p.age, photo: p.photo ?? null })),
+      players: entry.players.map((p) => ({ id: p.id, name: armenianPlayerName(p.name), number: p.number, position: p.position, age: p.age, photo: p.photo ?? null })),
     };
     if (db) {
       await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey, JSON.stringify(squad), Date.now()).run();

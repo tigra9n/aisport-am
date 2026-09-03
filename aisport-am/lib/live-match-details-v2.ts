@@ -1,5 +1,6 @@
 import { formatDateYerevan, formatTimeYerevan } from "./format-date";
 import { armenianCompetition } from "./names-hy";
+import { armenianPlayerName } from "./player-names-hy";
 import { armenianTeamName } from "./team-names-hy";
 import type { LiveMatch, LiveMatchDetail, LineupPlayer } from "./live-football-server";
 import { getStandings } from "./football-server";
@@ -168,8 +169,12 @@ function mapEvents(data:{response?:ApiFootballEvent[]}|null):EventsSection{
   return(data?.response??[]).map(e=>({
     minute:e.time.extra?`${e.time.elapsed}+${e.time.extra}′`:`${e.time.elapsed}′`,
     team:armenianTeamName(e.team.name),
-    player:e.player.name||"—",
-    assist:e.assist.name||"—",
+    // The same spelling as the lineup uses. The modal matches a card or a
+    // substitution to a player on the pitch by comparing these strings, so
+    // translating one side and not the other would silently stop the yellow
+    // and red markers, and the substitution arrows, from appearing at all.
+    player:armenianPlayerName(e.player.name)||"—",
+    assist:armenianPlayerName(e.assist.name)||"—",
     label:eventLabel(e.type,e.detail),
   }));
 }
@@ -177,8 +182,8 @@ function mapLineups(data:{response?:ApiFootballLineup[]}|null,ratings:RatingsSec
   return(data?.response??[]).map(l=>({
     team:armenianTeamName(l.team.name),
     formation:l.formation||"—",
-    starters:l.startXI.map((p):LineupPlayer=>({id:p.player.id??null,name:p.player.name||"—",number:p.player.number??null,grid:p.player.grid??null,rating:p.player.name?ratings[p.player.name]??null:null})),
-    substitutes:l.substitutes.map((p):LineupPlayer=>({id:p.player.id??null,name:p.player.name||"—",number:p.player.number??null,grid:p.player.grid??null,rating:p.player.name?ratings[p.player.name]??null:null})),
+    starters:l.startXI.map((p):LineupPlayer=>({id:p.player.id??null,name:armenianPlayerName(p.player.name)||"—",number:p.player.number??null,grid:p.player.grid??null,rating:p.player.name?ratings[p.player.name]??null:null})),
+    substitutes:l.substitutes.map((p):LineupPlayer=>({id:p.player.id??null,name:armenianPlayerName(p.player.name)||"—",number:p.player.number??null,grid:p.player.grid??null,rating:p.player.name?ratings[p.player.name]??null:null})),
   }));
 }
 function mapRatings(data:{response?:ApiFootballPlayerStats[]}|null):RatingsSection{
@@ -194,7 +199,7 @@ function mapRatings(data:{response?:ApiFootballPlayerStats[]}|null):RatingsSecti
 function mapInjuries(data:{response?:ApiFootballInjury[]}|null):InjuriesSection{
   return(data?.response??[]).map(i=>({
     team:armenianTeamName(i.team.name),
-    player:i.player.name,
+    player:armenianPlayerName(i.player.name),
     reason:i.player_reason||i.reason||"Վնասվածք",
   }));
 }
@@ -299,12 +304,12 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
   const db=(env as unknown as {DB?:D1Database}).DB;
 
   const fixtureCacheKey=`apifootball:v9:fixture:${fixtureId}`;
-  const eventsCacheKey=`apifootball:v9:events:${fixtureId}`;
-  const lineupsCacheKey=`apifootball:v10:lineups:${fixtureId}`;
+  const eventsCacheKey=`apifootball:v10:events:${fixtureId}`;
+  const lineupsCacheKey=`apifootball:v11:lineups:${fixtureId}`;
   const statsCacheKey=`apifootball:v9:stats:${fixtureId}`;
   const predictionCacheKey=`apifootball:v9:prediction:${fixtureId}`;
   const ratingsCacheKey=`apifootball:v9:ratings:${fixtureId}`;
-  const injuriesCacheKey=`apifootball:v9:injuries:${fixtureId}`;
+  const injuriesCacheKey=`apifootball:v10:injuries:${fixtureId}`;
 
   // BUG FIXED: the previous version always speculatively fetched the
   // fixture externally in parallel with the cache batch-read, even when

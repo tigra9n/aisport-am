@@ -59,9 +59,11 @@ export type KnownPlayer = { name: string; photo: string | null; team: string | n
 
 export async function knownPlayer(playerId: number): Promise<KnownPlayer | null> {
   const season = currentSeasonYear();
-  const tables = await readCached<TopScorer[]>(
-    LEAGUE_IDS.map((id) => `apifootball:v3:topscorers:${id}:${season}`),
-  );
+  const tables = await readCached<TopScorer[]>([
+    ...LEAGUE_IDS.map((id) => `apifootball:v4:topscorers:${id}:${season}`),
+    // The previous key, still worth reading while the new one fills up.
+    ...LEAGUE_IDS.map((id) => `apifootball:v3:topscorers:${id}:${season}`),
+  ]);
   for (const rows of tables) {
     for (const row of rows ?? []) {
       if (row.id === playerId) return { name: row.name, photo: row.photo, team: row.team };

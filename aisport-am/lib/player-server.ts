@@ -1,4 +1,5 @@
 import { armenianCompetition, armenianCountry } from "./names-hy";
+import { armenianPlayerName } from "./player-names-hy";
 import { armenianTeamName } from "./team-names-hy";
 
 export type PlayerSeasonStat = {
@@ -136,7 +137,7 @@ type ApiFootballPlayerBio = { player?: ApiFootballPlayerProfile["player"] };
 
 async function fetchBioOnly(playerId: number, key: string): Promise<PlayerProfile | null> {
   return cachedGet<PlayerProfile>(
-    `apifootball:v1:playerbio:${playerId}`,
+    `apifootball:v2:playerbio:${playerId}`,
     7 * 24 * 60 * 60 * 1000,
     `https://v3.football.api-sports.io/players/profiles?player=${playerId}`,
     key,
@@ -145,7 +146,7 @@ async function fetchBioOnly(playerId: number, key: string): Promise<PlayerProfil
       if (!p?.id || !p.name) return null;
       return {
         id: p.id,
-        name: p.name,
+        name: armenianPlayerName(p.name),
         photo: p.photo ?? null,
         nationality: p.nationality ? armenianCountry(p.nationality) : null,
         birthDate: p.birth?.date ?? null,
@@ -187,7 +188,7 @@ async function profileForSeason(playerId: number, key: string, season: number): 
   // carries statistics (v2) and Armenian country/competition names (v3), and
   // an older row would keep serving the previous shape for a whole day.
   return cachedGet<PlayerProfile>(
-    `apifootball:v3:playerprofile:${playerId}:${season}`,
+    `apifootball:v4:playerprofile:${playerId}:${season}`,
     24 * 60 * 60 * 1000,
     `https://v3.football.api-sports.io/players?id=${playerId}&season=${season}`,
     key,
@@ -223,7 +224,7 @@ async function profileForSeason(playerId: number, key: string, season: number): 
 
       return {
         id: p.id,
-        name: p.name,
+        name: armenianPlayerName(p.name),
         photo: p.photo ?? null,
         nationality: p.nationality ? armenianCountry(p.nationality) : null,
         birthDate: p.birth?.date ?? null,
