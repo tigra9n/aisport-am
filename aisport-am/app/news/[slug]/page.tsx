@@ -99,7 +99,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
     {/* eslint-disable-next-line @next/next/no-img-element */}
     {image ? <img className="article-image" src={sizedImage(image, 900)} alt="" referrerPolicy="no-referrer" decoding="async" fetchPriority="high" /> : <div className="article-placeholder" aria-hidden="true">AI</div>}
     <div className="article-content">{paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</div>
-    {tags.length > 0 ? <div className="article-tags">{tags.map((tag) => <Link key={tag} href={`/search?q=${encodeURIComponent(tag)}`} className="article-tag">#{tag}</Link>)}</div> : null}
+    {tags.length > 0 ? <div className="article-tags">{tags.map((tag) => <Link prefetch={false} key={tag} href={`/search?q=${encodeURIComponent(tag)}`} className="article-tag">#{tag}</Link>)}</div> : null}
     <aside className="source-box"><strong>Սկզբնաղբյուր</strong><p>Նյութը պատրաստվել է հրապարակված սկզբնաղբյուրի հիման վրա։</p><a href={sourceUrl} target="_blank" rel="noreferrer">Բացել սկզբնաղբյուրը ↗</a></aside>
     {related.length > 0 ? <section className="related-articles"><h2>{category}․ ևս</h2><ul className="related-list">{related.map((a) => <li key={a.slug}><Link href={`/news/${a.slug}`}>{a.title}</Link></li>)}</ul></section> : null}
     <section className="comments-section"><h2>Մեկնաբանություններ</h2><p className="comments-intro">Միացեք քննարկմանը․ մեկնաբանությունը հրապարակվելուց առաջ կստուգվի։</p><CommentList articleSlug={slug} /><CommentForm articleSlug={slug} /></section>
