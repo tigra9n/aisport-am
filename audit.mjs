@@ -25,7 +25,7 @@ const matchId = (homeHtml.match(/af-\d{5,}/) ?? [])[0];
 
 // ---------- 1. Sharing cards. This is what a Telegram or Facebook post shows.
 log(`=== sharing cards (Open Graph) ===`);
-for (const [name, path] of [["home", "/"], ["article", articlePath], ["league", "/league/PL"], ["opinion", opinionPath]]) {
+for (const [name, path] of [["home", `/?cachebust=${Date.now()}`], ["article", articlePath], ["league", "/league/PL"], ["opinion", opinionPath]]) {
   const res = await page.request.get(BASE + path, { timeout: 45000 }).catch(() => null);
   if (!res || !res.ok()) { log(`  ${name}: HTTP ${res ? res.status() : "unreachable"}`); continue; }
   const html = await res.text();

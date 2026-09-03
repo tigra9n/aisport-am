@@ -38,6 +38,15 @@ html[data-theme="light"] {
   --line:#ccdbd0;
   --navy:#07110b;
   --shadow:0 14px 38px rgba(9,35,19,.1);
+  /* The accent green was never redefined for this theme, so it stayed the
+     bright #2fd181 that is designed to glow on a near-black background. On
+     white it measures about 2:1 - the label on the trending bar, the date
+     on the live calendar and the text on the comment button were all just
+     below readable, and all for this one reason. This darker green is the
+     same hue at about 6.5:1, both as text on white and as white on it. */
+  --blue:#0e6c3e;
+  --blue-2:#0a5330;
+  --green:#0e6c3e;
   color-scheme:light;
 }
 
