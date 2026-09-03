@@ -13,6 +13,10 @@ import { getArticleBySlug, getArticlesByCategory } from "../../../lib/articles";
 import { resolveArticleImage } from "../../../lib/article-image";
 import { FOUNDER_NAME } from "../../../lib/site-info";
 import { readingMinutes as minutesToRead } from "../../../lib/reading-time";
+import ReactDOM from "react-dom";
+
+// One definition, used by the <img> and by its preload. They must agree.
+const HERO_SIZES = "(max-width:700px) calc(100vw - 24px), 900px";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
@@ -86,6 +90,26 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
 
   const categorySlug = categories.find((c) => c.name === category)?.slug ?? null;
 
+  // The photograph is the largest element on the page, so it decides the
+  // LCP - and the browser could only find it after parsing this far into the
+  // body. Preloading it puts the request in the head, where it is issued
+  // while the rest of the page is still being parsed.
+  //
+  // The srcset and sizes have to be byte-identical to the <img> below, which
+  // is why they are computed once here and used in both places: if the
+  // preload picked a different width the browser would download two copies
+  // and the LCP would get worse, not better.
+  const heroSrc = image ? sizedImage(image, 900) : "";
+  const heroSrcSet = image ? imageSrcSet(image, [360, 760, 1300]) : undefined;
+  if (heroSrc) {
+    ReactDOM.preload(heroSrc, {
+      as: "image",
+      imageSrcSet: heroSrcSet,
+      imageSizes: heroSrcSet ? HERO_SIZES : undefined,
+      fetchPriority: "high",
+    });
+  }
+
   const publishedIso = new Date(stored.publishedAt + "Z").toISOString();
   const jsonLd = {
     "@context": "https://schema.org",
@@ -125,7 +149,7 @@ export default async function ArticlePage({ params }: { params: Promise<{ slug: 
     <nav className="article-breadcrumb" aria-label="Նավարկություն"><Link href="/">Գլխավոր</Link><span>›</span>{categorySlug ? <Link href={`/category/${categorySlug}`}>{category}</Link> : <span>{category}</span>}</nav>
     <header className="article-header"><span className="section-label">{category}</span><h1>{title}</h1><p>{excerpt}</p><div className="article-byline"><strong><Link href="/about" className="byline-link">{author}</Link></strong><span>•</span><time>{published}</time><span>•</span><span>{readingMinutes} րոպե ընթերցում</span></div></header>
     {/* eslint-disable-next-line @next/next/no-img-element */}
-    {image ? <img className="article-image" src={sizedImage(image, 900)} srcSet={imageSrcSet(image, [360, 760, 1300])} sizes="(max-width:700px) calc(100vw - 24px), 900px" alt={title} referrerPolicy="no-referrer" decoding="async" fetchPriority="high" /> : <div className="article-placeholder" aria-hidden="true">AI</div>}
+    {image ? <img className="article-image" src={heroSrc} srcSet={heroSrcSet} sizes={HERO_SIZES} alt={title} referrerPolicy="no-referrer" decoding="async" fetchPriority="high" /> : <div className="article-placeholder" aria-hidden="true">AI</div>}
     <div className="article-content">{paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}</div>
     <ShareRow url={`https://aifootball.am/news/${slug}`} title={title} />
     {tags.length > 0 ? <div className="article-tags">{orderedTags.map((tag) => <Link prefetch={false} key={tag} href={tagHref(tag)} className={tagIsPage(tag) ? "article-tag is-page" : "article-tag"}>#{tag}</Link>)}</div> : null}

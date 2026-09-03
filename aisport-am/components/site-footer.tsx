@@ -28,7 +28,7 @@ export function SiteFooter() {
           ))}</div>
         )}
       </div>
-      <div className="site-shell footer-bottom"><span>© 2026 AIFootball</span><span>Բովանդակության օգտագործումը՝ սկզբնաղբյուրի հղումով</span><span><Link prefetch={false} href="/about">Մեր մասին</Link> · <Link prefetch={false} href="/contact">Կապ</Link> · <Link prefetch={false} href="/privacy">Գաղտնիության քաղաքականություն</Link> · <Link prefetch={false} href="/terms">Օգտագործման կանոններ</Link></span></div>
+      <div className="site-shell footer-bottom"><span>© 2026 AIFootball</span><span>Բովանդակության օգտագործումը՝ սկզբնաղբյուրի հղումով</span><span><Link prefetch={false} href="/about">Մեր մասին</Link> · <Link prefetch={false} href="/editorial">Խմբագրական սկզբունքներ</Link> · <Link prefetch={false} href="/contact">Կապ</Link> · <Link prefetch={false} href="/privacy">Գաղտնիության քաղաքականություն</Link> · <Link prefetch={false} href="/terms">Օգտագործման կանոններ</Link></span></div>
     </footer>
   );
 }

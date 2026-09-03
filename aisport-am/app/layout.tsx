@@ -31,9 +31,15 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="hy" data-theme="dark" suppressHydrationWarning>
       <head>
-        {/* The team badges and the analytics script come from two hosts the
-            browser cannot discover until it is parsing, by which time the
-            handshake is on the critical path. */}
+        {/* Hosts the browser cannot discover until it is parsing, by which
+            time the handshake is on the critical path.
+
+            wsrv.nl matters most and was missing: every photograph on the
+            site is served through it, including the one that is the largest
+            element on an article page, so its DNS lookup and TLS handshake
+            were being paid for at the exact moment that measurement is
+            taken. */}
+        <link rel="preconnect" href="https://wsrv.nl" crossOrigin="" />
         <link rel="preconnect" href="https://media.api-sports.io" crossOrigin="" />
         <link rel="preconnect" href="https://www.googletagmanager.com" />
       </head>
