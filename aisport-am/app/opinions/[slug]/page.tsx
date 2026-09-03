@@ -97,7 +97,7 @@ export default async function OpinionPage({ params }: { params: Promise<{ slug: 
         )}
         <div className="article-content" dangerouslySetInnerHTML={{ __html: formatOpinionContent(opinion.content) }} />
 
-        <ShareRow url={`https://aifootball.am/opinions/${slug}`} title={title} />
+        <ShareRow url={`https://aifootball.am/opinions/${slug}`} title={opinion.title} />
       </article>
       <SiteFooter />
     </main>
