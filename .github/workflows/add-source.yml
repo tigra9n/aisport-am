@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Audit every page type in a real browser, desktop and phone
+      - name: Name the elements that overflow the phone viewport
         run: |
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium
