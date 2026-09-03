@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
+import { formatLongDateHy } from "../lib/format-date";
 
 const dropdownItems = [
   { label: "Գլխավոր", href: "/", children: [["Վերջին լուրեր", "/#latest"], ["Live", "/live"], ["Փոդքաստներ", "/podcasts"]] },
@@ -64,7 +65,7 @@ export function SiteHeader() {
     <>
       <div className="topline">
         <div className="site-shell topline-inner">
-          <span>{new Intl.DateTimeFormat("hy-AM", { timeZone: "Asia/Yerevan", day: "numeric", month: "long", weekday: "long" }).format(new Date())}</span>
+          <span>{formatLongDateHy(new Date())}</span>
           <div><Link prefetch={false} href="/podcasts">Փոդքաստներ</Link><span>·</span><Link prefetch={false} href="/control">Խմբագրություն</Link></div>
         </div>
       </div>

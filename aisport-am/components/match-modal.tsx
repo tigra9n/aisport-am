@@ -50,16 +50,24 @@ function surname(name: string) {
 }
 
 function PitchPlayer({ player, card }: { player: LineupPlayer; card?: "yellow" | "red" }) {
-  return (
-    <div className="pitch-player">
+  const body = (
+    <>
       {player.rating && <span className={`pitch-rating ${ratingClass(player.rating)}`}>{player.rating}</span>}
       <span className="pitch-player-dot">
         {player.number ?? "•"}
         {card && <i className={`pitch-card ${card}`} />}
       </span>
       <span className="pitch-player-name">{surname(player.name)}</span>
-    </div>
+    </>
   );
+  // The lineup is where a reader meets a name for the first time, so it is
+  // the natural way into the player page. The id comes from the lineups
+  // endpoint; older cached lineups have none, and those stay plain text
+  // rather than linking somewhere that would 404.
+  if (player.id) {
+    return <Link href={`/player/${player.id}`} className="pitch-player pitch-player-link">{body}</Link>;
+  }
+  return <div className="pitch-player">{body}</div>;
 }
 
 type CardMap = Map<string, "yellow" | "red">;
@@ -295,9 +303,15 @@ export function MatchModal() {
                             <h3>{lineup.team} · Պահեստայիններ</h3>
                             <div className="subs-grid">
                               {lineup.substitutes.map((player, index) => (
-                                <span className="subs-chip" key={`${player.name}-${index}`}>
-                                  <b>{player.number ?? "•"}</b>{player.name}
-                                </span>
+                                player.id ? (
+                                  <Link href={`/player/${player.id}`} className="subs-chip subs-chip-link" key={`${player.name}-${index}`}>
+                                    <b>{player.number ?? "•"}</b>{player.name}
+                                  </Link>
+                                ) : (
+                                  <span className="subs-chip" key={`${player.name}-${index}`}>
+                                    <b>{player.number ?? "•"}</b>{player.name}
+                                  </span>
+                                )
                               ))}
                             </div>
                           </div>

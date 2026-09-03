@@ -1,7 +1,8 @@
+import { formatTimeYerevan } from "./format-date";
 import { armenianTeamName } from "./team-names-hy";
 
 export type LiveMatch={id:string;status:string;competition:string;home:string;away:string;homeId:number|null;awayId:number|null;homeLogo:string|null;awayLogo:string|null;homeScore:number|null;awayScore:number|null;isLive:boolean};
-export type LineupPlayer={name:string;number:number|null;grid:string|null;rating:string|null};
+export type LineupPlayer={id:number|null;name:string;number:number|null;grid:string|null;rating:string|null};
 export type LiveMatchDetail={match:LiveMatch;venue:string;referee:string;events:{minute:string;team:string;player:string;assist:string;label:string}[];lineups:{team:string;formation:string;starters:LineupPlayer[];substitutes:LineupPlayer[]}[];statistics:{team:string;possession:string;shotsOnGoal:string;totalShots:string;xg:string}[];h2h:{date:string;competition:string;home:string;away:string;homeScore:number|null;awayScore:number|null}[];prediction:{winnerName:string|null;comment:string|null;advice:string|null;homePct:string;drawPct:string;awayPct:string}|null;standings:import("./football").StandingRow[]|null;topScorers:import("./topscorers-server").TopScorer[]|null;injuries:{team:string;player:string;reason:string}[];formGuide:{team:string;form:string;played:number;won:number;draw:number;lost:number;goalsForAvg:string;goalsAgainstAvg:string;cleanSheets:number}[]};
 
 type ApiFootballFixture={fixture:{id:number;date:string;venue?:{name?:string|null};referee?:string|null;status:{short:string;elapsed?:number|null}};league:{id:number};teams:{home:{id:number;name:string;logo?:string|null};away:{id:number;name:string;logo?:string|null}};goals:{home:number|null;away:number|null}};
@@ -80,7 +81,7 @@ function isLiveStatus(short:string){return["1H","2H","ET","P","LIVE","HT","BT"].
 function toSortable(fx:ApiFootballFixture):SortableMatch|null{
   const league=TRACKED_LEAGUES[fx.league.id];
   if(!league)return null;
-  const label=statusLabel(fx.fixture.status)??new Intl.DateTimeFormat("hy-AM",{timeZone:"Asia/Yerevan",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date(fx.fixture.date));
+  const label=statusLabel(fx.fixture.status)??formatTimeYerevan(fx.fixture.date);
   return{
     id:`af-${fx.fixture.id}`,
     status:label,
@@ -103,7 +104,7 @@ export async function getLiveMatches(dayOffset=0,allowProviderRequest=true){
   const {env}=await import("cloudflare:workers");
   const runtime=env as unknown as Record<string,string|undefined>;
   const date=yerevanDate(Number.isInteger(dayOffset)?Math.max(-7,Math.min(7,dayOffset)):0);
-  const updatedAt=new Intl.DateTimeFormat("hy-AM",{timeZone:"Asia/Yerevan",hour:"2-digit",minute:"2-digit"}).format(new Date());
+  const updatedAt=formatTimeYerevan(new Date());
   const key=runtime.API_FOOTBALL_KEY;
   if(!key)return{matches:[],demo:false,unavailable:true,limited:true,updatedAt};
   const ttl=dayOffset===0?480:1800;

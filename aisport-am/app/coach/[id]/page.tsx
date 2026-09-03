@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
 import { SiteHeader } from "../../../components/site-header";
+import { formatDateHy } from "../../../lib/format-date";
 import { getCoachById } from "../../../lib/squad-server";
 
 export const dynamic = "force-dynamic";
@@ -21,12 +22,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 }
 
 function formatDate(value: string | null) {
-  if (!value) return "մինչ օրս";
-  try {
-    return new Intl.DateTimeFormat("hy-AM", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value));
-  } catch {
-    return value;
-  }
+  return value ? formatDateHy(value) : "մինչ օրս";
 }
 
 export default async function CoachPage({ params }: { params: Promise<{ id: string }> }) {

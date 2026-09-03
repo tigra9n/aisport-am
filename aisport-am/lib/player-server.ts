@@ -1,3 +1,4 @@
+import { armenianCompetition, armenianCountry } from "./names-hy";
 import { armenianTeamName } from "./team-names-hy";
 
 export type PlayerSeasonStat = {
@@ -110,10 +111,11 @@ export async function getPlayerProfile(playerId: number): Promise<PlayerProfile 
   const key = runtime.API_FOOTBALL_KEY;
   if (!key) return null;
   const season = currentSeasonYear();
-  // Cache key bumped to v2: the stored shape now carries statistics, and a
-  // v1 row would deserialise into a profile whose table is silently empty.
+  // Cache key bumped on every change to what gets stored: the payload now
+  // carries statistics (v2) and Armenian country/competition names (v3), and
+  // an older row would keep serving the previous shape for a whole day.
   return cachedGet<PlayerProfile>(
-    `apifootball:v2:playerprofile:${playerId}`,
+    `apifootball:v3:playerprofile:${playerId}`,
     24 * 60 * 60 * 1000,
     `https://v3.football.api-sports.io/players?id=${playerId}&season=${season}`,
     key,
@@ -124,7 +126,7 @@ export async function getPlayerProfile(playerId: number): Promise<PlayerProfile 
 
       const statistics: PlayerSeasonStat[] = (entry.statistics ?? [])
         .map((row) => ({
-          league: row.league?.name ?? "—",
+          league: armenianCompetition(row.league?.name) || "—",
           leagueLogo: row.league?.logo ?? null,
           team: armenianTeamName(row.team?.name ?? ""),
           teamLogo: row.team?.logo ?? null,
@@ -151,7 +153,7 @@ export async function getPlayerProfile(playerId: number): Promise<PlayerProfile 
         id: p.id,
         name: p.name,
         photo: p.photo ?? null,
-        nationality: p.nationality ?? null,
+        nationality: p.nationality ? armenianCountry(p.nationality) : null,
         birthDate: p.birth?.date ?? null,
         birthPlace: p.birth?.place ?? null,
         height: p.height ?? null,

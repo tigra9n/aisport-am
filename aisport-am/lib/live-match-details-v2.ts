@@ -1,3 +1,5 @@
+import { formatDateYerevan, formatTimeYerevan } from "./format-date";
+import { armenianCompetition } from "./names-hy";
 import { armenianTeamName } from "./team-names-hy";
 import type { LiveMatch, LiveMatchDetail, LineupPlayer } from "./live-football-server";
 import { getStandings } from "./football-server";
@@ -7,7 +9,7 @@ const LEAGUE_CODE_BY_ID:Record<number,string>={39:"PL",140:"PD",135:"SA",78:"BL1
 
 type ApiFootballFixtureFull={fixture:{id:number;date:string;venue?:{name?:string|null};referee?:string|null;status:{short:string;elapsed?:number|null}};league:{id:number};teams:{home:{id:number;name:string;logo?:string|null};away:{id:number;name:string;logo?:string|null}};goals:{home:number|null;away:number|null}};
 type ApiFootballEvent={time:{elapsed:number;extra?:number|null};team:{name:string};player:{name?:string|null};assist:{name?:string|null};type:string;detail:string};
-type ApiFootballLineupPlayer={player:{name?:string|null;number?:number|null;grid?:string|null}};
+type ApiFootballLineupPlayer={player:{id?:number|null;name?:string|null;number?:number|null;grid?:string|null}};
 type ApiFootballLineup={team:{name:string};formation?:string|null;startXI:ApiFootballLineupPlayer[];substitutes:ApiFootballLineupPlayer[]};
 type ApiFootballStatItem={type:string;value:string|number|null};
 type ApiFootballStatistics={team:{name:string};statistics:ApiFootballStatItem[]};
@@ -138,7 +140,7 @@ function statusLabel(status:{short:string;elapsed?:number|null}){
   if(s==="PST")return"Հետաձգված";
   if(s==="CANC"||s==="ABD"||s==="AWD"||s==="WO")return"Չեղարկված";
   if(s==="SUSP"||s==="INT")return"Կասեցված";
-  return new Intl.DateTimeFormat("hy-AM",{timeZone:"Asia/Yerevan",hour:"2-digit",minute:"2-digit",hour12:false}).format(new Date());
+  return formatTimeYerevan(new Date());
 }
 function isLiveStatus(short:string){return["1H","2H","ET","P","LIVE","HT","BT"].includes(short)}
 function isFinishedStatus(short:string){return["FT","AET","PEN","CANC","PST","ABD","AWD","WO"].includes(short)}
@@ -175,8 +177,8 @@ function mapLineups(data:{response?:ApiFootballLineup[]}|null,ratings:RatingsSec
   return(data?.response??[]).map(l=>({
     team:armenianTeamName(l.team.name),
     formation:l.formation||"—",
-    starters:l.startXI.map((p):LineupPlayer=>({name:p.player.name||"—",number:p.player.number??null,grid:p.player.grid??null,rating:p.player.name?ratings[p.player.name]??null:null})),
-    substitutes:l.substitutes.map((p):LineupPlayer=>({name:p.player.name||"—",number:p.player.number??null,grid:p.player.grid??null,rating:p.player.name?ratings[p.player.name]??null:null})),
+    starters:l.startXI.map((p):LineupPlayer=>({id:p.player.id??null,name:p.player.name||"—",number:p.player.number??null,grid:p.player.grid??null,rating:p.player.name?ratings[p.player.name]??null:null})),
+    substitutes:l.substitutes.map((p):LineupPlayer=>({id:p.player.id??null,name:p.player.name||"—",number:p.player.number??null,grid:p.player.grid??null,rating:p.player.name?ratings[p.player.name]??null:null})),
   }));
 }
 function mapRatings(data:{response?:ApiFootballPlayerStats[]}|null):RatingsSection{
@@ -211,8 +213,8 @@ function mapH2H(data:{response?:ApiFootballH2HFixture[]}|null):H2HSection{
     .sort((a,b)=>new Date(b.fixture.date).getTime()-new Date(a.fixture.date).getTime())
     .slice(0,5)
     .map(fx=>({
-      date:new Intl.DateTimeFormat("hy-AM",{timeZone:"Asia/Yerevan",day:"2-digit",month:"2-digit",year:"numeric"}).format(new Date(fx.fixture.date)),
-      competition:fx.league.name,
+      date:formatDateYerevan(fx.fixture.date),
+      competition:armenianCompetition(fx.league.name),
       home:armenianTeamName(fx.teams.home.name),
       away:armenianTeamName(fx.teams.away.name),
       homeScore:fx.goals.home,
@@ -298,7 +300,7 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
 
   const fixtureCacheKey=`apifootball:v9:fixture:${fixtureId}`;
   const eventsCacheKey=`apifootball:v9:events:${fixtureId}`;
-  const lineupsCacheKey=`apifootball:v9:lineups:${fixtureId}`;
+  const lineupsCacheKey=`apifootball:v10:lineups:${fixtureId}`;
   const statsCacheKey=`apifootball:v9:stats:${fixtureId}`;
   const predictionCacheKey=`apifootball:v9:prediction:${fixtureId}`;
   const ratingsCacheKey=`apifootball:v9:ratings:${fixtureId}`;
@@ -368,7 +370,7 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
   // them together cuts that to roughly the duration of the single
   // slowest call instead of the sum of all of them.
   const teamPairKey=[fx.teams.home.id,fx.teams.away.id].sort((a,b)=>a-b).join("-");
-  const h2hCacheKey=`apifootball:v9:h2h:${teamPairKey}`;
+  const h2hCacheKey=`apifootball:v10:h2h:${teamPairKey}`;
   const leagueCode=LEAGUE_CODE_BY_ID[fx.league.id];
   const seasonYear=(()=>{const d=new Date(fx.fixture.date);const m=d.getUTCMonth()+1;return m>=7?d.getUTCFullYear():d.getUTCFullYear()-1})();
   const formGuideCacheKeyFor=(teamId:number)=>`apifootball:v1:form:${fx.league.id}:${seasonYear}:${teamId}`;

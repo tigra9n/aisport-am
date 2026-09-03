@@ -1,3 +1,5 @@
+import { armenianCountry, isKnownCountry } from "./names-hy";
+
 const teamNames: Record<string, string> = {
   // Armenia
   "ararat-armenia": "Արարատ-Արմենիա", ararat: "Արարատ", alashkert: "Ալաշկերտ",
@@ -281,6 +283,11 @@ export function armenianTeamName(name: string) {
     const hit = teamNames[variant];
     if (hit) return hit;
   }
+
+  // National teams come back as a bare country name ("Spain", "England").
+  // They are not clubs, so they are absent from the table above and used to
+  // fall through to the transliterator, which produced "Սպային".
+  if (isKnownCountry(key)) return armenianCountry(key);
 
   // Last resort before transliterating: drop a trailing founding year
   // ("Mainz 05" -> "Mainz"). Tried last so "Schalke 04" keeps its own entry.

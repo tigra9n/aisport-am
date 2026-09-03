@@ -176,6 +176,9 @@ img{display:block;max-width:100%}
 .pitch-player{position:relative;display:flex;flex-direction:column;align-items:center;gap:4px;width:60px}
 .pitch-player-dot{position:relative;display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--surface);border:2px solid var(--ink);color:var(--ink);font-size:10px;font-weight:950}
 .pitch-player-name{max-width:60px;overflow:hidden;color:#fff;font-size:9.5px;font-weight:900;text-align:center;text-overflow:ellipsis;white-space:nowrap;text-shadow:0 1px 3px rgba(0,0,0,.6)}
+.pitch-player-link{text-decoration:none;cursor:pointer}
+.pitch-player-link:hover .pitch-player-dot{background:var(--blue);border-color:var(--blue);color:#fff}
+.pitch-player-link:hover .pitch-player-name{text-decoration:underline}
 .pitch-card{position:absolute;top:-3px;right:-5px;width:9px;height:12px;border-radius:1.5px;border:1px solid rgba(0,0,0,.35)}
 .pitch-card.yellow{background:#f2c94c}
 .pitch-card.red{background:#eb4d4b}
@@ -234,6 +237,8 @@ img{display:block;max-width:100%}
 .subs-grid{display:flex;flex-wrap:wrap;gap:8px}
 .subs-chip{display:flex;align-items:center;gap:6px;padding:5px 9px 5px 5px;border-radius:99px;background:var(--surface-2);border:1px solid var(--line);font-size:9px}
 .subs-chip b{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--line);font-size:8px}
+.subs-chip-link{color:inherit;text-decoration:none;cursor:pointer}
+.subs-chip-link:hover{border-color:var(--blue)}
 .lineups-panel{display:grid;gap:20px}
 
 /* Stat comparison bars */

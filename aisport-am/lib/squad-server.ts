@@ -1,3 +1,4 @@
+import { armenianCountry } from "./names-hy";
 import { armenianTeamName } from "./team-names-hy";
 
 export type SquadPlayer = { id: number; name: string; number: number | null; position: string; age: number | null; photo: string | null };
@@ -43,7 +44,7 @@ function mapCoach(raw: ApiFootballCoach): Coach {
     id: raw.id,
     name: raw.name,
     photo: raw.photo ?? null,
-    nationality: raw.nationality ?? null,
+    nationality: raw.nationality ? armenianCountry(raw.nationality) : null,
     age: raw.age ?? null,
     career: raw.career.map((c) => ({ team: armenianTeamName(c.team.name), teamLogo: c.team.logo ?? null, start: c.start, end: c.end })),
   };
@@ -56,7 +57,7 @@ export async function getCoach(teamId: number): Promise<Coach | null> {
   if (!key) return null;
 
   const db = (env as unknown as { DB?: D1Database }).DB;
-  const cacheKey = `apifootball:v2:coach:${teamId}`;
+  const cacheKey = `apifootball:v3:coach:${teamId}`;
 
   if (db) {
     await ensureCacheTable(db);
@@ -97,7 +98,7 @@ export async function getCoachById(coachId: number): Promise<Coach | null> {
   if (!key) return null;
 
   const db = (env as unknown as { DB?: D1Database }).DB;
-  const cacheKey = `apifootball:v1:coachbyid:${coachId}`;
+  const cacheKey = `apifootball:v2:coachbyid:${coachId}`;
 
   if (db) {
     await ensureCacheTable(db);

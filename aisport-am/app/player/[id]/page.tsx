@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
 import { SiteHeader } from "../../../components/site-header";
+import { formatDateHy } from "../../../lib/format-date";
 import { getPlayerProfile, getPlayerTransfers } from "../../../lib/player-server";
 
 export const dynamic = "force-dynamic";
@@ -29,14 +30,6 @@ const POSITION_HY: Record<string, string> = {
   Attacker: "Հարձակվող",
 };
 
-function formatDate(value: string) {
-  try {
-    return new Intl.DateTimeFormat("hy-AM", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value));
-  } catch {
-    return value;
-  }
-}
-
 export default async function PlayerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const playerId = Number.parseInt(id, 10);
@@ -54,7 +47,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
           {profile.currentTeam && <span>⚽ {profile.currentTeam}{profile.shirtNumber ? ` · #${profile.shirtNumber}` : ""}</span>}
           {profile.position && <span>📋 {POSITION_HY[profile.position] ?? profile.position}</span>}
           {profile.nationality && <span>🌍 {profile.nationality}</span>}
-          {profile.birthDate && <span>🎂 {formatDate(profile.birthDate)}{profile.age ? ` (${profile.age} տ.)` : ""}{profile.birthPlace ? `, ${profile.birthPlace}` : ""}</span>}
+          {profile.birthDate && <span>🎂 {formatDateHy(profile.birthDate)}{profile.age ? ` (${profile.age} տ.)` : ""}{profile.birthPlace ? `, ${profile.birthPlace}` : ""}</span>}
           {profile.height && <span>📏 {profile.height}</span>}
           {profile.weight && <span>⚖️ {profile.weight}</span>}
         </div>
@@ -110,7 +103,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
         <div className="transfers-list">
           {transfers.map((t, index) => (
             <div className="transfer-row" key={index}>
-              <span className="transfer-date">{formatDate(t.date)}</span>
+              <span className="transfer-date">{formatDateHy(t.date)}</span>
               <span className="transfer-teams">
                 <span className="team-with-logo">{t.teamOutLogo && <img src={t.teamOutLogo} alt="" className="team-logo" loading="lazy" />}{t.teamOut}</span>
                 <span className="transfer-arrow">→</span>
