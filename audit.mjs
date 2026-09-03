@@ -122,6 +122,14 @@ if (!pairs) log(`  no near-duplicate headlines among ${titles.length} on the pag
 // ever checked the light theme at all. Walk the visible text and report
 // anything whose contrast against its own background is too low to read.
 log(`\n=== light mode contrast ===`);
+{
+  const html = await (await page.request.get(BASE + "/", { timeout: 45000 })).text();
+  const href = (html.match(/href="(\/assets\/index-[^"]+\.css)"/) ?? [])[1];
+  if (href) {
+    const css = await (await page.request.get(BASE + href, { timeout: 45000 })).text();
+    log(`  stylesheet ${href}: light-theme green present: ${css.includes("#0e6c3e") ? "yes" : "NO - the deploy did not carry it"}`);
+  }
+}
 for (const [name, path] of [["home", "/"], ["standings", "/standings"], ["article", articlePath], ["live", "/live"]]) {
   await p.goto(BASE + path, { waitUntil: "load", timeout: 60000 }).catch(() => {});
   await p.evaluate(() => {
@@ -156,7 +164,7 @@ for (const [name, path] of [["home", "/"], ["standings", "/standings"], ["articl
       const l1 = lum(fg) + 0.05;
       const l2 = lum(backdrop(el)) + 0.05;
       const ratio = l1 > l2 ? l1 / l2 : l2 / l1;
-      if (ratio < 3) out.push(`${ratio.toFixed(1)}:1  <${el.tagName.toLowerCase()}${el.className ? "." + String(el.className).split(" ")[0] : ""}> "${text.slice(0, 40)}"`);
+      if (ratio < 3) out.push(`${ratio.toFixed(1)}:1  <${el.tagName.toLowerCase()}${el.className ? "." + String(el.className).split(" ")[0] : ""}> "${text.slice(0, 26)}"  color ${style.color} on ${backdrop(el).join(",")}`);
     }
     // The select is not caught by the walk above: its text is drawn by the
     // browser, not by a child node.
