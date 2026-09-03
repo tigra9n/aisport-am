@@ -1,4 +1,5 @@
 /* eslint-disable @next/next/no-img-element */
+import { RevealGrid } from "../../../components/reveal-grid";
 import { sizedImage } from "../../../lib/image-proxy";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -43,7 +44,7 @@ export default async function CategoryPage({ params }: { params: Promise<{ slug:
         <div className="category-list">{articles.slice(1, 4).map((article) => <NewsCard article={article} compact key={article.slug} />)}</div>
       </section>
       <div className="modern-section-head"><div><span>Վերջին հրապարակումները</span><h2>{category.name}․ բոլոր լուրերը</h2></div></div>
-      <section className="category-grid">{articles.slice(1).map((article) => <NewsCard article={article} key={article.slug} />)}</section>
+      <RevealGrid className="category-grid" total={Math.max(articles.length - 4, 0)}>{articles.slice(4).map((article) => <NewsCard article={article} key={article.slug} />)}</RevealGrid>
     </> : <p className="empty-search">Այս մարզաձևից դեռ նյութեր չկան։ Շուտով կլինեն։</p>}
   </div><SiteFooter /></main>;
 }

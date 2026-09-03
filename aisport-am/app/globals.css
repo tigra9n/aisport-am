@@ -365,3 +365,10 @@ img{display:block;max-width:100%}
 .sport-news-block{content-visibility:auto;contain-intrinsic-size:auto 900px}
 .headline-feed-item{content-visibility:auto;contain-intrinsic-size:auto 96px}
 .standings-block,.transfers-section{content-visibility:auto;contain-intrinsic-size:auto 600px}
+
+/* Folded list: everything past the twelfth card stays in the HTML but is
+   not laid out, so the page stops being thirteen thousand pixels tall on a
+   phone while still carrying every article for a crawler to read. */
+.reveal-collapsed>*:nth-child(n+13){display:none}
+.reveal-more{display:block;width:100%;margin:22px 0 8px;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink);font:inherit;font-size:12px;font-weight:900;cursor:pointer}
+.reveal-more:hover{border-color:var(--blue);color:var(--blue)}
