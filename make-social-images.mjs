@@ -11,61 +11,141 @@ import fs from "node:fs";
 
 fs.mkdirSync("aisport-am/public", { recursive: true });
 
-const FONT = `-apple-system, "Segoe UI", "Noto Sans Armenian", Roboto, sans-serif`;
+// Single quotes around the family names, not double: this string is
+// interpolated into a style="..." attribute, and a double quote there ends
+// the attribute and takes the whole font stack with it - which is how the
+// wordmark used to come out in Times.
+//
+// Liberation Sans is Arial's metric-compatible twin and is the family that
+// is actually installed where this runs; asking for Arial first does not
+// help, because fontconfig answers that request with a serif. DejaVu Sans
+// is last because it is the one here that carries Armenian, for the line
+// under the wordmark on the cover.
+const FONT = `'Liberation Sans', Arial, Helvetica, 'Noto Sans Armenian', 'DejaVu Sans', sans-serif`;
 
-// A plain football, not a stylised one: a white ball with the black
-// pentagons everybody recognises. Drawn rather than photographed so it
-// stays sharp at the 32 pixels a profile picture is actually seen at.
-const pentagon = (cx, cy, r, rotation, fill) => {
-  const points = Array.from({ length: 5 }, (_, i) => {
-    const angle = ((rotation + i * 72 - 90) * Math.PI) / 180;
-    return `${(cx + r * Math.cos(angle)).toFixed(2)},${(cy + r * Math.sin(angle)).toFixed(2)}`;
-  }).join(" ");
-  return `<polygon points="${points}" fill="${fill}"/>`;
+// A real ball, not a diagram of one. The panels are the actual truncated
+// icosahedron - twelve pentagons, twenty hexagons - turned so that a
+// pentagon faces the camera, projected onto a sphere, and lit from the
+// upper left. Every edge is drawn as an arc of the great circle between
+// its corners, which is what makes the ball look round rather than faceted,
+// and each panel is shaded by how much it faces the light. Drawn rather
+// than photographed: no licence to worry about, and it stays sharp at any
+// size Facebook decides to serve it at.
+const PHI = (1 + Math.sqrt(5)) / 2;
+const norm = (v) => { const l = Math.hypot(...v); return v.map((c) => c / l); };
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+const mul = (M, v) => M.map((row) => dot(row, v));
+const mm = (A, B) => A.map((row, i) => [0, 1, 2].map((j) => [0, 1, 2].reduce((sum, k) => sum + A[i][k] * B[k][j], 0)));
+
+// Every even (i.e. cyclic) permutation of the coordinates, with every sign.
+const spread = (base) => {
+  const out = [];
+  for (const sx of [1, -1]) for (const sy of [1, -1]) for (const sz of [1, -1]) {
+    const [x, y, z] = [sx * base[0], sy * base[1], sz * base[2]];
+    out.push([x, y, z], [y, z, x], [z, x, y]);
+  }
+  return out;
+};
+const dedupe = (list) => {
+  const out = [];
+  for (const v of list) if (!out.some((u) => Math.hypot(u[0] - v[0], u[1] - v[1], u[2] - v[2]) < 1e-7)) out.push(v);
+  return out;
 };
 
-const ball = (size, dark) => {
-  const outer = Array.from({ length: 5 }, (_, i) => {
-    const angle = ((i * 72 - 90) * Math.PI) / 180;
-    return pentagon(50 + 32 * Math.cos(angle), 50 + 32 * Math.sin(angle), 13, 180 + i * 72, dark);
-  }).join("");
-  const seams = Array.from({ length: 5 }, (_, i) => {
-    const a = ((i * 72 - 90) * Math.PI) / 180;
-    return `<line x1="${50 + 15 * Math.cos(a)}" y1="${50 + 15 * Math.sin(a)}" x2="${50 + 21 * Math.cos(a)}" y2="${50 + 21 * Math.sin(a)}" stroke="${dark}" stroke-width="3"/>`;
-  }).join("");
+const CORNERS = dedupe([[0, 1, 3 * PHI], [1, 2 + PHI, 2 * PHI], [PHI, 2, 2 * PHI + 1]].flatMap(spread).map(norm));
+// A pentagon sits on each icosahedron vertex, a hexagon on each of its faces.
+const PENTAGON_AXES = dedupe(spread([0, 1, PHI]).map(norm));
+const HEXAGON_AXES = dedupe([...spread([1, 1, 1]), ...spread([0, 1 / PHI, PHI])].map(norm));
+
+// The corners of a panel are the corners furthest along its own axis, in the
+// order you meet them going round that axis.
+const panel = (axis, pentagon) => {
+  const reach = CORNERS.map((v) => dot(v, axis));
+  const best = Math.max(...reach);
+  const ring = CORNERS.filter((_, i) => reach[i] > best - 1e-6);
+  const u = norm(ring[0].map((c, i) => c - axis[i] * dot(ring[0], axis)));
+  const w = cross(axis, u);
+  return { pentagon, axis, ring: ring.sort((a, b) => Math.atan2(dot(a, w), dot(a, u)) - Math.atan2(dot(b, w), dot(b, u))) };
+};
+const PANELS = [...PENTAGON_AXES.map((a) => panel(a, true)), ...HEXAGON_AXES.map((a) => panel(a, false))];
+
+// Turn the ball so the first pentagon points at the camera, a little up and
+// to the left, then spin it about the line of sight.
+const align = (a, b) => {
+  const v = cross(a, b), c = dot(a, b), s = Math.hypot(...v);
+  const K = [[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]];
+  const K2 = mm(K, K), f = (1 - c) / (s * s);
+  return K.map((row, i) => row.map((val, j) => (i === j ? 1 : 0) + val + K2[i][j] * f));
+};
+const spin = (a) => [[Math.cos(a), -Math.sin(a), 0], [Math.sin(a), Math.cos(a), 0], [0, 0, 1]];
+const VIEW = mm(spin(0.35), align(PENTAGON_AXES[0], norm([-0.16, 0.2, 1])));
+const LIGHT = norm([-0.38, 0.58, 0.72]);
+
+const arc = (a, b, t) => {
+  const angle = Math.acos(Math.max(-1, Math.min(1, dot(a, b))));
+  if (angle < 1e-6) return a;
+  return norm(a.map((c, i) => (Math.sin((1 - t) * angle) * c + Math.sin(t * angle) * b[i]) / Math.sin(angle)));
+};
+const shade = (hex, f) => "#" + [1, 3, 5].map((i) => Math.max(0, Math.min(255, Math.round(parseInt(hex.slice(i, i + 2), 16) * f))).toString(16).padStart(2, "0")).join("");
+
+// The gap between panels, as a fraction of the way from a corner towards the
+// middle of its own panel: the seams are the white body showing through.
+const SEAM = 0.052;
+
+const ball = (size, key) => {
+  const r = 230, c = 256;
+  const faces = PANELS.filter((p) => mul(VIEW, p.axis)[2] > 0.015).map((p) => {
+    const inset = p.ring.map((v) => norm(v.map((coord, i) => coord * (1 - SEAM) + p.axis[i] * SEAM * 1.9)));
+    const points = inset.flatMap((from, i) => {
+      const to = inset[(i + 1) % inset.length];
+      return [0, 0.25, 0.5, 0.75].map((t) => {
+        const q = mul(VIEW, arc(from, to, t));
+        return `${(c + r * q[0]).toFixed(2)},${(c - r * q[1]).toFixed(2)}`;
+      });
+    });
+    const lit = Math.max(0, dot(mul(VIEW, p.axis), LIGHT));
+    return `<polygon points="${points.join(" ")}" fill="${shade(p.pentagon ? "#12100f" : "#ffffff", 0.46 + 0.62 * lit)}"/>`;
+  });
   return `
-<svg width="${size}" height="${size}" viewBox="0 0 100 100">
-  <defs><clipPath id="ballclip"><circle cx="50" cy="50" r="47"/></clipPath></defs>
-  <circle cx="50" cy="50" r="47" fill="#ffffff"/>
-  <g clip-path="url(#ballclip)">
-    ${pentagon(50, 50, 16, 0, dark)}
-    ${outer}
-    ${seams}
-  </g>
-  <circle cx="50" cy="50" r="47" fill="none" stroke="${dark}" stroke-width="2.5" opacity=".35"/>
+<svg width="${size}" height="${size}" viewBox="0 0 512 512">
+  <defs>
+    <radialGradient id="body-${key}" cx="34%" cy="28%" r="78%">
+      <stop offset="0" stop-color="#ffffff"/><stop offset=".55" stop-color="#e9edea"/><stop offset="1" stop-color="#9aa8a0"/>
+    </radialGradient>
+    <radialGradient id="round-${key}" cx="34%" cy="28%" r="76%">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".30"/>
+      <stop offset=".45" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset=".86" stop-color="#04120a" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#04120a" stop-opacity=".52"/>
+    </radialGradient>
+    <radialGradient id="gleam-${key}"><stop offset="0" stop-color="#ffffff" stop-opacity=".75"/><stop offset="1" stop-color="#ffffff" stop-opacity="0"/></radialGradient>
+    <clipPath id="sphere-${key}"><circle cx="${c}" cy="${c}" r="${r}"/></clipPath>
+  </defs>
+  <circle cx="${c}" cy="${c}" r="${r}" fill="url(#body-${key})"/>
+  <g clip-path="url(#sphere-${key})">${faces.join("")}</g>
+  <circle cx="${c}" cy="${c}" r="${r}" fill="url(#round-${key})"/>
+  <ellipse cx="${c - r * 0.42}" cy="${c - r * 0.5}" rx="${r * 0.34}" ry="${r * 0.24}" fill="url(#gleam-${key})" transform="rotate(-24 ${c - r * 0.42} ${c - r * 0.5})"/>
 </svg>`;
 };
 
-// Variant A: the ball on the site's near-black, letters in white.
-const profile = `<!doctype html><html><body style="margin:0">
-<div style="width:512px;height:512px;position:relative;display:grid;place-items:center;background:#08100b;font-family:${FONT}">
-  <div style="position:absolute;inset:26px;border-radius:50%;border:6px solid #1d3227"></div>
-  <div style="display:grid;place-items:center">
-    <div>${ball(152, "#08100b")}</div>
-    <div style="margin-top:8px;color:#f5f8f5;font-size:104px;font-weight:900;letter-spacing:-.06em;line-height:.9">AI</div>
-  </div>
+// The profile picture: the ball, as big as the circular crop allows, over
+// the address in the largest type that still clears that crop. Facebook
+// shows this at 32 pixels in a feed and at 170 on the page itself, so the
+// ball has to carry it on its own at the small end - hence no tile, no
+// frame, nothing else in the square.
+const lockup = (field, ink, accent, key) => `<!doctype html><html><body style="margin:0">
+<div style="width:1024px;height:1024px;position:relative;background:${field};font-family:${FONT}">
+  <div style="position:absolute;left:50%;top:398px;transform:translate(-50%,-50%)">${ball(624, key)}</div>
+  <div style="position:absolute;left:0;right:0;top:806px;transform:translateY(-50%);text-align:center;color:${ink};font-size:98px;font-weight:900;letter-spacing:-.045em;line-height:1;white-space:nowrap"><span style="color:${accent}">AI</span>FOOTBALL<span style="color:${accent}">.AM</span></div>
 </div></body></html>`;
 
-// Variant B: the accent green as the whole field, which is what stands out
+// Variant A: the accent green as the whole field, which is what stands out
 // in a feed of white cards.
-const profileAlt = `<!doctype html><html><body style="margin:0">
-<div style="width:512px;height:512px;position:relative;display:grid;place-items:center;background:#2fd181;font-family:${FONT}">
-  <div style="position:absolute;inset:24px;border-radius:50%;border:7px solid rgba(6,35,21,.22)"></div>
-  <div style="display:grid;place-items:center">
-    <div>${ball(150, "#062315")}</div>
-    <div style="margin-top:6px;color:#062315;font-size:106px;font-weight:900;letter-spacing:-.06em;line-height:.9">AI</div>
-  </div>
-</div></body></html>`;
+const profile = lockup("#2fd181", "#062315", "#ffffff", "a");
+
+// Variant B: the site's near-black, for anyone who prefers the darker page.
+const profileAlt = lockup("#08100b", "#f5f8f5", "#2fd181", "b");
 
 // The five Tigran asked for, by name. Their photographs come from the same
 // API the site already uses, but the ids are not written down here - an id
@@ -104,7 +184,7 @@ for (const wanted of WANTED) {
   }
   if (photo) players.push({ ...wanted, photo });
 }
-if (!players.length) console.log("  no photographs resolved - the cover will carry the wordmark alone");
+if (!players.length) console.log("  no photographs resolved - leaving the cover alone, drawing the profile pictures only");
 
 // The Armenian gets the accent ring: on a site written in Armenian, he is
 // the reason someone follows this page rather than a bigger one.
@@ -116,21 +196,25 @@ const faces = players.map((p, i) => `
 const cover = `<!doctype html><html><body style="margin:0">
 <div style="width:1640px;height:856px;position:relative;overflow:hidden;background:radial-gradient(circle at 22% 30%, #16281e 0%, #08100b 62%);font-family:${FONT}">
   <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:flex-end;padding-right:58px">${faces}</div>
-  <div style="position:absolute;inset:0;background:linear-gradient(90deg,#08100b 30%,rgba(8,16,11,.9) 44%,rgba(8,16,11,0) 62%)"></div>
-  <div style="position:absolute;top:50%;left:96px;transform:translateY(-50%);display:flex;align-items:center;gap:30px">
-    <div style="width:118px;height:118px;display:grid;place-items:center;border-radius:26px;background:#2fd181;color:#062315;font-size:54px;font-weight:900">AI</div>
+  ${players.length ? `<div style="position:absolute;inset:0;background:linear-gradient(90deg,#08100b 30%,rgba(8,16,11,.9) 44%,rgba(8,16,11,0) 62%)"></div>` : ""}
+  <div style="position:absolute;top:50%;${players.length ? "left:96px;transform:translateY(-50%)" : "left:50%;transform:translate(-50%,-50%)"};display:flex;align-items:center;gap:30px">
+    <div style="width:132px;height:132px;display:grid;place-items:center;border-radius:34px;background:#2fd181">${ball(96, "cover")}</div>
     <div>
-      <div style="color:#f5f8f5;font-size:60px;font-weight:900;letter-spacing:-.03em;line-height:1;white-space:nowrap">FOOTBALL<span style="color:#2fd181">.AM</span></div>
+      <div style="color:#f5f8f5;font-size:60px;font-weight:900;letter-spacing:-.03em;line-height:1;white-space:nowrap"><span style="color:#2fd181">AI</span>FOOTBALL<span style="color:#f28c18">.AM</span></div>
       <div style="margin-top:12px;color:#a9bdaf;font-size:24px;font-weight:700">Ֆուտբոլը՝ արագ, խելացի, հայերեն</div>
     </div>
   </div>
 </div></body></html>`;
 
+// The cover is the one with the five photographs on it. Without an API key
+// none of them resolve, and a cover that is a wordmark on an empty field is
+// not worth having - so in that case the cover is left exactly as it is and
+// only the profile pictures are redrawn.
 const browser = await chromium.launch();
 for (const [name, html, width, height] of [
-  ["fb-profile.png", profile, 512, 512],
-  ["fb-profile-alt.png", profileAlt, 512, 512],
-  ["fb-cover.png", cover, 1640, 856],
+  ["fb-profile.png", profile, 1024, 1024],
+  ["fb-profile-alt.png", profileAlt, 1024, 1024],
+  ...(players.length ? [["fb-cover.png", cover, 1640, 856]] : []),
 ]) {
   const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
   await page.setContent(html, { waitUntil: "load" });
