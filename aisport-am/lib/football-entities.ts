@@ -19,6 +19,14 @@ export type EntityClass = "person.name" | "title";
 
 type Entity = { name: string; priority: 100 | 90 | 80 | 70; section: string };
 
+// How many Armenians-abroad to put at the head of a search attempt. They
+// lead every attempt rather than waiting their turn, but not all of them
+// at once: an attempt only tries fifteen entities in total, and eight
+// names that happen to have no news today would eat half that budget and
+// cost the site its publishing rate. Three lead, the rest sit at the end
+// of the chain where they are still reachable if nothing else answers.
+const ABROAD_PER_ATTEMPT = 3;
+
 const CLUBS: Entity[] = [
   { name: "FC Noah", priority: 100, section: "armenia" },
   { name: "FC Pyunik", priority: 100, section: "armenia" },
@@ -129,14 +137,14 @@ const CLUBS: Entity[] = [
 ];
 
 const PERSONS: Entity[] = [
-  { name: "Henrikh Mkhitaryan", priority: 100, section: "armenia" },
-  { name: "Eduard Spertsyan", priority: 100, section: "armenia" },
-  { name: "Nair Tiknizyan", priority: 100, section: "armenia" },
-  { name: "Lucas Zelarayan", priority: 100, section: "armenia" },
-  { name: "Grant-Leon Ranos", priority: 100, section: "armenia" },
-  { name: "Vahan Bichakhchyan", priority: 100, section: "armenia" },
-  { name: "Edgar Sevikyan", priority: 100, section: "armenia" },
-  { name: "Tigran Barseghyan", priority: 100, section: "armenia" },
+  { name: "Henrikh Mkhitaryan", priority: 100, section: "armenia-abroad" },
+  { name: "Eduard Spertsyan", priority: 100, section: "armenia-abroad" },
+  { name: "Nair Tiknizyan", priority: 100, section: "armenia-abroad" },
+  { name: "Lucas Zelarayan", priority: 100, section: "armenia-abroad" },
+  { name: "Grant-Leon Ranos", priority: 100, section: "armenia-abroad" },
+  { name: "Vahan Bichakhchyan", priority: 100, section: "armenia-abroad" },
+  { name: "Edgar Sevikyan", priority: 100, section: "armenia-abroad" },
+  { name: "Tigran Barseghyan", priority: 100, section: "armenia-abroad" },
   { name: "Artur Serobyan", priority: 100, section: "armenia" },
   { name: "Zhirayr Shaghoyan", priority: 100, section: "armenia" },
   { name: "Narek Grigoryan", priority: 100, section: "armenia" },
@@ -312,27 +320,53 @@ function buildChain(entities: Entity[], _tierCycle: number, rotationSeed: number
   const byTier: Record<100 | 90 | 80 | 70, string[]> = { 100: [], 90: [], 80: [], 70: [] };
   for (const e of entities) {
     if (runtimeQuarantine.has(e.name)) continue;
-    // Armenia (tier 100) entities are fully excluded from AI-driven
-    // content generation by explicit request - Tigran writes Armenian
-    // football/sports articles himself now. Only automated live scores
-    // and the standings table (separate from this entity-search pipeline
-    // entirely) stay auto-updated for Armenia. This used to only
-    // deprioritize tier 100 to "last" in the chain (see fixed ordering
-    // bug above); now it's skipped from the chain outright.
-    if (e.priority === 100) continue;
+    // Armenian domestic football is excluded from AI-driven generation by
+    // explicit request - Tigran writes the Armenian league himself, and
+    // two authors covering the same match is worse than one. Only live
+    // scores and the standings table (a separate pipeline) stay automatic.
+    //
+    // Armenians playing abroad are the exception, and are searched first:
+    // Mkhitaryan at Inter or Spertsyan at Krasnodar are covered by the
+    // international press the searches already read, so there is real
+    // material for them, and they are the one subject this site can cover
+    // in Armenian that nobody else does. They do not collide with what
+    // Tigran writes, which is the domestic game.
+    if (e.section === "armenia") continue;
     byTier[e.priority].push(e.name);
   }
 
-  const tierOrder = [90, 80, 70] as const;
-
-  const chain: string[] = [];
-  for (const tier of tierOrder) {
-    const names = byTier[tier];
-    if (!names.length) continue;
+  const rotate = (names: string[]) => {
+    if (!names.length) return [];
     const start = rotationSeed % names.length;
-    for (let i = 0; i < names.length; i++) chain.push(names[(start + i) % names.length]);
+    return names.map((_, i) => names[(start + i) % names.length]);
+  };
+
+  // Armenians abroad (tier 100) lead, but only ABROAD_PER_ATTEMPT of them;
+  // the rotation moves which three across attempts, so all of them get
+  // their turn over the course of a day.
+  const abroad = rotate(byTier[100]);
+  const chain: string[] = abroad.slice(0, ABROAD_PER_ATTEMPT);
+
+  for (const tier of [90, 80, 70] as const) {
+    for (const name of rotate(byTier[tier])) chain.push(name);
   }
+
+  // The remaining Armenians sit at the tail rather than being dropped:
+  // reachable when nothing ahead of them answered, which is exactly when
+  // an extra try is worth making.
+  chain.push(...abroad.slice(ABROAD_PER_ATTEMPT));
   return chain;
+}
+
+// The Armenians-abroad that lead this attempt, in the same rotation the
+// chain builder uses so the two agree on whose turn it is.
+function abroadLead(rotationSeed: number): string[] {
+  const names = PERSONS
+    .filter((e) => e.section === "armenia-abroad" && !runtimeQuarantine.has(e.name))
+    .map((e) => e.name);
+  if (!names.length) return [];
+  const start = rotationSeed % names.length;
+  return Array.from({ length: Math.min(ABROAD_PER_ATTEMPT, names.length) }, (_, i) => names[(start + i) % names.length]);
 }
 
 export function pickPersonQueryChain(cycle: number, rotationSeed: number = cycle): string[] {
@@ -352,5 +386,14 @@ export function pickClubQueryChain(cycle: number, rotationSeed: number = cycle):
 export function pickCombinedChain(cycle: number, rotationSeed: number = cycle): { filterType: EntityClass; value: string }[] {
   const persons = pickPersonQueryChain(cycle, rotationSeed).map((value) => ({ filterType: "person.name" as const, value }));
   const clubs = pickClubQueryChain(cycle, rotationSeed).map((value) => ({ filterType: "title" as const, value }));
-  return cycle % 2 === 0 ? [...clubs, ...persons] : [...persons, ...clubs];
+  const rest = cycle % 2 === 0 ? [...clubs, ...persons] : [...persons, ...clubs];
+
+  // Leading the persons chain is not enough. Half the cycles put the clubs
+  // first, and a caller only tries the first fifteen entries - which on
+  // those cycles would leave the Armenians sitting behind seventy clubs,
+  // never reached. They lead the combined chain instead, on every cycle.
+  const lead: { filterType: EntityClass; value: string }[] = abroadLead(rotationSeed)
+    .map((value) => ({ filterType: "person.name" as const, value }));
+  const seen = new Set(lead.map((pick) => pick.value));
+  return [...lead, ...rest.filter((pick) => !seen.has(pick.value))];
 }
