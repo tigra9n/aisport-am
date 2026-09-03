@@ -4,13 +4,19 @@
 // Latin on a page that is Armenian everywhere else, including in the
 // articles about those same players.
 //
-// This is a table and not a transliterator on purpose. The site already
-// transliterates unknown club names, and that machinery once put a wrong,
-// Latin-looking name into a published headline. A name is somebody's name:
-// getting "Հալանդ" from "Haaland" by rule also produces "Հաալանդ", and
-// there is no way for the code to know which is right. So known names are
-// spelled out here, and a name that is not here is left exactly as the API
-// sent it - recognisable, if not Armenian - rather than guessed at.
+// The table comes first and always wins. A name is somebody's name, and no
+// rule can know whether "Haaland" is "Հալանդ" or "Հաալանդ" - so every name
+// worth getting right is spelled out here.
+//
+// What the table cannot do is cover a squad list: Manchester City showed 23
+// of its 26 players in Latin, and there are hundreds of clubs. A name that
+// is not here now falls through to transliterateName(), which spells it out
+// by rule. That is a fallback and not a replacement - it will not always
+// match how a commentator says the name - but an approximate Armenian
+// spelling is more use to a reader of an Armenian site than Latin script,
+// and anything it gets wrong is fixed by adding the name above.
+import { transliterateName } from "./translit-hy";
+
 const playerNames: Record<string, string> = {
   // Premier League
   "erling haaland": "Էրլինգ Հալանդ", "mohamed salah": "Մոհամեդ Սալահ",
@@ -136,5 +142,6 @@ export function armenianPlayerName(name: string | null | undefined): string {
     const matches = Object.entries(playerNames).filter(([full]) => full.split(" ").pop() === surname);
     if (matches.length === 1) return matches[0][1];
   }
-  return name;
+
+  return transliterateName(name) ?? name;
 }
