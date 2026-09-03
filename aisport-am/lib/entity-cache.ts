@@ -60,8 +60,12 @@ export type KnownPlayer = { name: string; photo: string | null; team: string | n
 export async function knownPlayer(playerId: number): Promise<KnownPlayer | null> {
   const season = currentSeasonYear();
   const tables = await readCached<TopScorer[]>([
+    ...LEAGUE_IDS.map((id) => `apifootball:v5:topscorers:${id}:${season}`),
+    // Previous keys, still worth reading while the new one fills up. This
+    // lookup only answers "does this player exist, and what is their
+    // photo" - an older row with a Latin name is a better answer than a
+    // 404 page.
     ...LEAGUE_IDS.map((id) => `apifootball:v4:topscorers:${id}:${season}`),
-    // The previous key, still worth reading while the new one fills up.
     ...LEAGUE_IDS.map((id) => `apifootball:v3:topscorers:${id}:${season}`),
   ]);
   for (const rows of tables) {

@@ -44,7 +44,7 @@ export async function getTopScorers(code: string): Promise<{ rows: TopScorer[]; 
 
   const db = (env as unknown as { DB?: D1Database }).DB;
   const season = currentSeasonYear();
-  const cacheKey = `apifootball:v4:topscorers:${leagueId}:${season}`;
+  const cacheKey = `apifootball:v5:topscorers:${leagueId}:${season}`;
 
   if (db) {
     await ensureCacheTable(db);
