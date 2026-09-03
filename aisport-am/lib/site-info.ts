@@ -7,7 +7,7 @@
 // The person behind the site. An ad network's reviewer, and a reader, both
 // want a name rather than "our team" - and a made-up name is worse than
 // none, so this is the real one.
-export const FOUNDER_NAME = "Տիգրան";
+export const FOUNDER_NAME = "Տիգրան Կարապետյան";
 
 // contact@aisport.am, not @aifootball.am: the aisport.am mailbox works
 // today and the aifootball.am one is not routed yet. An address on the

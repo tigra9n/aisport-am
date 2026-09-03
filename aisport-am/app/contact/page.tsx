@@ -20,7 +20,7 @@ export default function ContactPage() {
     <span className="page-kicker">Կապ</span>
     <h1 className="page-title">Կապ մեզ հետ</h1>
     <div className="legal-content">
-      <p>Գրեք մեզ ցանկացած հարցով։ Նամակները կարդում է կայքի խմբագիրը՝ {FOUNDER_NAME}-ը, և պատասխանում է սովորաբար 1–2 աշխատանքային օրվա ընթացքում։</p>
+      <p>Գրեք մեզ ցանկացած հարցով։ Նամակները կարդում է կայքի խմբագիրը՝ {FOUNDER_NAME}, և պատասխանում է սովորաբար 1–2 աշխատանքային օրվա ընթացքում։</p>
 
       <h2>Էլեկտրոնային փոստ</h2>
       <p style={{ fontSize: 18 }}><a href={`mailto:${CONTACT_EMAIL}`}><strong>{CONTACT_EMAIL}</strong></a></p>
