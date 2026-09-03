@@ -12,38 +12,42 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Verify what Google will actually find
+      - name: Check that inner pages redirect to their equivalent, not the homepage
         run: |
-          # Checked from a runner because the site is not reachable from
-          # the agent's network. Submitting a sitemap to Search Console is
-          # pointless if it 404s, is empty, or lists the wrong host, so
-          # confirm all three before asking Google to crawl it.
+          # Search Console warned that only some pages redirect with 301.
+          # A site move loses the value of every old URL that does not land
+          # on its equivalent, so test real article URLs rather than trust
+          # a generic warning: each must answer 301 from the old host, name
+          # the SAME path on the new host (not the homepage, which would
+          # throw away the page's specific ranking), and that target must
+          # then return 200.
+          curl -s -m 60 -o /tmp/sitemap.xml https://aifootball.am/sitemap.xml
           {
-            echo "=== robots.txt ==="
-            curl -s -m 30 -w "\nHTTP %{http_code} in %{time_total}s\n" https://aifootball.am/robots.txt
+            echo "sitemap URLs: $(grep -o '<loc>' /tmp/sitemap.xml | wc -l)"
             echo
-            echo "=== sitemap.xml: status, size, URL count ==="
-            curl -s -m 60 -o /tmp/sitemap.xml -w "HTTP %{http_code} in %{time_total}s, %{size_download} bytes\n" https://aifootball.am/sitemap.xml
-            echo "total <loc> entries: $(grep -o '<loc>' /tmp/sitemap.xml | wc -l)"
-            echo "article URLs (/news/): $(grep -o '<loc>[^<]*/news/[^<]*</loc>' /tmp/sitemap.xml | wc -l)"
-            echo "any URL still pointing at the OLD domain: $(grep -c 'aisport\.am' /tmp/sitemap.xml || true)"
+            PASS=0; TOHOME=0; BAD=0
+            # A spread across the sitemap: newest, oldest and the middle.
+            URLS=$( { grep -o '<loc>[^<]*/news/[^<]*</loc>' /tmp/sitemap.xml | head -4;
+                      grep -o '<loc>[^<]*/news/[^<]*</loc>' /tmp/sitemap.xml | tail -4;
+                      grep -o '<loc>[^<]*/opinions/[^<]*</loc>' /tmp/sitemap.xml | head -2; } \
+                    | sed 's|<loc>||; s|</loc>||' | sort -u )
+            for NEW in $URLS; do
+              PATH_ONLY="${NEW#https://aifootball.am}"
+              OLD="https://aisport.am${PATH_ONLY}"
+              CODE=$(curl -s -m 30 -o /dev/null -w '%{http_code}' "$OLD")
+              TARGET=$(curl -s -m 30 -o /dev/null -w '%{redirect_url}' "$OLD")
+              FINAL=$(curl -s -m 30 -L -o /dev/null -w '%{http_code}' "$OLD")
+              SHORT=$(printf '%s' "$PATH_ONLY" | cut -c1-46)
+              if [ "$CODE" = "301" ] && [ "$TARGET" = "$NEW" ] && [ "$FINAL" = "200" ]; then
+                PASS=$((PASS+1)); echo "OK    $CODE -> same path, final 200   $SHORT"
+              elif [ "$TARGET" = "https://aifootball.am/" ]; then
+                TOHOME=$((TOHOME+1)); echo "HOME  $CODE -> homepage, page value lost   $SHORT"
+              else
+                BAD=$((BAD+1)); echo "BAD   $CODE -> $TARGET (final $FINAL)   $SHORT"
+              fi
+            done
             echo
-            echo "=== first 3 and last 3 URLs ==="
-            grep -o '<loc>[^<]*</loc>' /tmp/sitemap.xml | head -3
-            echo "..."
-            grep -o '<loc>[^<]*</loc>' /tmp/sitemap.xml | tail -3
-            echo
-            echo "=== does the newest article page render for a crawler? ==="
-            NEWEST=$(grep -o '<loc>[^<]*/news/[^<]*</loc>' /tmp/sitemap.xml | tail -1 | sed 's|<loc>||; s|</loc>||')
-            echo "testing: $NEWEST"
-            curl -s -m 30 -o /tmp/article.html -w "HTTP %{http_code} in %{time_total}s, %{size_download} bytes\n" \
-              -A "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" "$NEWEST"
-            echo "has <title>: $(grep -o '<title>[^<]*</title>' /tmp/article.html | head -1)"
-            echo "has meta description: $(grep -o 'name="description" content="[^"]\{0,80\}' /tmp/article.html | head -1)"
-            echo "has JSON-LD structured data: $(grep -c 'application/ld+json' /tmp/article.html || true)"
-            echo
-            echo "=== old domain behaviour (should be a permanent redirect) ==="
-            curl -s -m 30 -o /dev/null -w "aisport.am -> HTTP %{http_code}, redirects to %{redirect_url}\n" https://aisport.am/
+            echo "same-path 301 then 200: $PASS | redirected to homepage: $TOHOME | other problem: $BAD"
           } > add-source-result.txt 2>&1 || true
           cat add-source-result.txt
       - run: |
