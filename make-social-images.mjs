@@ -11,7 +11,17 @@ import fs from "node:fs";
 
 fs.mkdirSync("aisport-am/public", { recursive: true });
 
-const FONT = `-apple-system, "Segoe UI", "Noto Sans Armenian", Roboto, sans-serif`;
+// Single quotes around the family names, not double: this string is
+// interpolated into a style="..." attribute, and a double quote there ends
+// the attribute and takes the whole font stack with it - which is how the
+// wordmark used to come out in Times.
+//
+// Liberation Sans is Arial's metric-compatible twin and is the family that
+// is actually installed where this runs; asking for Arial first does not
+// help, because fontconfig answers that request with a serif. DejaVu Sans
+// is last because it is the one here that carries Armenian, for the line
+// under the wordmark on the cover.
+const FONT = `'Liberation Sans', Arial, Helvetica, 'Noto Sans Armenian', 'DejaVu Sans', sans-serif`;
 
 // A plain football, not a stylised one: a white ball with the black
 // pentagons everybody recognises. Drawn rather than photographed so it
@@ -42,30 +52,28 @@ const ball = (size, dark) => {
     ${outer}
     ${seams}
   </g>
-  <circle cx="50" cy="50" r="47" fill="none" stroke="${dark}" stroke-width="2.5" opacity=".35"/>
 </svg>`;
 };
 
-// Variant A: the ball on the site's near-black, letters in white.
-const profile = `<!doctype html><html><body style="margin:0">
-<div style="width:512px;height:512px;position:relative;display:grid;place-items:center;background:#08100b;font-family:${FONT}">
-  <div style="position:absolute;inset:26px;border-radius:50%;border:6px solid #1d3227"></div>
-  <div style="display:grid;place-items:center">
-    <div>${ball(152, "#08100b")}</div>
-    <div style="margin-top:8px;color:#f5f8f5;font-size:104px;font-weight:900;letter-spacing:-.06em;line-height:.9">AI</div>
+// The profile picture is the site's own mark at poster size: the green
+// tile, the ball on it, the wordmark under it. Facebook crops it to a
+// circle and shows it at 32 pixels in a feed, so the ball is what carries
+// it - the wordmark is there for the page header, where it is 170 pixels.
+const lockup = (field, ink, aiColor, ring) => `<!doctype html><html><body style="margin:0">
+<div style="width:1024px;height:1024px;position:relative;display:grid;place-items:center;background:${field};font-family:${FONT}">
+  <div style="position:absolute;inset:46px;border-radius:50%;border:7px solid ${ring}"></div>
+  <div style="display:grid;place-items:center;gap:52px">
+    <div>${ball(430, "#08150e")}</div>
+    <div style="color:${ink};font-size:84px;font-weight:900;letter-spacing:-.045em;line-height:.9;white-space:nowrap"><span style="color:${aiColor}">AI</span>FOOTBALL<span style="opacity:.66">.AM</span></div>
   </div>
 </div></body></html>`;
 
-// Variant B: the accent green as the whole field, which is what stands out
+// Variant A: the accent green as the whole field, which is what stands out
 // in a feed of white cards.
-const profileAlt = `<!doctype html><html><body style="margin:0">
-<div style="width:512px;height:512px;position:relative;display:grid;place-items:center;background:#2fd181;font-family:${FONT}">
-  <div style="position:absolute;inset:24px;border-radius:50%;border:7px solid rgba(6,35,21,.22)"></div>
-  <div style="display:grid;place-items:center">
-    <div>${ball(150, "#062315")}</div>
-    <div style="margin-top:6px;color:#062315;font-size:106px;font-weight:900;letter-spacing:-.06em;line-height:.9">AI</div>
-  </div>
-</div></body></html>`;
+const profile = lockup("#2fd181", "#062315", "#ffffff", "rgba(6,35,21,.26)");
+
+// Variant B: the site's near-black, for anyone who prefers the darker page.
+const profileAlt = lockup("#08100b", "#f5f8f5", "#2fd181", "rgba(47,209,129,.36)");
 
 // The five Tigran asked for, by name. Their photographs come from the same
 // API the site already uses, but the ids are not written down here - an id
@@ -116,21 +124,28 @@ const faces = players.map((p, i) => `
 const cover = `<!doctype html><html><body style="margin:0">
 <div style="width:1640px;height:856px;position:relative;overflow:hidden;background:radial-gradient(circle at 22% 30%, #16281e 0%, #08100b 62%);font-family:${FONT}">
   <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:flex-end;padding-right:58px">${faces}</div>
-  <div style="position:absolute;inset:0;background:linear-gradient(90deg,#08100b 30%,rgba(8,16,11,.9) 44%,rgba(8,16,11,0) 62%)"></div>
-  <div style="position:absolute;top:50%;left:96px;transform:translateY(-50%);display:flex;align-items:center;gap:30px">
-    <div style="width:118px;height:118px;display:grid;place-items:center;border-radius:26px;background:#2fd181;color:#062315;font-size:54px;font-weight:900">AI</div>
+  ${players.length ? `<div style="position:absolute;inset:0;background:linear-gradient(90deg,#08100b 30%,rgba(8,16,11,.9) 44%,rgba(8,16,11,0) 62%)"></div>` : ""}
+  <div style="position:absolute;top:50%;${players.length ? "left:96px;transform:translateY(-50%)" : "left:50%;transform:translate(-50%,-50%)"};display:flex;align-items:center;gap:30px">
+    <div style="width:132px;height:132px;display:grid;place-items:center;border-radius:34px;background:#2fd181">${ball(96, "#08150e")}</div>
     <div>
-      <div style="color:#f5f8f5;font-size:60px;font-weight:900;letter-spacing:-.03em;line-height:1;white-space:nowrap">FOOTBALL<span style="color:#2fd181">.AM</span></div>
+      <div style="color:#f5f8f5;font-size:60px;font-weight:900;letter-spacing:-.03em;line-height:1;white-space:nowrap"><span style="color:#2fd181">AI</span>FOOTBALL<span style="color:#f28c18">.AM</span></div>
       <div style="margin-top:12px;color:#a9bdaf;font-size:24px;font-weight:700">Ֆուտբոլը՝ արագ, խելացի, հայերեն</div>
     </div>
   </div>
 </div></body></html>`;
 
+// The cover already in public/ was drawn with the five photographs on it.
+// Without an API key none of them resolve, and rewriting the file would
+// quietly replace a cover that has faces with one that does not - so the
+// wordmark-only version is written beside it, under its own name, and the
+// real cover is only rebuilt when the photographs are there.
+const coverName = players.length ? "fb-cover.png" : "fb-cover-logo.png";
+
 const browser = await chromium.launch();
 for (const [name, html, width, height] of [
-  ["fb-profile.png", profile, 512, 512],
-  ["fb-profile-alt.png", profileAlt, 512, 512],
-  ["fb-cover.png", cover, 1640, 856],
+  ["fb-profile.png", profile, 1024, 1024],
+  ["fb-profile-alt.png", profileAlt, 1024, 1024],
+  [coverName, cover, 1640, 856],
 ]) {
   const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
   await page.setContent(html, { waitUntil: "load" });

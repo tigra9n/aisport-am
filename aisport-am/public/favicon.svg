@@ -1,6 +1,18 @@
-<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-<path d="M22 19.2727C22 20.779 20.779 22 19.2727 22H14.7273C13.221 22 12 20.779 12 19.2727V12H19.2727C20.779 12 22 13.221 22 14.7273V19.2727Z" fill="#68C4FF"/>
-<path d="M20 2C21.1046 2 22 2.89543 22 4V7C22 8.10457 21.1046 9 20 9H17C15.8954 9 15 8.10457 15 7V4C15 2.89543 15.8954 2 17 2H20Z" fill="#0C79D8"/>
-<path d="M7 15C8.10457 15 9 15.8954 9 17V20C9 21.1046 8.10457 22 7 22H4C2.89543 22 2 21.1046 2 20V17C2 15.8954 2.89543 15 4 15H7Z" fill="#0C79D8"/>
-<path d="M12 12H4.72727C3.22104 12 2 10.779 2 9.27273V4.72727C2 3.22104 3.22104 2 4.72727 2H9.27273C10.779 2 12 3.22104 12 4.72727V12Z" fill="#2E9EFF"/>
+<svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
+  <defs><clipPath id="brand-ball"><circle cx="20" cy="20" r="12.6"/></clipPath></defs>
+  <rect width="40" height="40" rx="11" fill="#2fd181"/>
+  <circle cx="20" cy="20" r="12.6" fill="#ffffff"/>
+  <g clip-path="url(#brand-ball)" fill="#062315">
+  <polygon points="20.00,15.71 24.08,18.67 22.52,23.47 17.48,23.47 15.92,18.67"/>
+  <polygon points="20.00,14.91 16.69,12.50 17.95,8.60 22.05,8.60 23.31,12.50"/>
+  <polygon points="24.84,18.43 26.11,14.53 30.21,14.53 31.47,18.43 28.16,20.83"/>
+  <polygon points="22.99,24.12 27.09,24.12 28.36,28.02 25.04,30.43 21.73,28.02"/>
+  <polygon points="17.01,24.12 18.27,28.02 14.96,30.43 11.64,28.02 12.91,24.12"/>
+  <polygon points="15.16,18.43 11.84,20.83 8.53,18.43 9.79,14.53 13.89,14.53"/>
+  <line x1="20.0" y1="15.98" x2="20.0" y2="14.37" stroke="#062315" stroke-width="0.8" stroke-linecap="round"/>
+  <line x1="23.82" y1="18.76" x2="25.35" y2="18.26" stroke="#062315" stroke-width="0.8" stroke-linecap="round"/>
+  <line x1="22.36" y1="23.25" x2="23.31" y2="24.55" stroke="#062315" stroke-width="0.8" stroke-linecap="round"/>
+  <line x1="17.64" y1="23.25" x2="16.69" y2="24.55" stroke="#062315" stroke-width="0.8" stroke-linecap="round"/>
+  <line x1="16.18" y1="18.76" x2="14.65" y2="18.26" stroke="#062315" stroke-width="0.8" stroke-linecap="round"/>
+  </g>
 </svg>
