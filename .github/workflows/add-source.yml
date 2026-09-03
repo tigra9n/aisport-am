@@ -199,6 +199,65 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      - name: Withdraw the two articles that repeat a story already published
+        run: |
+          # Tigran asked for these removed. Both are the older or weaker half
+          # of a pair the new duplicate check would now stop at publication:
+          # the Kone piece that also carried the wrong club for Alonso and a
+          # headline making three claims, and the earlier of two pieces about
+          # the same Lautaro Martinez statement.
+          #
+          # status='withdrawn' rather than DELETE: every listing filters on
+          # 'published' and so does the article page now, so the piece leaves
+          # the site, the sitemaps and the search - but the row survives, and
+          # putting it back is one word if this turns out to be wrong.
+          npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
+          echo "=== withdrawn duplicates ===" > withdraw.txt
+          npx wrangler d1 execute aisport-db --remote --json --command             "UPDATE articles SET status='withdrawn' WHERE status='published' AND (slug LIKE 'chempionnery-dzakhoghvetsin-konei-pokhadrutyan%' OR title LIKE 'Լաուտարո Մարտինես մեկնաբանել%')"             > w1.json 2>&1 || true
+          npx wrangler d1 execute aisport-db --remote --json --command             "SELECT status, slug, substr(title,1,58) AS title FROM articles WHERE slug LIKE 'chempionnery-dzakhoghvetsin-konei-pokhadrutyan%' OR title LIKE 'Լաուտարո Մարտինես%' ORDER BY published_at DESC"             > w2.json 2>&1 || true
+          node -e "
+            const fs=require('fs');
+            const rows=(f)=>{try{const r=fs.readFileSync(f,'utf8');return JSON.parse(r.slice(r.indexOf('[')))[0].results||[]}catch(e){return null}};
+            const after=rows('w2.json');
+            if(after===null){console.log('  query failed: '+fs.readFileSync('w2.json','utf8').slice(0,200));}
+            else for(const r of after) console.log('  ['+r.status+']  '+r.title+'  ('+r.slug.slice(0,40)+')');
+          " >> withdraw.txt 2>&1
+          cat withdraw.txt
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Correct Xabi Alonso's club where an article names the wrong one
+        run: |
+          # Tigran confirms Alonso manages Chelsea. One published piece calls
+          # him Real Madrid's manager in its opening line - the model filled
+          # that in from memory rather than from the source, which the prompt
+          # now forbids. A published factual error gets corrected, per the
+          # editorial line on /about. Only the present-tense attribution is
+          # touched; a historical mention ("played under Alonso at Real")
+          # stays, because it is true.
+          npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
+          echo "=== Xabi Alonso's club ===" > alonso.txt
+          npx wrangler d1 execute aisport-db --remote --json --command             "SELECT slug, substr(title,1,60) AS title FROM articles WHERE content LIKE '%Մադրիդի» գլխավոր մարզիչ Խաբի Ալոնսո%' OR content LIKE '%Ռեալի» գլխավոր մարզիչ Խաբի Ալոնսո%'"             > al1.json 2>&1 || true
+          npx wrangler d1 execute aisport-db --remote --json --command             "UPDATE articles SET content = REPLACE(REPLACE(content, '«Ռեալ Մադրիդի» գլխավոր մարզիչ Խաբի Ալոնսոն', '«Չելսիի» գլխավոր մարզիչ Խաբի Ալոնսոն'), '«Ռեալի» գլխավոր մարզիչ Խաբի Ալոնսոն', '«Չելսիի» գլխավոր մարզիչ Խաբի Ալոնսոն') WHERE content LIKE '%Մադրիդի» գլխավոր մարզիչ Խաբի Ալոնսո%' OR content LIKE '%Ռեալի» գլխավոր մարզիչ Խաբի Ալոնսո%'"             > al2.json 2>&1 || true
+          npx wrangler d1 execute aisport-db --remote --json --command             "SELECT COUNT(*) AS still_wrong FROM articles WHERE content LIKE '%Մադրիդի» գլխավոր մարզիչ Խաբի Ալոնսո%' OR content LIKE '%Ռեալի» գլխավոր մարզիչ Խաբի Ալոնսո%'"             > al3.json 2>&1 || true
+          node -e "
+            const fs=require('fs');
+            const rows=(f)=>{try{const r=fs.readFileSync(f,'utf8');return JSON.parse(r.slice(r.indexOf('[')))[0].results||[]}catch(e){return null}};
+            const before=rows('al1.json');
+            if(before===null){console.log('  query failed: '+fs.readFileSync('al1.json','utf8').slice(0,200));}
+            else{
+              console.log('  articles naming him a Real manager before the fix: '+before.length);
+              for(const r of before) console.log('    '+r.slug+'  '+r.title);
+            }
+            const after=rows('al3.json');
+            if(after) console.log('  still wrong after the fix: '+after[0].still_wrong);
+          " >> alonso.txt 2>&1
+          cat alonso.txt
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Does any article contradict itself between its title and its SEO title
         run: |
           npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
@@ -284,6 +343,8 @@ jobs:
             node vitals.mjs 2>&1 || echo "  (vitals.mjs exited non-zero)"
           } > weight.txt
           cat weight.txt
+          cat withdraw.txt >> add-source-result.txt 2>/dev/null || true
+          cat alonso.txt >> add-source-result.txt 2>/dev/null || true
           cat titles.txt >> add-source-result.txt 2>/dev/null || true
           cat coaches.txt >> add-source-result.txt 2>/dev/null || true
           cat weight.txt >> add-source-result.txt 2>/dev/null || true

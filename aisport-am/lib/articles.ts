@@ -119,10 +119,14 @@ export async function searchArticles(query: string, category: string, limit = 20
 
 export async function getArticleBySlug(slug: string): Promise<NewsArticle | null> {
   try {
+    // Only published ones. Every list on the site filters by status, but
+    // this did not, so an article withdrawn for a factual error or as a
+    // duplicate stayed reachable at its own address - removed from the
+    // listings and still readable by anyone holding the link.
     const [article] = await (await getDb())
       .select()
       .from(articles)
-      .where(eq(articles.slug, slug))
+      .where(and(eq(articles.slug, slug), eq(articles.status, "published")))
       .limit(1);
     return article ?? null;
   } catch {
