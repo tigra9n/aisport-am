@@ -105,11 +105,19 @@ for (const url of [`${BASE}/cdn-cgi/image/width=80,format=auto/${probe}`, probe]
   const img = res.filter((r) => r.type.startsWith("image/"));
   const counted = await p2.evaluate(() => {
     const imgs = [...document.querySelectorAll("img")];
-    return { inDom: imgs.length, lazy: imgs.filter((i) => i.getAttribute("loading") === "lazy").length };
+    const broken = imgs.filter((i) => i.complete && i.naturalWidth === 0 && i.currentSrc);
+    return {
+      inDom: imgs.length,
+      lazy: imgs.filter((i) => i.getAttribute("loading") === "lazy").length,
+      proxied: imgs.filter((i) => (i.currentSrc || "").includes("wsrv.nl")).length,
+      broken: broken.length,
+      brokenSrc: broken.slice(0, 3).map((i) => i.currentSrc.slice(0, 90)),
+    };
   });
   log(`\n=== home page weight after the lazy pass (phone) ===`);
   log(`  ${(total / 1024 / 1024).toFixed(2)} MB total, images ${img.length} files / ${(img.reduce((n, r) => n + r.size, 0) / 1024 / 1024).toFixed(2)} MB (was 2.20 MB / 13 files / 1.13 MB)`);
-  log(`  <img> in the DOM: ${counted.inDom} | lazy: ${counted.lazy} (was 48 | 26)`);
+  log(`  <img> in the DOM: ${counted.inDom} | lazy: ${counted.lazy} | through the proxy: ${counted.proxied} | FAILED TO LOAD: ${counted.broken}`);
+  for (const b of counted.brokenSrc) log(`    broken: ${b}`);
   log(`  ten largest downloads:`);
   for (const r of res.slice().sort((a, b) => b.size - a.size).slice(0, 10)) {
     log(`    ${String(Math.round(r.size / 1024)).padStart(5)} KB  ${(r.type || "?").padEnd(14)} ${(r.url ?? "").slice(0, 76)}`);
