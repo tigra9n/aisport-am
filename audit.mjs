@@ -37,42 +37,52 @@ await page.goto(BASE, { waitUntil: "load", timeout: 60000 });
 await page.waitForTimeout(1500);
 log(`\n=== header ===`);
 log(`  date line: ${await page.evaluate(() => {
-  const hit = [...document.querySelectorAll("header span, .site-header span, .topbar span")]
+  const hit = [...document.querySelectorAll(".topline-inner span")]
     .map((s) => s.textContent?.trim() ?? "")
     .find((t) => /\d/.test(t) && t.length > 5);
   return hit ?? "not found";
 })}`);
 
-// 3. A live-match modal: are the lineup names links now?
-const matchHref = await page.evaluate(() => {
-  const a = [...document.querySelectorAll('a[href*="match="]')].map((x) => x.getAttribute("href"));
-  return a[0] ?? null;
-});
-log(`\n=== match modal (${matchHref ?? "no match link on the home page"}) ===`);
-if (matchHref) {
-  await page.goto(new URL(matchHref, BASE).toString(), { waitUntil: "load", timeout: 60000 });
+// 3. A live-match modal: are the lineup names links now? Lineups only exist
+// for matches close to kickoff, so try several rather than concluding from
+// one match that happens not to have them.
+const hrefs = await page.evaluate(() =>
+  [...document.querySelectorAll('a[href*="match="]')].map((x) => x.getAttribute("href")).slice(0, 8));
+await page.goto(`${BASE}/live`, { waitUntil: "load", timeout: 60000 }).catch(() => {});
+await page.waitForTimeout(2000);
+const liveHrefs = await page.evaluate(() =>
+  [...document.querySelectorAll('a[href*="match="]')].map((x) => x.getAttribute("href")).slice(0, 12));
+const candidates = [...new Set([...liveHrefs, ...hrefs])];
+log(`\n=== match modal — ${candidates.length} matches to try ===`);
+let checked = 0;
+for (const href of candidates) {
+  if (checked >= 6) break;
+  checked += 1;
+  await page.goto(new URL(href, BASE).toString(), { waitUntil: "load", timeout: 60000 });
   const tab = page.locator("button", { hasText: "Կազմեր" }).first();
   await tab.waitFor({ state: "visible", timeout: 30000 }).catch(() => {});
-  if (await tab.count()) {
-    await tab.click();
-    await page.waitForTimeout(6000);
-    const m = await page.evaluate(() => ({
-      pitchPlayers: document.querySelectorAll(".pitch-player").length,
-      pitchLinks: document.querySelectorAll("a.pitch-player-link").length,
-      subs: document.querySelectorAll(".subs-chip").length,
-      subLinks: document.querySelectorAll("a.subs-chip-link").length,
-      teams: [...document.querySelectorAll(".pitch-team-label strong")].map((t) => t.textContent?.trim()),
-      firstHref: document.querySelector("a.pitch-player-link")?.getAttribute("href") ?? null,
-      empty: document.querySelector(".detail-empty")?.textContent?.trim() ?? null,
-    }));
-    log(`  teams: ${m.teams.join(" vs ")}`);
-    log(`  pitch: ${m.pitchLinks}/${m.pitchPlayers} names are links | subs: ${m.subLinks}/${m.subs}`);
-    log(`  first link: ${m.firstHref}`);
-    if (m.empty) log(`  note: ${m.empty}`);
-    await page.screenshot({ path: `${OUT}/lineup.jpg`, type: "jpeg", quality: 70 });
-  } else {
-    log(`  the Կազմեր tab was not found`);
+  if (!(await tab.count())) { log(`  ${href}: no tabs (details unavailable)`); continue; }
+  await tab.click();
+  await page.waitForTimeout(3000);
+  const m = await page.evaluate(() => ({
+    pitchPlayers: document.querySelectorAll(".pitch-player").length,
+    pitchLinks: document.querySelectorAll("a.pitch-player-link").length,
+    subs: document.querySelectorAll(".subs-chip").length,
+    subLinks: document.querySelectorAll("a.subs-chip-link").length,
+    teams: [...document.querySelectorAll(".pitch-team-label strong")].map((t) => t.textContent?.trim()),
+    firstHref: document.querySelector("a.pitch-player-link")?.getAttribute("href") ?? null,
+  }));
+  if (m.pitchPlayers === 0) { log(`  ${href}: no lineup published yet`); continue; }
+  log(`  ${href}: ${m.teams.join(" vs ")}`);
+  log(`    pitch ${m.pitchLinks}/${m.pitchPlayers} names are links | subs ${m.subLinks}/${m.subs} | first link ${m.firstHref}`);
+  await page.screenshot({ path: `${OUT}/lineup.jpg`, type: "jpeg", quality: 70 });
+  // Follow one of them: the point is that it reaches a real player page.
+  if (m.firstHref) {
+    await page.goto(new URL(m.firstHref, BASE).toString(), { waitUntil: "load", timeout: 60000 });
+    await page.waitForTimeout(1500);
+    log(`    following it lands on: ${await page.evaluate(() => document.querySelector("h1")?.textContent?.trim() ?? "404")}`);
   }
+  break;
 }
 
 // 4. Can Cloudflare resize a remote image for us? This decides whether the
