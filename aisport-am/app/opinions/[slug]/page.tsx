@@ -78,7 +78,7 @@ export default async function OpinionPage({ params }: { params: Promise<{ slug: 
           <p>{opinion.role} · {opinion.author}</p>
         </div>
         {opinion.imageUrl && (
-          <img src={sizedImage(opinion.imageUrl, 700)} alt="" className="article-image" style={{ width: "100%", borderRadius: 12, marginBottom: 24 }} decoding="async" fetchPriority="high" />
+          <img src={sizedImage(opinion.imageUrl, 700)} alt={opinion.title} className="article-image" style={{ width: "100%", borderRadius: 12, marginBottom: 24 }} decoding="async" fetchPriority="high" />
         )}
         {embedUrl && (
           <div style={{ position: "relative", paddingBottom: "56.25%", height: 0, marginBottom: 24, borderRadius: 12, overflow: "hidden" }}>

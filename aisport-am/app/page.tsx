@@ -84,13 +84,30 @@ export default async function Home() {
     ...articleRows.map((a) => ({ publishedAt: a.publishedAt, preview: toPreview(a) })),
     ...opinionRowsForFeed.map((o) => ({ publishedAt: o.publishedAt, preview: opinionToPreview(o) })),
   ].sort((a, b) => (a.publishedAt < b.publishedAt ? 1 : a.publishedAt > b.publishedAt ? -1 : 0));
-  const headlineStream = combinedFeed.slice(0, 9).map((entry) => entry.preview);
+  // The hero carousel already shows the six newest articles. Letting the
+  // headline feed start from the same place printed the top story twice on
+  // one screen - the last duplicate the audit could still see.
+  //
+  // The walk has to count as it goes rather than filter afterwards. The
+  // feed's "load more" continues from an offset into the articles table,
+  // so that offset must count every article row passed over, including the
+  // ones skipped for being in the hero and excluding the opinions mixed in
+  // - otherwise the second page repeats or skips.
+  const heroSlugs = new Set(articles.slice(0, 6).map((item) => item.slug));
+  const headlineStream: ArticlePreview[] = [];
+  let articlesConsumed = 0;
+  for (const entry of combinedFeed) {
+    const isArticle = entry.preview.basePath !== "/opinions";
+    if (isArticle) articlesConsumed += 1;
+    if (!heroSlugs.has(entry.preview.slug)) headlineStream.push(entry.preview);
+    if (headlineStream.length >= 9) break;
+  }
   // Infinite-scroll pagination (HeadlineFeed's "load more") only continues
   // from the articles table via /api/articles?offset=N, so the starting
   // offset must count only the actual articles among the first 9 shown -
   // not the total including any opinions mixed in - or subsequent pages
   // would skip or repeat articles.
-  const articlesInHeadline = headlineStream.filter((item) => item.basePath !== "/opinions").length;
+  const articlesInHeadline = articlesConsumed;
   const heroArticles = articles.slice(0, 6);
   // Everything the page has already shown, so the sport sections below do
   // not print the same article a second time. The audit found five headlines
