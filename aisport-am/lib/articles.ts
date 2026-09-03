@@ -1,9 +1,10 @@
-import { and, desc, eq, like, or } from "drizzle-orm";
+import { and, desc, eq, gt, like, or } from "drizzle-orm";
 import { getDb } from "../db";
 import { articles } from "../db/schema";
 import type { ArticlePreview } from "./content";
 import { resolveArticleImage } from "./article-image";
 import { detectLeague } from "./league-tags";
+import { isSameStory } from "./story-signature";
 import { readTimeLabel } from "./reading-time";
 
 export type NewsArticle = typeof articles.$inferSelect;
@@ -183,8 +184,45 @@ function slugify(title: string, uniquePart: string) {
   return `${transliterated || "news"}-${uniquePart}`.slice(0, 120);
 }
 
+// Why the last save was refused, for the cron log - a story dropped as a
+// repeat should be visible, not silent.
+export let lastSaveSkipReason = "";
+
+// The same story reaching us from two outlets has two source URLs, so the
+// unique constraint below cannot see it: two pieces about Manu Koné went out
+// ninety minutes apart, one from Foot Mercato and one from Metro. Compare
+// what the new piece is about against everything published in the last day.
+const SAME_STORY_WINDOW_HOURS = 24;
+
+async function alreadyToldThisStory(title: string, excerpt: string): Promise<string | null> {
+  try {
+    const db = await getDb();
+    const since = new Date(Date.now() - SAME_STORY_WINDOW_HOURS * 60 * 60 * 1000)
+      .toISOString()
+      .replace("T", " ")
+      .slice(0, 19);
+    const recent = await db
+      .select({ title: articles.title, excerpt: articles.excerpt })
+      .from(articles)
+      .where(and(eq(articles.status, "published"), gt(articles.publishedAt, since)))
+      .orderBy(desc(articles.publishedAt))
+      .limit(80);
+    for (const published of recent) {
+      if (isSameStory({ title, excerpt }, { title: published.title, excerpt: published.excerpt })) {
+        return published.title;
+      }
+    }
+    return null;
+  } catch {
+    // A failed lookup must not stop publishing - the worst case is the
+    // behaviour we had before this check existed.
+    return null;
+  }
+}
+
 // Returns true if a new row was inserted, false if it already existed
-// (sourceUrl is unique, so re-processing the same match/feed item is safe).
+// (sourceUrl is unique, so re-processing the same match/feed item is safe)
+// or if the same story went out in the last day.
 export async function saveGeneratedArticle(input: {
   title: string;
   excerpt: string;
@@ -203,6 +241,13 @@ export async function saveGeneratedArticle(input: {
   confidence?: number | null;
 }): Promise<boolean> {
   try {
+    lastSaveSkipReason = "";
+    const duplicateOf = await alreadyToldThisStory(input.title, input.excerpt);
+    if (duplicateOf) {
+      lastSaveSkipReason = `same story as "${duplicateOf.slice(0, 60)}"`;
+      return false;
+    }
+
     const db = await getDb();
     const league = detectLeague(input.title, input.content, input.category);
     const result = await db
