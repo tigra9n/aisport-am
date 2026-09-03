@@ -130,7 +130,7 @@ export default async function Home() {
       <section className="live-ribbon" aria-label="Ուղիղ արդյունքներ">
         <div className="site-shell live-ribbon-inner">
           <Link className="live-title" href="/live"><span /> LIVE</Link>
-          <div className="live-ticker"><div className="live-ticker-track">{[...live.matches, ...live.matches].map((match, index) => <Link className="live-ribbon-match" href={`/?match=${match.id}`} scroll={false} key={`${match.id}-${index}`}><small className={match.isLive ? "ticker-live" : ""}>{match.status}</small><strong>{match.home}</strong><b>{match.homeScore ?? "–"}</b><span>:</span><b>{match.awayScore ?? "–"}</b><strong>{match.away}</strong></Link>)}</div></div>
+          <div className="live-ticker"><div className="live-ticker-track">{[...live.matches, ...live.matches].map((match, index) => <Link className="live-ribbon-match" href={`/?match=${match.id}`} scroll={false} prefetch={false} key={`${match.id}-${index}`}><small className={match.isLive ? "ticker-live" : ""}>{match.status}</small><strong>{match.home}</strong><b>{match.homeScore ?? "–"}</b><span>:</span><b>{match.awayScore ?? "–"}</b><strong>{match.away}</strong></Link>)}</div></div>
           <Link className="all-scores" href="/live">Բոլոր խաղերը →</Link>
         </div>
       </section>

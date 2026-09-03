@@ -114,17 +114,65 @@ function currentSeasonYear() {
   return month >= 7 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
 }
 
+// The bio-only endpoint. It takes no season, so it answers for a player the
+// season-scoped endpoint has nothing on - a squad player who has not been
+// used this year, which is most of an Armenian league bench.
+type ApiFootballPlayerBio = { player?: ApiFootballPlayerProfile["player"] };
+
+async function fetchBioOnly(playerId: number, key: string): Promise<PlayerProfile | null> {
+  return cachedGet<PlayerProfile>(
+    `apifootball:v1:playerbio:${playerId}`,
+    7 * 24 * 60 * 60 * 1000,
+    `https://v3.football.api-sports.io/players/profiles?player=${playerId}`,
+    key,
+    (json) => {
+      const p = (json as { response?: ApiFootballPlayerBio[] })?.response?.[0]?.player;
+      if (!p?.id || !p.name) return null;
+      return {
+        id: p.id,
+        name: p.name,
+        photo: p.photo ?? null,
+        nationality: p.nationality ? armenianCountry(p.nationality) : null,
+        birthDate: p.birth?.date ?? null,
+        birthPlace: p.birth?.place ?? null,
+        height: p.height ?? null,
+        weight: p.weight ?? null,
+        age: p.age ?? null,
+        position: null,
+        currentTeam: null,
+        currentTeamLogo: null,
+        shirtNumber: null,
+        season: currentSeasonYear(),
+        statistics: [],
+      };
+    },
+  );
+}
+
 export async function getPlayerProfile(playerId: number): Promise<PlayerProfile | null> {
   const { env } = await import("cloudflare:workers");
   const runtime = env as unknown as Record<string, string | undefined>;
   const key = runtime.API_FOOTBALL_KEY;
   if (!key) return null;
+  // Try this season, then last season, then the bio-only endpoint. Linking a
+  // lineup name to a page that answers 404 is worse than linking nothing, and
+  // the season-scoped endpoint returns an empty response for any player who
+  // has not appeared this year. The extra calls only happen when the first
+  // one comes back empty, and the answer is cached either way.
   const season = currentSeasonYear();
+  return (
+    (await profileForSeason(playerId, key, season)) ??
+    (await profileForSeason(playerId, key, season - 1)) ??
+    (await fetchBioOnly(playerId, key))
+  );
+}
+
+async function profileForSeason(playerId: number, key: string, season: number): Promise<PlayerProfile | null> {
   // Cache key bumped on every change to what gets stored: the payload now
   // carries statistics (v2) and Armenian country/competition names (v3), and
   // an older row would keep serving the previous shape for a whole day.
   return cachedGet<PlayerProfile>(
-    `apifootball:v3:playerprofile:${playerId}`,
+    `apifootball:v3:playerprofile:${playerId}:${season}`,
     24 * 60 * 60 * 1000,
     `https://v3.football.api-sports.io/players?id=${playerId}&season=${season}`,
     key,
@@ -176,7 +224,7 @@ export async function getPlayerProfile(playerId: number): Promise<PlayerProfile 
         statistics,
       };
     },
-    [`apifootball:v2:playerprofile:${playerId}`],
+    [`apifootball:v3:playerprofile:${playerId}`, `apifootball:v2:playerprofile:${playerId}`],
   );
 }
 

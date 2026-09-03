@@ -118,7 +118,7 @@ for (const url of [`${BASE}/cdn-cgi/image/width=80,format=auto/${probe}`, probe]
     const type = (r.headers()["content-type"] ?? "").split(";")[0];
     let size = Number(r.headers()["content-length"] ?? 0);
     if (!size) { try { size = (await r.body()).length; } catch { size = 0; } }
-    if (size > 0) res.push({ size, type });
+    if (size > 0) res.push({ size, type, url: r.url() });
   });
   await p2.setViewportSize({ width: 390, height: 844 });
   await p2.goto(BASE, { waitUntil: "load", timeout: 60000 });
@@ -132,6 +132,12 @@ for (const url of [`${BASE}/cdn-cgi/image/width=80,format=auto/${probe}`, probe]
   log(`\n=== home page weight after the lazy pass (phone) ===`);
   log(`  ${(total / 1024 / 1024).toFixed(2)} MB total, images ${img.length} files / ${(img.reduce((n, r) => n + r.size, 0) / 1024 / 1024).toFixed(2)} MB (was 2.20 MB / 13 files / 1.13 MB)`);
   log(`  <img> in the DOM: ${counted.inDom} | lazy: ${counted.lazy} (was 48 | 26)`);
+  log(`  ten largest downloads:`);
+  for (const r of res.slice().sort((a, b) => b.size - a.size).slice(0, 10)) {
+    log(`    ${String(Math.round(r.size / 1024)).padStart(5)} KB  ${(r.type || "?").padEnd(14)} ${(r.url ?? "").slice(0, 76)}`);
+  }
+  const rsc = res.filter((r) => (r.url ?? "").includes("_rsc="));
+  log(`  RSC prefetches: ${rsc.length} requests, ${Math.round(rsc.reduce((n, r) => n + r.size, 0) / 1024)} KB (was 2 requests, 210 KB)`);
 }
 
 await browser.close();

@@ -33,10 +33,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         {children}
         {/* Google Analytics 4 - property created 2026-08-27 for real
             traffic/source tracking (Search Console alone doesn't show
-            session-level behavior). afterInteractive so it doesn't block
-            initial page render/LCP. */}
-        <Script src="https://www.googletagmanager.com/gtag/js?id=G-LETFRQPT04" strategy="afterInteractive" />
-        <Script id="ga4-init" strategy="afterInteractive">
+            session-level behavior). lazyOnload rather than afterInteractive:
+            gtag.js is 170 KB, the single largest script the site loads, and
+            none of the page depends on it, so it waits until everything else
+            has finished. GA4 still records the pageview. */}
+        <Script src="https://www.googletagmanager.com/gtag/js?id=G-LETFRQPT04" strategy="lazyOnload" />
+        <Script id="ga4-init" strategy="lazyOnload">
           {`window.dataLayer = window.dataLayer || [];
 function gtag(){dataLayer.push(arguments);}
 gtag('js', new Date());
