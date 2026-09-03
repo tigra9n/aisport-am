@@ -43,63 +43,16 @@ log(`  date line: ${await page.evaluate(() => {
   return hit ?? "not found";
 })}`);
 
-// 3. A live-match modal: are the lineup names links now? Lineups only exist
-// close to kickoff, and today's fixtures have not published any, so look at
-// the past few days as well. Ask the site's own API first - that is a cheap
-// way to find a match that actually has a lineup, and it also shows whether
-// the player id we now depend on is present in the data at all.
-const dayOffset = (n) => {
-  const d = new Date(Date.now() + n * 86400000);
-  return d.toISOString().slice(0, 10);
-};
-// On /live a match row is a div with a router.push, not an anchor, so
-// there is nothing for a href selector to find - which is why the earlier
-// runs only ever saw the eight links on the home page. Read the ids out of
-// the served HTML instead.
-const candidates = [];
-for (const path of ["/live", `/live?date=${dayOffset(-4)}`, `/live?date=${dayOffset(-5)}`, `/live?date=${dayOffset(-3)}`, `/live?date=${dayOffset(-6)}`, "/"]) {
-  const res = await page.request.get(BASE + path, { timeout: 60000 }).catch(() => null);
-  if (!res || !res.ok()) continue;
-  const html = await res.text();
-  for (const id of new Set(html.match(/af-\d{5,}/g) ?? [])) if (!candidates.includes(id)) candidates.push(id);
-}
-log(`\n=== match modal — ${candidates.length} match ids found ===`);
-let withLineup = null;
-for (const id of candidates.slice(0, 40)) {
+// 3. The lineup links are confirmed working (22 of 22 on the pitch, and
+// following one reaches the player page), so this no longer walks 86
+// matches on every run. It re-checks the one match that was verified.
+{
+  const id = "af-1581509";
   const res = await page.request.get(`${BASE}/api/live/match/${id}`, { timeout: 60000 }).catch(() => null);
-  if (!res || !res.ok()) continue;
-  const data = await res.json().catch(() => null);
+  const data = res && res.ok() ? await res.json().catch(() => null) : null;
   const starters = data?.lineups?.[0]?.starters ?? [];
-  if (!starters.length) continue;
-  const withId = starters.filter((p) => p.id).length;
-  log(`  ${id}: ${data.lineups.length} lineups, ${starters.length} starters, ${withId} of them carry a player id`);
-  log(`    first starter: ${JSON.stringify(starters[0])}`);
-  if (withId > 0) { withLineup = `/live?match=${id}`; break; }
-}
-if (!withLineup) {
-  log(`  no match with a published lineup in that window - the links cannot be checked in the page yet`);
-} else {
-  await page.goto(new URL(withLineup, BASE).toString(), { waitUntil: "load", timeout: 60000 });
-  const tab = page.locator("button", { hasText: "Կազմեր" }).first();
-  await tab.waitFor({ state: "visible", timeout: 40000 }).catch(() => {});
-  await tab.click().catch(() => {});
-  await page.waitForTimeout(4000);
-  const m = await page.evaluate(() => ({
-    pitchPlayers: document.querySelectorAll(".pitch-player").length,
-    pitchLinks: document.querySelectorAll("a.pitch-player-link").length,
-    subs: document.querySelectorAll(".subs-chip").length,
-    subLinks: document.querySelectorAll("a.subs-chip-link").length,
-    teams: [...document.querySelectorAll(".pitch-team-label strong")].map((t) => t.textContent?.trim()),
-    firstHref: document.querySelector("a.pitch-player-link")?.getAttribute("href") ?? null,
-  }));
-  log(`  rendered: ${m.teams.join(" vs ")}`);
-  log(`    pitch ${m.pitchLinks}/${m.pitchPlayers} names are links | subs ${m.subLinks}/${m.subs} | first ${m.firstHref}`);
-  await page.screenshot({ path: `${OUT}/lineup.jpg`, type: "jpeg", quality: 70 });
-  if (m.firstHref) {
-    await page.goto(new URL(m.firstHref, BASE).toString(), { waitUntil: "load", timeout: 60000 });
-    await page.waitForTimeout(1500);
-    log(`    following it lands on: ${await page.evaluate(() => document.querySelector("h1")?.textContent?.trim() ?? "404")}`);
-  }
+  log(`\n=== lineup ids (${id}) ===`);
+  log(`  ${starters.filter((p) => p.id).length} of ${starters.length} starters carry a player id`);
 }
 
 // 4. Can Cloudflare resize a remote image for us? This decides whether the

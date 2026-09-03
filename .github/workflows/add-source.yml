@@ -39,12 +39,29 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      - name: Can this account write to R2 at all
+        run: |
+          # Resizing images ourselves needs somewhere to put them. R2's free
+          # tier is large enough (10 GB; the site produces about 4 MB a day),
+          # but only if the deploy token is allowed to create a bucket. Find
+          # out before designing around it.
+          npx wrangler r2 bucket list > r2.txt 2>&1 || true
+          echo "=== r2 access ===" >> add-source-result.txt || true
+          head -20 r2.txt
+          head -20 r2.txt > r2-head.txt
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: Verify the Armenian names, the lineup links and the image proxy
         run: |
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium
           node audit.mjs || true
           cat rate.txt >> add-source-result.txt 2>/dev/null || echo "(rate query produced nothing)" >> add-source-result.txt
+          echo "" >> add-source-result.txt
+          echo "=== can the deploy token use R2? ===" >> add-source-result.txt
+          cat r2-head.txt >> add-source-result.txt 2>/dev/null || echo "(no output)" >> add-source-result.txt
           echo "" >> add-source-result.txt
           echo "--- screenshots produced ---" >> add-source-result.txt
           ls -la audit >> add-source-result.txt 2>&1 || true
