@@ -250,8 +250,15 @@ jobs:
                       const stint=(c.career||[]).find(s=>s.team.id===team&&!s.end);
                       console.log("      OPEN  "+c.name+"  (from "+stint.start+")");
                     }
-                    // What the site picks today: the first open stint, else the first row.
-                    const picked=open[0]||rows[0];
+                    // What the site picks: among the open stints, the one that
+                    // started last. This mirrors getCoach - printing the old
+                    // first-match rule here would keep reporting a bug that
+                    // has been fixed.
+                    const byStart=[...open].sort((a,b)=>{
+                      const s=(c)=>((c.career||[]).find(x=>x.team.id===team&&!x.end)||{}).start||"";
+                      return s(b).localeCompare(s(a));
+                    });
+                    const picked=byStart[0]||rows[0];
                     if(picked) console.log("      site shows: "+picked.name);
                   })' "$TEAM"
             done
