@@ -189,10 +189,12 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
       - name: Verify the Armenian names, the lineup links and the image proxy
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
           npm install --no-save playwright@1.55.0
           npx playwright install --with-deps chromium
-          node make-social-images.mjs || true
+          API_FOOTBALL_KEY="${API_FOOTBALL_KEY}" node make-social-images.mjs || true
           node audit.mjs || true
           cat rate.txt >> add-source-result.txt 2>/dev/null || echo "(rate query produced nothing)" >> add-source-result.txt
           echo "" >> add-source-result.txt

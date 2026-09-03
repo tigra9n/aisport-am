@@ -21,31 +21,56 @@ const profile = `<!doctype html><html><body style="margin:0">
   </div>
 </div></body></html>`;
 
-// The cover carries the players the site is actually writing about,
-// pulled from its own top-scorer table rather than picked by hand: the
-// photographs are the ones already on every page of the site, and the
-// selection stays current on its own whenever this is regenerated.
-const browser0 = await chromium.launch();
-const scout = await browser0.newPage({ viewport: { width: 1400, height: 900 } });
-await scout.goto("https://aifootball.am/topscorers", { waitUntil: "load", timeout: 60000 }).catch(() => {});
-await scout.waitForTimeout(2500);
-const players = await scout.evaluate(() =>
-  [...document.querySelectorAll(".topscorers-table tbody tr")].slice(0, 5).map((row) => ({
-    name: row.querySelector("strong")?.textContent?.trim() ?? "",
-    photo: row.querySelector("img")?.currentSrc ?? row.querySelector("img")?.src ?? "",
-  })).filter((p) => p.photo));
-await browser0.close();
-console.log("players on the cover:", players.map((p) => p.name).join(", ") || "none found");
+// The five Tigran asked for, by name. Their photographs come from the same
+// API the site already uses, but the ids are not written down here - an id
+// typed from memory is how you end up with a stranger's face on your cover.
+// Each name is searched for and matched against what comes back.
+const WANTED = [
+  { search: "messi", expect: "messi", label: "Messi" },
+  { search: "ronaldo", expect: "cristiano", label: "Ronaldo" },
+  { search: "spertsyan", expect: "spertsyan", label: "Սպերցյան", armenian: true },
+  { search: "haaland", expect: "haaland", label: "Haaland" },
+  { search: "mbappe", expect: "mbappe", label: "Mbappe" },
+];
 
+const apiKey = process.env.API_FOOTBALL_KEY ?? "";
+const players = [];
+for (const wanted of WANTED) {
+  let photo = "";
+  if (apiKey) {
+    try {
+      const res = await fetch(`https://v3.football.api-sports.io/players/profiles?search=${encodeURIComponent(wanted.search)}`, {
+        headers: { "x-apisports-key": apiKey, Accept: "application/json" },
+      });
+      const data = await res.json();
+      const rows = (data?.response ?? []).map((r) => r.player).filter(Boolean);
+      const norm = (v) => (v ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const hit = rows.find((p) => norm(`${p.firstname} ${p.lastname} ${p.name}`).includes(wanted.expect)) ?? rows[0];
+      if (hit?.photo) {
+        photo = hit.photo;
+        console.log(`  ${wanted.label} -> ${hit.name} (id ${hit.id})`);
+      } else {
+        console.log(`  ${wanted.label} -> no match among ${rows.length} results`);
+      }
+    } catch (err) {
+      console.log(`  ${wanted.label} -> lookup failed: ${String(err).slice(0, 80)}`);
+    }
+  }
+  if (photo) players.push({ ...wanted, photo });
+}
+if (!players.length) console.log("  no photographs resolved - the cover will carry the wordmark alone");
+
+// The Armenian gets the accent ring: on a site written in Armenian, he is
+// the reason someone follows this page rather than a bigger one.
 const faces = players.map((p, i) => `
-  <div style="position:relative;width:210px;height:210px;border-radius:50%;overflow:hidden;border:5px solid ${i === 0 ? "#2fd181" : "#1d3227"};background:#12211a;margin-left:${i ? "-34px" : "0"};z-index:${10 - i};box-shadow:0 18px 40px rgba(0,0,0,.45)">
+  <div style="position:relative;width:215px;height:215px;border-radius:50%;overflow:hidden;border:6px solid ${p.armenian ? "#2fd181" : "#1d3227"};background:#12211a;margin-left:${i ? "-38px" : "0"};z-index:${p.armenian ? 20 : 10 - i};box-shadow:0 18px 40px rgba(0,0,0,.45)">
     <img src="${p.photo}" style="width:100%;height:100%;object-fit:cover;object-position:top center" />
   </div>`).join("");
 
 const cover = `<!doctype html><html><body style="margin:0">
 <div style="width:1640px;height:856px;position:relative;overflow:hidden;background:radial-gradient(circle at 22% 30%, #16281e 0%, #08100b 62%);font-family:${FONT}">
-  <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:flex-end;padding-right:70px;opacity:.95">${faces}</div>
-  <div style="position:absolute;inset:0;background:linear-gradient(90deg,#08100b 34%,rgba(8,16,11,.85) 52%,rgba(8,16,11,0) 78%)"></div>
+  <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:flex-end;padding-right:64px">${faces}</div>
+  <div style="position:absolute;inset:0;background:linear-gradient(90deg,#08100b 32%,rgba(8,16,11,.86) 50%,rgba(8,16,11,0) 76%)"></div>
   <div style="position:absolute;top:50%;left:96px;transform:translateY(-50%);display:flex;align-items:center;gap:30px">
     <div style="width:132px;height:132px;display:grid;place-items:center;border-radius:28px;background:#2fd181;color:#062315;font-size:60px;font-weight:900">AI</div>
     <div>
