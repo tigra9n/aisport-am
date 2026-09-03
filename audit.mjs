@@ -126,5 +126,25 @@ for (const url of [`${BASE}/cdn-cgi/image/width=80,format=auto/${probe}`, probe]
   log(`  RSC prefetches: ${rsc.length} requests, ${Math.round(rsc.reduce((n, r) => n + r.size, 0) / 1024)} KB (was 2 requests, 210 KB)`);
 }
 
+// Are the long pages shorter now?
+{
+  const ctx2 = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
+  const p3 = await ctx2.newPage();
+  log(`\n=== page height on a phone ===`);
+  for (const [name, path, before] of [["league PL", "/league/PL", 13119], ["category football", "/category/football", null], ["search", "/search?q=%D5%86%D5%B8%D5%A1", 12247]]) {
+    await p3.goto(BASE + path, { waitUntil: "load", timeout: 60000 }).catch(() => {});
+    await p3.waitForTimeout(1500);
+    const m = await p3.evaluate(() => ({
+      height: document.documentElement.scrollHeight,
+      cards: document.querySelectorAll(".modern-news-card").length,
+      shown: [...document.querySelectorAll(".modern-news-card")].filter((c) => c.getBoundingClientRect().height > 0).length,
+      button: document.querySelector(".reveal-more")?.textContent?.trim() ?? "none",
+      overflow: document.documentElement.scrollWidth > 391,
+    }));
+    log(`  ${name}: ${m.height}px${before ? ` (was ${before}px)` : ""} | cards in HTML ${m.cards}, displayed ${m.shown} | button: ${m.button}${m.overflow ? " | HORIZONTAL OVERFLOW" : ""}`);
+  }
+  await ctx2.close();
+}
+
 await browser.close();
 fs.writeFileSync("add-source-result.txt", report.join("\n"));
