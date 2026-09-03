@@ -13,11 +13,35 @@ fs.mkdirSync("aisport-am/public", { recursive: true });
 
 const FONT = `-apple-system, "Segoe UI", "Noto Sans Armenian", Roboto, sans-serif`;
 
+// A football drawn as a mark rather than a photograph: at the size a
+// profile picture is actually seen - 32 pixels in a feed - a photograph is
+// a smudge and lettering is a grey line. A ball and two letters survive.
+const ball = (size, ink, panel) => `
+<svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none">
+  <circle cx="50" cy="50" r="46" fill="${ink}"/>
+  <path d="M50 22 L64 32 L59 49 L41 49 L36 32 Z" fill="${panel}"/>
+  <path d="M50 12 L50 22 M36 32 L26 26 M64 32 L74 26 M41 49 L34 66 M59 49 L66 66" stroke="${panel}" stroke-width="5" stroke-linecap="round"/>
+  <path d="M34 66 L44 78 L56 78 L66 66" stroke="${panel}" stroke-width="5" stroke-linecap="round" fill="none"/>
+</svg>`;
+
+// Variant A: the mark in the accent green on the site's own near-black.
 const profile = `<!doctype html><html><body style="margin:0">
-<div style="width:512px;height:512px;display:grid;place-items:center;background:#08100b;font-family:${FONT}">
-  <div style="display:grid;place-items:center;gap:18px">
-    <div style="width:190px;height:190px;display:grid;place-items:center;border-radius:38px;background:#2fd181;color:#062315;font-size:86px;font-weight:900;letter-spacing:-.04em">AI</div>
-    <div style="color:#f5f8f5;font-size:44px;font-weight:900;letter-spacing:-.02em">FOOTBALL<span style="color:#2fd181">.AM</span></div>
+<div style="width:512px;height:512px;position:relative;display:grid;place-items:center;background:#08100b;font-family:${FONT}">
+  <div style="position:absolute;inset:26px;border-radius:50%;border:6px solid #1d3227"></div>
+  <div style="display:grid;place-items:center;gap:-6px">
+    <div style="opacity:.95">${ball(150, "#2fd181", "#08100b")}</div>
+    <div style="margin-top:6px;color:#f5f8f5;font-size:104px;font-weight:900;letter-spacing:-.06em;line-height:.9">AI</div>
+  </div>
+</div></body></html>`;
+
+// Variant B: inverted - the accent green as the whole field, which is what
+// stands out in a feed of white cards.
+const profileAlt = `<!doctype html><html><body style="margin:0">
+<div style="width:512px;height:512px;position:relative;display:grid;place-items:center;background:#2fd181;font-family:${FONT}">
+  <div style="position:absolute;inset:24px;border-radius:50%;border:7px solid rgba(6,35,21,.22)"></div>
+  <div style="display:grid;place-items:center">
+    <div>${ball(146, "#062315", "#2fd181")}</div>
+    <div style="margin-top:4px;color:#062315;font-size:106px;font-weight:900;letter-spacing:-.06em;line-height:.9">AI</div>
   </div>
 </div></body></html>`;
 
@@ -83,6 +107,7 @@ const cover = `<!doctype html><html><body style="margin:0">
 const browser = await chromium.launch();
 for (const [name, html, width, height] of [
   ["fb-profile.png", profile, 512, 512],
+  ["fb-profile-alt.png", profileAlt, 512, 512],
   ["fb-cover.png", cover, 1640, 856],
 ]) {
   const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
