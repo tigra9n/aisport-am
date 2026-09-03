@@ -13,35 +13,57 @@ fs.mkdirSync("aisport-am/public", { recursive: true });
 
 const FONT = `-apple-system, "Segoe UI", "Noto Sans Armenian", Roboto, sans-serif`;
 
-// A football drawn as a mark rather than a photograph: at the size a
-// profile picture is actually seen - 32 pixels in a feed - a photograph is
-// a smudge and lettering is a grey line. A ball and two letters survive.
-const ball = (size, ink, panel) => `
-<svg width="${size}" height="${size}" viewBox="0 0 100 100" fill="none">
-  <circle cx="50" cy="50" r="46" fill="${ink}"/>
-  <path d="M50 22 L64 32 L59 49 L41 49 L36 32 Z" fill="${panel}"/>
-  <path d="M50 12 L50 22 M36 32 L26 26 M64 32 L74 26 M41 49 L34 66 M59 49 L66 66" stroke="${panel}" stroke-width="5" stroke-linecap="round"/>
-  <path d="M34 66 L44 78 L56 78 L66 66" stroke="${panel}" stroke-width="5" stroke-linecap="round" fill="none"/>
-</svg>`;
+// A plain football, not a stylised one: a white ball with the black
+// pentagons everybody recognises. Drawn rather than photographed so it
+// stays sharp at the 32 pixels a profile picture is actually seen at.
+const pentagon = (cx, cy, r, rotation, fill) => {
+  const points = Array.from({ length: 5 }, (_, i) => {
+    const angle = ((rotation + i * 72 - 90) * Math.PI) / 180;
+    return `${(cx + r * Math.cos(angle)).toFixed(2)},${(cy + r * Math.sin(angle)).toFixed(2)}`;
+  }).join(" ");
+  return `<polygon points="${points}" fill="${fill}"/>`;
+};
 
-// Variant A: the mark in the accent green on the site's own near-black.
+const ball = (size, dark) => {
+  const outer = Array.from({ length: 5 }, (_, i) => {
+    const angle = ((i * 72 - 90) * Math.PI) / 180;
+    return pentagon(50 + 32 * Math.cos(angle), 50 + 32 * Math.sin(angle), 13, 180 + i * 72, dark);
+  }).join("");
+  const seams = Array.from({ length: 5 }, (_, i) => {
+    const a = ((i * 72 - 90) * Math.PI) / 180;
+    return `<line x1="${50 + 15 * Math.cos(a)}" y1="${50 + 15 * Math.sin(a)}" x2="${50 + 21 * Math.cos(a)}" y2="${50 + 21 * Math.sin(a)}" stroke="${dark}" stroke-width="3"/>`;
+  }).join("");
+  return `
+<svg width="${size}" height="${size}" viewBox="0 0 100 100">
+  <defs><clipPath id="ballclip"><circle cx="50" cy="50" r="47"/></clipPath></defs>
+  <circle cx="50" cy="50" r="47" fill="#ffffff"/>
+  <g clip-path="url(#ballclip)">
+    ${pentagon(50, 50, 16, 0, dark)}
+    ${outer}
+    ${seams}
+  </g>
+  <circle cx="50" cy="50" r="47" fill="none" stroke="${dark}" stroke-width="2.5" opacity=".35"/>
+</svg>`;
+};
+
+// Variant A: the ball on the site's near-black, letters in white.
 const profile = `<!doctype html><html><body style="margin:0">
 <div style="width:512px;height:512px;position:relative;display:grid;place-items:center;background:#08100b;font-family:${FONT}">
   <div style="position:absolute;inset:26px;border-radius:50%;border:6px solid #1d3227"></div>
-  <div style="display:grid;place-items:center;gap:-6px">
-    <div style="opacity:.95">${ball(150, "#2fd181", "#08100b")}</div>
-    <div style="margin-top:6px;color:#f5f8f5;font-size:104px;font-weight:900;letter-spacing:-.06em;line-height:.9">AI</div>
+  <div style="display:grid;place-items:center">
+    <div>${ball(152, "#08100b")}</div>
+    <div style="margin-top:8px;color:#f5f8f5;font-size:104px;font-weight:900;letter-spacing:-.06em;line-height:.9">AI</div>
   </div>
 </div></body></html>`;
 
-// Variant B: inverted - the accent green as the whole field, which is what
-// stands out in a feed of white cards.
+// Variant B: the accent green as the whole field, which is what stands out
+// in a feed of white cards.
 const profileAlt = `<!doctype html><html><body style="margin:0">
 <div style="width:512px;height:512px;position:relative;display:grid;place-items:center;background:#2fd181;font-family:${FONT}">
   <div style="position:absolute;inset:24px;border-radius:50%;border:7px solid rgba(6,35,21,.22)"></div>
   <div style="display:grid;place-items:center">
-    <div>${ball(146, "#062315", "#2fd181")}</div>
-    <div style="margin-top:4px;color:#062315;font-size:106px;font-weight:900;letter-spacing:-.06em;line-height:.9">AI</div>
+    <div>${ball(150, "#062315")}</div>
+    <div style="margin-top:6px;color:#062315;font-size:106px;font-weight:900;letter-spacing:-.06em;line-height:.9">AI</div>
   </div>
 </div></body></html>`;
 
@@ -87,19 +109,19 @@ if (!players.length) console.log("  no photographs resolved - the cover will car
 // The Armenian gets the accent ring: on a site written in Armenian, he is
 // the reason someone follows this page rather than a bigger one.
 const faces = players.map((p, i) => `
-  <div style="position:relative;width:215px;height:215px;border-radius:50%;overflow:hidden;border:6px solid ${p.armenian ? "#2fd181" : "#1d3227"};background:#12211a;margin-left:${i ? "-38px" : "0"};z-index:${p.armenian ? 20 : 10 - i};box-shadow:0 18px 40px rgba(0,0,0,.45)">
+  <div style="position:relative;width:184px;height:184px;border-radius:50%;overflow:hidden;border:6px solid ${p.armenian ? "#2fd181" : "#1d3227"};background:#12211a;margin-left:${i ? "-30px" : "0"};z-index:${p.armenian ? 20 : 10 - i};box-shadow:0 18px 40px rgba(0,0,0,.45)">
     <img src="${p.photo}" style="width:100%;height:100%;object-fit:cover;object-position:top center" />
   </div>`).join("");
 
 const cover = `<!doctype html><html><body style="margin:0">
 <div style="width:1640px;height:856px;position:relative;overflow:hidden;background:radial-gradient(circle at 22% 30%, #16281e 0%, #08100b 62%);font-family:${FONT}">
-  <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:flex-end;padding-right:64px">${faces}</div>
-  <div style="position:absolute;inset:0;background:linear-gradient(90deg,#08100b 32%,rgba(8,16,11,.86) 50%,rgba(8,16,11,0) 76%)"></div>
+  <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:flex-end;padding-right:58px">${faces}</div>
+  <div style="position:absolute;inset:0;background:linear-gradient(90deg,#08100b 30%,rgba(8,16,11,.9) 44%,rgba(8,16,11,0) 62%)"></div>
   <div style="position:absolute;top:50%;left:96px;transform:translateY(-50%);display:flex;align-items:center;gap:30px">
-    <div style="width:132px;height:132px;display:grid;place-items:center;border-radius:28px;background:#2fd181;color:#062315;font-size:60px;font-weight:900">AI</div>
+    <div style="width:118px;height:118px;display:grid;place-items:center;border-radius:26px;background:#2fd181;color:#062315;font-size:54px;font-weight:900">AI</div>
     <div>
-      <div style="color:#f5f8f5;font-size:70px;font-weight:900;letter-spacing:-.03em;line-height:1">FOOTBALL<span style="color:#2fd181">.AM</span></div>
-      <div style="margin-top:14px;color:#a9bdaf;font-size:27px;font-weight:700">Ֆուտբոլը՝ արագ, խելացի, հայերեն</div>
+      <div style="color:#f5f8f5;font-size:60px;font-weight:900;letter-spacing:-.03em;line-height:1;white-space:nowrap">FOOTBALL<span style="color:#2fd181">.AM</span></div>
+      <div style="margin-top:12px;color:#a9bdaf;font-size:24px;font-weight:700">Ֆուտբոլը՝ արագ, խելացի, հայերեն</div>
     </div>
   </div>
 </div></body></html>`;
