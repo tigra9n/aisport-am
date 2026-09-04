@@ -50,13 +50,32 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             session-level behavior). lazyOnload rather than afterInteractive:
             gtag.js is 170 KB, the single largest script the site loads, and
             none of the page depends on it, so it waits until everything else
-            has finished. GA4 still records the pageview. */}
-        <Script src="https://www.googletagmanager.com/gtag/js?id=G-LETFRQPT04" strategy="lazyOnload" />
+            has finished. GA4 still records the pageview.
+
+            gtag.js is injected by hand instead of by <Script src> so that it
+            can be withheld from automated browsers. On 2026-09-04 the report
+            for a single day showed 198 "users", of whom 9 were in Armenia;
+            the top cities were Flint Hill, Moses Lake, Boardman, Des Moines
+            and Dublin - Amazon, Azure and Google datacentre regions, not
+            people. Part of that is crawlers, and part is this repository's
+            own doing: audit.mjs, a11y.mjs, vitals.mjs and page-weight.mjs
+            drive a real Chromium against the live site from GitHub Actions
+            runners, which sit in exactly those regions, and a real Chromium
+            runs gtag.js and is counted. Every one of those tools sets
+            navigator.webdriver, so the flag separates them from readers.
+            Bots that never execute JavaScript were never in these numbers
+            to begin with. */}
         <Script id="ga4-init" strategy="lazyOnload">
-          {`window.dataLayer = window.dataLayer || [];
-function gtag(){dataLayer.push(arguments);}
-gtag('js', new Date());
-gtag('config', 'G-LETFRQPT04');`}
+          {`if (!navigator.webdriver && !/HeadlessChrome/.test(navigator.userAgent)) {
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = function(){ window.dataLayer.push(arguments); };
+  gtag('js', new Date());
+  gtag('config', 'G-LETFRQPT04');
+  var s = document.createElement('script');
+  s.async = true;
+  s.src = 'https://www.googletagmanager.com/gtag/js?id=G-LETFRQPT04';
+  document.head.appendChild(s);
+}`}
         </Script>
       </body>
     </html>
