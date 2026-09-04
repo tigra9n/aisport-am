@@ -11,13 +11,11 @@
 // footer and on every article's share row at once - one edit, no hunting
 // through components.
 export const SOCIAL = {
-  // The page's own address as Facebook serves it, rather than a pretty
-  // name: Facebook does not offer a new page a username until it has some
-  // content and followers behind it - the setting is not merely disabled,
-  // it is absent from Page setup - so this is the address that actually
-  // works today. One line to change to facebook.com/aifootball.am once
-  // that becomes claimable.
-  facebook: "https://www.facebook.com/profile.php?id=61594138647396",
+  // The username became claimable once the page had content behind it, so
+  // this is now the readable address rather than profile.php?id=. The old
+  // numeric one still resolves, and Facebook keeps redirecting it, so no
+  // link posted anywhere before today is broken by this.
+  facebook: "https://www.facebook.com/aifootball.am",
   telegram: "",
   instagram: "",
   threads: "",
