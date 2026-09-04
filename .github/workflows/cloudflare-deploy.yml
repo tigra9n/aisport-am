@@ -76,6 +76,13 @@ jobs:
           cp /tmp/deploy-log.txt deploy-log.txt || echo "no log" > deploy-log.txt
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
+          # Commit the report onto an orphan tree that holds nothing else.
+          # Pushing the whole branch fails the moment a workflow file has
+          # changed on it: GitHub refuses to let an Actions token create or
+          # update a workflow, and the run is then marked failed even though
+          # the work it reports on succeeded. Same fix as add-source.yml.
+          git checkout -q --orphan report-tree
+          git reset -q
           git add -f deploy-log.txt
           git commit -m "Deploy log [skip ci]" || true
           git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:deploy-logs --force

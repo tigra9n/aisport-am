@@ -28,6 +28,13 @@ jobs:
       - run: |
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
+          # Commit the report onto an orphan tree that holds nothing else.
+          # Pushing the whole branch fails the moment a workflow file has
+          # changed on it: GitHub refuses to let an Actions token create or
+          # update a workflow, and the run is then marked failed even though
+          # the work it reports on succeeded. Same fix as add-source.yml.
+          git checkout -q --orphan report-tree
+          git reset -q
           git add -f test.txt
           git commit -m "check [skip ci]" || true
           git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
