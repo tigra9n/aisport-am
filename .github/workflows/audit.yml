@@ -33,7 +33,7 @@ jobs:
 
       - name: Install a browser
         run: |
-          npm install --no-save playwright@1.55.0
+          npm install --no-save playwright@1.55.0 axe-core@4.10.2
           npx playwright install --with-deps chromium
 
       # Every script is allowed to fail without failing the run: a report
@@ -50,6 +50,11 @@ jobs:
         if: ${{ inputs.full }}
         run: node vitals.mjs > vitals.txt 2>&1 || true
 
+      # Accessibility was the one section of the report that was a guess:
+      # "no missing alt, contrast readable" is two questions out of dozens.
+      - name: Accessibility
+        run: node a11y.mjs > a11y.txt 2>&1 || true
+
       - name: Collect the report
         run: |
           {
@@ -63,6 +68,9 @@ jobs:
             echo
             echo "=============================================="
             cat vitals.txt 2>/dev/null || true
+            echo
+            echo "=============================================="
+            cat a11y.txt 2>/dev/null || true
             echo
             echo "--- screenshots produced ---"
             ls -la audit 2>&1 || true
