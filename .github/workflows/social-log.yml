@@ -1,0 +1,79 @@
+name: What happened to the social posts
+
+# publication_logs records every attempt to post an article to a network -
+# which article, which network, whether it worked, and the error verbatim
+# when it did not. Nothing read it, so a token that silently stops working
+# looks exactly like a quiet news day.
+#
+# One SELECT. It writes nothing.
+
+on:
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: 'How many recent attempts to show'
+        required: false
+        default: '15'
+
+jobs:
+  read:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Read the publication log
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npm install --no-save wrangler@4.92.0 >/dev/null 2>&1
+          LIMIT="${{ inputs.limit }}"
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT p.created_at, p.platform, p.status, p.external_id, p.error, a.title
+             FROM publication_logs p LEFT JOIN articles a ON a.id = p.article_id
+             ORDER BY p.id DESC LIMIT ${LIMIT:-15}" > logs.json 2>&1 || true
+          node -e '
+            const fs = require("fs");
+            const raw = fs.readFileSync("logs.json", "utf8");
+            const start = raw.indexOf("[");
+            let rows = [];
+            try { rows = JSON.parse(raw.slice(start))[0].results } catch { console.log(raw.slice(0, 900)); process.exit(0) }
+            if (!rows.length) {
+              console.log("publication_logs is empty - nothing has ever been posted to any network.");
+              console.log("If articles are being published, the posting step is not running at all.");
+              process.exit(0);
+            }
+            for (const r of rows) {
+              console.log(`${r.created_at}  ${String(r.platform).padEnd(9)} ${r.status}`);
+              console.log(`   ${(r.title ?? "(article gone)").slice(0, 70)}`);
+              if (r.error) console.log(`   ERROR: ${r.error}`);
+              if (r.external_id) console.log(`   post id: ${r.external_id}`);
+            }
+            const failed = rows.filter((r) => r.status !== "published").length;
+            console.log(`\n${rows.length - failed} of ${rows.length} succeeded.`);
+          '
+
+      # The other half of the question: are articles even being written? A
+      # network that never gets a post because nothing was published is a
+      # different problem from one that rejects what it is sent.
+      - name: And how many articles were published recently
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT strftime('%Y-%m-%d %H:00', published_at) AS hour, COUNT(*) AS articles
+             FROM articles WHERE published_at > datetime('now','-12 hours')
+             GROUP BY hour ORDER BY hour DESC" > rate.json 2>&1 || true
+          node -e '
+            const fs = require("fs");
+            const raw = fs.readFileSync("rate.json", "utf8");
+            const start = raw.indexOf("[");
+            let rows = [];
+            try { rows = JSON.parse(raw.slice(start))[0].results } catch { console.log(raw.slice(0, 600)); process.exit(0) }
+            if (!rows.length) { console.log("no articles published in the last 12 hours"); process.exit(0) }
+            for (const r of rows) console.log(`  ${r.hour} UTC   ${r.articles} article(s)`);
+          '
