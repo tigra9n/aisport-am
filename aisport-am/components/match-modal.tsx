@@ -173,6 +173,13 @@ export function MatchModal() {
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"events" | "lineups" | "stats" | "h2h" | "prediction" | "standings" | "topscorers" | "form">("events");
   const dialog = useRef<HTMLDivElement>(null);
+  // Closing means removing ?match= from the URL, and on a force-dynamic page
+  // that is a round trip to the server before anything on screen changes -
+  // measured at over 700ms. A dialog that thinks about it for most of a
+  // second before going away feels broken, and the accessibility audit read
+  // it as Escape doing nothing at all. So the dialog leaves the moment it is
+  // dismissed and the URL catches up behind it.
+  const [dismissedId, setDismissedId] = useState<string | null>(null);
   // Where the reader was before the dialog opened, so they can be put back
   // there when it closes rather than at the top of the page.
   const opener = useRef<Element | null>(null);
@@ -191,11 +198,12 @@ export function MatchModal() {
   }, [matchId]);
 
   const close = useCallback(() => {
+    setDismissedId(matchId);
     const params = new URLSearchParams(searchParams.toString());
     params.delete("match");
     const query = params.toString();
     router.push(query ? `?${query}` : window.location.pathname, { scroll: false });
-  }, [router, searchParams]);
+  }, [router, searchParams, matchId]);
 
   // A dialog nobody can leave with the keyboard is worse than one that does
   // not open. Escape closes it, the focus moves in when it opens and goes
@@ -216,7 +224,7 @@ export function MatchModal() {
     };
   }, [matchId, close]);
 
-  if (!matchId) return null;
+  if (!matchId || dismissedId === matchId) return null;
 
 
   const homeName = details?.match.home ?? "";

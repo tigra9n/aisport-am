@@ -128,7 +128,9 @@ if (!row) {
     });
     console.log(`  role=${role.role}  aria-modal=${role.modal}  labelled by=${role.label}`);
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(700);
+    // Long enough to tell "it does not close" from "the page had to ask the
+    // server first". At 700ms this reported a failure that was a timeout.
+    await page.waitForTimeout(2500);
     console.log(`  closes with Escape: ${(await page.$(".match-modal")) ? "NO" : "yes"}`);
   }
 }
