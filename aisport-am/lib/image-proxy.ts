@@ -12,6 +12,32 @@
 const PROXY_IMAGES = true;
 const PROXY = "https://wsrv.nl/";
 
+// Clubs whose crest API-Football gets wrong.
+//
+// Every badge on the site is that API's own image, addressed by team id -
+// media.api-sports.io/football/teams/3684.png - and when the upstream is out
+// of date there is nowhere else the picture could come from. Tigran reports
+// FC Noah's is not the club's crest.
+//
+// The correction goes here rather than in the six server modules that read a
+// logo (standings, live, match details, player, squad, cache), because every
+// image on this site is drawn through the two functions below. One place,
+// every screen: the table, the live rows, the match dialog, the team page,
+// the transfer list.
+//
+// A club listed here should come out again once API-Football catches up.
+const TEAM_LOGO_OVERRIDES: Record<string, string> = {
+  // FC Noah, from the club's own site.
+  "3684": "https://noah.am/images/white_logo.svg",
+};
+
+const API_FOOTBALL_TEAM_LOGO = /^https?:\/\/media\.api-sports\.io\/football\/teams\/(\d+)\.png$/i;
+
+function corrected(src: string): string {
+  const id = src.match(API_FOOTBALL_TEAM_LOGO)?.[1];
+  return (id && TEAM_LOGO_OVERRIDES[id]) || src;
+}
+
 // Our own URLs are already the right size, and sending the proxy its own
 // output back would be a loop. Everything else is fair game: even a team
 // badge is worth it - api-sports serves them as 88 KB PNGs for a 24px slot,
@@ -38,8 +64,9 @@ function isProxyable(src: string): boolean {
  * image if the proxy cannot fetch or process it, so a source that blocks the
  * proxy degrades to what the site does today instead of to a broken image.
  */
-export function sizedImage(src: string | null | undefined, width: number): string {
-  if (!src) return "";
+export function sizedImage(source: string | null | undefined, width: number): string {
+  if (!source) return "";
+  const src = corrected(source);
   if (!PROXY_IMAGES || !isProxyable(src)) return src;
   const params = new URLSearchParams({
     url: src,
@@ -65,7 +92,8 @@ export function sizedImage(src: string | null | undefined, width: number): strin
  * are real pixels, NOT doubled. Pair it with `sizes`; without one the
  * browser assumes the image fills the viewport and picks too large a copy.
  */
-export function imageSrcSet(src: string | null | undefined, widths: number[]): string | undefined {
+export function imageSrcSet(source: string | null | undefined, widths: number[]): string | undefined {
+  const src = source ? corrected(source) : source;
   if (!src || !PROXY_IMAGES || !isProxyable(src)) return undefined;
   return widths
     .map((width) => {
