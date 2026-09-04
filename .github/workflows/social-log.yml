@@ -14,6 +14,10 @@ on:
         description: 'How many recent attempts to show'
         required: false
         default: '15'
+      hours:
+        description: 'How far back the per-hour article count reaches'
+        required: false
+        default: '12'
 
 jobs:
   read:
@@ -64,9 +68,10 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
+          HOURS="${{ inputs.hours }}"
           npx wrangler d1 execute aisport-db --remote --json --command \
             "SELECT strftime('%Y-%m-%d %H:00', published_at) AS hour, COUNT(*) AS articles
-             FROM articles WHERE published_at > datetime('now','-12 hours')
+             FROM articles WHERE published_at > datetime('now','-${HOURS:-12} hours')
              GROUP BY hour ORDER BY hour DESC" > rate.json 2>&1 || true
           node -e '
             const fs = require("fs");
@@ -74,6 +79,6 @@ jobs:
             const start = raw.indexOf("[");
             let rows = [];
             try { rows = JSON.parse(raw.slice(start))[0].results } catch { console.log(raw.slice(0, 600)); process.exit(0) }
-            if (!rows.length) { console.log("no articles published in the last 12 hours"); process.exit(0) }
+            if (!rows.length) { console.log("no articles published in that window"); process.exit(0) }
             for (const r of rows) console.log(`  ${r.hour} UTC   ${r.articles} article(s)`);
           '
