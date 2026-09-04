@@ -1,6 +1,9 @@
 node_modules/
 dist/
 .wrangler/
+# Scratch tree that scripts/sites-env.sh builds for the sandboxed build:
+# an npm cache, a wrangler home and a tmp dir. Machine state, not source.
+.sites-runtime/
 *.tsbuildinfo
 .next/
 .DS_Store
