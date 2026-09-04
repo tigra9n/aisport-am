@@ -1,0 +1,72 @@
+name: Check the Facebook token
+
+# Answers one question, without publishing anything: is the token in
+# META_PAGE_ACCESS_TOKEN the right kind, for the right Page, with the right
+# permission, and does it expire?
+#
+# Worth having as a button rather than a one-off command. A page token can
+# be revoked from the Facebook side at any time - the password changes, the
+# app is removed, someone resets the app secret - and when that happens the
+# site keeps publishing and simply stops appearing on the page. This says
+# so in ten seconds.
+#
+# Every call here is a GET. Nothing is posted.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ask Facebook what this token is
+        env:
+          TOKEN: ${{ secrets.META_PAGE_ACCESS_TOKEN }}
+          PAGE_ID: ${{ secrets.META_PAGE_ID }}
+        run: |
+          if [ -z "$TOKEN" ]; then echo "META_PAGE_ACCESS_TOKEN is not set"; exit 1; fi
+          if [ -z "$PAGE_ID" ]; then echo "META_PAGE_ID is not set"; exit 1; fi
+          echo "META_PAGE_ID = $PAGE_ID"
+          echo
+
+          # Who does this token belong to? A page token answers with the
+          # page; a user token answers with the person, which is the whole
+          # difference we are looking for.
+          echo "=== who the token belongs to ==="
+          curl -s --max-time 20 "https://graph.facebook.com/v26.0/me?fields=id,name,category&access_token=$TOKEN" \
+            | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{
+                let j; try { j = JSON.parse(d) } catch { console.log("  unreadable answer: " + d.slice(0,200)); process.exit(0) }
+                if (j.error) { console.log("  ERROR: " + j.error.message); process.exit(0) }
+                console.log("  id:       " + j.id);
+                console.log("  name:     " + j.name);
+                console.log("  category: " + (j.category ?? "(none - this looks like a person, not a page)"));
+              })'
+          echo
+
+          # And what kind of token is it? debug_token names the type and the
+          # expiry outright, which is the pair that matters: Page, never.
+          echo "=== what kind of token it is ==="
+          curl -s --max-time 20 "https://graph.facebook.com/v26.0/debug_token?input_token=$TOKEN&access_token=$TOKEN" \
+            | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{
+                let j; try { j = JSON.parse(d) } catch { console.log("  unreadable answer"); process.exit(0) }
+                if (j.error) { console.log("  ERROR: " + j.error.message); process.exit(0) }
+                const t = j.data ?? {};
+                console.log("  type:    " + t.type + (t.type === "PAGE" ? "  OK" : "  <- should be PAGE"));
+                console.log("  expires: " + (t.expires_at ? new Date(t.expires_at * 1000).toISOString() + "  <- should never expire" : "never  OK"));
+                console.log("  valid:   " + t.is_valid);
+                console.log("  scopes:  " + (t.scopes ?? []).join(", "));
+                console.log("  page:    " + (t.profile_id ?? t.user_id ?? "?"));
+              })'
+          echo
+
+          # The one that decides whether a post can be written at all.
+          echo "=== can it publish to the page ==="
+          curl -s --max-time 20 "https://graph.facebook.com/v26.0/$PAGE_ID?fields=id,name,tasks&access_token=$TOKEN" \
+            | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{
+                let j; try { j = JSON.parse(d) } catch { console.log("  unreadable answer"); process.exit(0) }
+                if (j.error) { console.log("  ERROR: " + j.error.message); process.exit(0) }
+                const tasks = j.tasks ?? [];
+                console.log("  page:  " + j.name + " (" + j.id + ")");
+                console.log("  tasks: " + (tasks.length ? tasks.join(", ") : "(none reported)"));
+                console.log(tasks.includes("CREATE_CONTENT") ? "  CREATE_CONTENT is granted - it can post" : "  CREATE_CONTENT missing - it cannot post yet");
+              })'
