@@ -14,6 +14,12 @@ name: Check the Facebook token
 
 on:
   workflow_dispatch: {}
+  # Every Monday morning. A page token lasts about two months and this one
+  # expires in November, so the site would otherwise go quiet on Facebook
+  # one Tuesday with nothing to say why. The job fails when there are less
+  # than fourteen days left, which is what sends the email.
+  schedule:
+    - cron: "0 6 * * 1"
 
 jobs:
   check:
@@ -59,14 +65,37 @@ jobs:
               })'
           echo
 
-          # The one that decides whether a post can be written at all.
-          echo "=== can it publish to the page ==="
-          curl -s --max-time 20 "https://graph.facebook.com/v26.0/$PAGE_ID?fields=id,name,tasks&access_token=$TOKEN" \
+          # Whether the token belongs to the page the site posts to. Asking
+          # the page for its `tasks` was the obvious check and the wrong one:
+          # that field only exists on the entries /me/accounts returns for a
+          # person, and a page asked about itself answers "nonexisting field
+          # (tasks)" - a failure that means nothing. Permission to publish is
+          # already settled above, by pages_manage_posts in the scopes.
+          echo "=== is it the page the site posts to ==="
+          curl -s --max-time 20 "https://graph.facebook.com/v26.0/me?fields=id&access_token=$TOKEN" \
+            | PAGE_ID="$PAGE_ID" node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{
+                let j; try { j = JSON.parse(d) } catch { console.log("  unreadable answer"); process.exit(1) }
+                if (j.error) { console.log("  ERROR: " + j.error.message); process.exit(1) }
+                const same = String(j.id) === String(process.env.PAGE_ID);
+                console.log(same ? "  the token is for META_PAGE_ID - correct" : `  MISMATCH: the token is for ${j.id}, the site posts to ${process.env.PAGE_ID}`);
+                process.exit(same ? 0 : 1);
+              })'
+          echo
+
+          # And the one thing a green check cannot tell you by itself: how
+          # long this stays true.
+          echo "=== how long is left ==="
+          curl -s --max-time 20 "https://graph.facebook.com/v26.0/debug_token?input_token=$TOKEN&access_token=$TOKEN" \
             | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{
-                let j; try { j = JSON.parse(d) } catch { console.log("  unreadable answer"); process.exit(0) }
-                if (j.error) { console.log("  ERROR: " + j.error.message); process.exit(0) }
-                const tasks = j.tasks ?? [];
-                console.log("  page:  " + j.name + " (" + j.id + ")");
-                console.log("  tasks: " + (tasks.length ? tasks.join(", ") : "(none reported)"));
-                console.log(tasks.includes("CREATE_CONTENT") ? "  CREATE_CONTENT is granted - it can post" : "  CREATE_CONTENT missing - it cannot post yet");
+                let j; try { j = JSON.parse(d) } catch { process.exit(1) }
+                const at = j.data?.expires_at;
+                if (!at) { console.log("  the token does not expire"); process.exit(0) }
+                const days = Math.round((at * 1000 - Date.now()) / 86400000);
+                console.log(`  ${days} days left (expires ${new Date(at * 1000).toISOString().slice(0, 10)})`);
+                if (days > 14) { console.log("  fine for now"); process.exit(0) }
+                console.log("  RENEW IT: Facebook posting stops when this runs out.");
+                console.log("  Graph API Explorer -> User Token -> Generate -> me/accounts,");
+                console.log("  take the page access_token, Extend Access Token in the debugger,");
+                console.log("  then update the META_PAGE_ACCESS_TOKEN secret and redeploy.");
+                process.exit(1);
               })'
