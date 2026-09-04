@@ -2,7 +2,7 @@
 
 import { sizedImage } from "../lib/image-proxy";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { LineupPlayer, LiveMatchDetail } from "../lib/live-football-server";
 
@@ -172,6 +172,10 @@ export function MatchModal() {
   const [details, setDetails] = useState<LiveMatchDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<"events" | "lineups" | "stats" | "h2h" | "prediction" | "standings" | "topscorers" | "form">("events");
+  const dialog = useRef<HTMLDivElement>(null);
+  // Where the reader was before the dialog opened, so they can be put back
+  // there when it closes rather than at the top of the page.
+  const opener = useRef<Element | null>(null);
 
   useEffect(() => {
     if (!matchId) {
@@ -186,14 +190,34 @@ export function MatchModal() {
       .finally(() => setLoading(false));
   }, [matchId]);
 
-  if (!matchId) return null;
-
-  const close = () => {
+  const close = useCallback(() => {
     const params = new URLSearchParams(searchParams.toString());
     params.delete("match");
     const query = params.toString();
     router.push(query ? `?${query}` : window.location.pathname, { scroll: false });
-  };
+  }, [router, searchParams]);
+
+  // A dialog nobody can leave with the keyboard is worse than one that does
+  // not open. Escape closes it, the focus moves in when it opens and goes
+  // back where it came from when it shuts.
+  useEffect(() => {
+    if (!matchId) return;
+    opener.current = document.activeElement;
+    dialog.current?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      close();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      (opener.current as HTMLElement | null)?.focus?.();
+    };
+  }, [matchId, close]);
+
+  if (!matchId) return null;
+
 
   const homeName = details?.match.home ?? "";
   const awayName = details?.match.away ?? "";
@@ -205,7 +229,15 @@ export function MatchModal() {
 
   return (
     <div className="match-modal-overlay" onClick={close}>
-      <div className="match-modal" onClick={(event) => event.stopPropagation()}>
+      <div
+        className="match-modal"
+        onClick={(event) => event.stopPropagation()}
+        ref={dialog}
+        role="dialog"
+        aria-modal="true"
+        aria-label={details ? `${details.match.home} ${details.match.away}` : "Խաղի մանրամասները"}
+        tabIndex={-1}
+      >
         <button className="match-modal-close" onClick={close} aria-label="Փակել">✕</button>
         {loading && <div className="match-modal-loading">Բեռնվում է…</div>}
         {!loading && !details && <div className="match-modal-loading">Տվյալները հասանելի չեն այս խաղի համար։</div>}

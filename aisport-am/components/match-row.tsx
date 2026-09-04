@@ -18,10 +18,7 @@ export function MatchRow({ match, date }: { match: LiveMatch; date: string }) {
   return (
     <div
       className="match-row match-row-link"
-      role="button"
-      tabIndex={0}
       onClick={openPopup}
-      onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") openPopup(); }}
     >
       <span className={match.isLive ? "match-live-status live-beacon-status" : ""}>{match.status}</span>
       {match.homeId ? (
@@ -32,7 +29,17 @@ export function MatchRow({ match, date }: { match: LiveMatch; date: string }) {
       ) : (
         <strong className="team-with-logo">{match.homeLogo && <img src={sizedImage(match.homeLogo, 24)} alt="" className="team-logo" loading="lazy" />}{match.home}</strong>
       )}
-      <b className="score-big">{match.homeScore ?? "–"} : {match.awayScore ?? "–"}</b>
+      {/* The row was a button with two team links inside it - one control
+          wrapping others, which axe reports and a screen reader cannot make
+          sense of. The row still opens the match for a mouse, but the score
+          is now the actual control, so the keyboard has one thing to press
+          rather than a box that swallows what it contains. */}
+      <button
+        type="button"
+        className="score-big score-open"
+        onClick={(event) => { event.stopPropagation(); openPopup(); }}
+        aria-label={`Բացել մանրամասները՝ ${match.home} ${match.homeScore ?? "–"} : ${match.awayScore ?? "–"} ${match.away}`}
+      >{match.homeScore ?? "–"} : {match.awayScore ?? "–"}</button>
       {match.awayId ? (
         <Link href={`/team/${match.awayId}`} className="team-with-logo team-cell-link" onClick={stopAndGo}>
           {match.awayLogo && <img src={sizedImage(match.awayLogo, 24)} alt="" className="team-logo" loading="lazy" />}

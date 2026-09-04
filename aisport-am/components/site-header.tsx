@@ -63,6 +63,9 @@ export function SiteHeader() {
 
   return (
     <>
+      {/* Twelve stops before the first headline, on every page. This is the
+          first thing focus reaches and the only thing that shows it. */}
+      <a className="skip-link" href="#content">Անցնել բովանդակությանը</a>
       <div className="topline">
         <div className="site-shell topline-inner">
           <span>{formatLongDateHy(new Date())}</span>
@@ -91,11 +94,20 @@ export function SiteHeader() {
               onMouseLeave={() => setOpenLabel((current) => (current === item.label ? null : current))}
               onToggle={(event) => { if (!event.currentTarget.open && openLabel === item.label) setOpenLabel(null); }}
             >
+              {/* The label used to be a link inside the summary, which is two
+                  controls in one box: axe reports it, and a screen reader
+                  cannot say whether it is opening a menu or following a
+                  link. The summary is now only the menu; the section's own
+                  page is the first entry inside it, where it is reachable
+                  by keyboard and unambiguous. */}
               <summary onClick={(event) => { event.preventDefault(); setOpenLabel((current) => (current === item.label ? null : item.label)); }}>
-                {item.href ? <Link prefetch={false} href={item.href} onClick={(event) => { event.stopPropagation(); setMenuOpen(false); }}>{item.label}</Link> : <span>{item.label}</span>}
+                <span>{item.label}</span>
                 <span>⌄</span>
               </summary>
-              <div>{item.children.map(([label, href]) => <Link href={href} key={href} onClick={() => setMenuOpen(false)}>{label}</Link>)}</div>
+              <div>
+                {item.href ? <Link className="nav-section-all" prefetch={false} href={item.href} key={item.href} onClick={() => setMenuOpen(false)}>{item.label}՝ բոլորը</Link> : null}
+                {item.children.map(([label, href]) => <Link href={href} key={href} onClick={() => setMenuOpen(false)}>{label}</Link>)}
+              </div>
             </details>)}
             {plainLinks.map((item) => <Link className="nav-plain-link" prefetch={false} href={item.href} key={item.href} onClick={() => setMenuOpen(false)}>{item.label}</Link>)}
             <Link className="podcast-nav-button" prefetch={false} href="/podcasts" onClick={() => setMenuOpen(false)}><span>◉</span> Փոդքաստ</Link>
@@ -111,6 +123,10 @@ export function SiteHeader() {
           </div>
         ) : null}
       </header>
+      {/* Where the skip link lands. Every page builds its own <main>, so
+          the header carries the target rather than twenty files each
+          growing an id. */}
+      <span id="content" tabIndex={-1} className="skip-target" />
     </>
   );
 }
