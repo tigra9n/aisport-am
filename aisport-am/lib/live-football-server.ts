@@ -7,7 +7,24 @@ type ArmenianLiveFixture={fixture:{status:{short:string;elapsed?:number|null}};l
 
 export type LiveMatch={id:string;status:string;competition:string;home:string;away:string;homeId:number|null;awayId:number|null;homeLogo:string|null;awayLogo:string|null;homeScore:number|null;awayScore:number|null;isLive:boolean};
 export type LineupPlayer={id:number|null;name:string;number:number|null;grid:string|null;rating:string|null};
-export type LiveMatchDetail={match:LiveMatch;venue:string;referee:string;events:{minute:string;team:string;player:string;assist:string;label:string}[];lineups:{team:string;formation:string;starters:LineupPlayer[];substitutes:LineupPlayer[]}[];statistics:{team:string;possession:string;shotsOnGoal:string;totalShots:string;xg:string}[];h2h:{date:string;competition:string;home:string;away:string;homeScore:number|null;awayScore:number|null}[];prediction:{winnerName:string|null;comment:string|null;advice:string|null;homePct:string;drawPct:string;awayPct:string}|null;standings:import("./football").StandingRow[]|null;topScorers:import("./topscorers-server").TopScorer[]|null;injuries:{team:string;player:string;reason:string}[];formGuide:{team:string;form:string;played:number;won:number;draw:number;lost:number;goalsForAvg:string;goalsAgainstAvg:string;cleanSheets:number}[]};
+// The optional fields at the end arrived with ESPN, which sends more than
+// the paid provider ever did: every team statistic it measures rather than
+// the four the layout was built around, what each named player actually did
+// in the match, and the minute-by-minute commentary. They are optional
+// because the API-Football path still fills this same shape and has none of
+// them.
+export type LiveMatchDetail={match:LiveMatch;venue:string;referee:string;events:{minute:string;team:string;player:string;assist:string;label:string}[];lineups:{team:string;formation:string;starters:LineupPlayer[];substitutes:LineupPlayer[]}[];statistics:{team:string;possession:string;shotsOnGoal:string;totalShots:string;xg:string}[];h2h:{date:string;competition:string;home:string;away:string;homeScore:number|null;awayScore:number|null}[];prediction:{winnerName:string|null;comment:string|null;advice:string|null;homePct:string;drawPct:string;awayPct:string}|null;standings:import("./football").StandingRow[]|null;topScorers:import("./topscorers-server").TopScorer[]|null;injuries:{team:string;player:string;reason:string}[];formGuide:{team:string;form:string;played:number;won:number;draw:number;lost:number;goalsForAvg:string;goalsAgainstAvg:string;cleanSheets:number}[];
+  // Every statistic the provider measured, home against away, in the order
+  // a reader expects rather than the provider's. Replaces the fixed four
+  // when present.
+  statRows?:{label:string;home:string;away:string}[];
+  // What each player did, keyed by name, so the lineup can say more than
+  // who was on the pitch.
+  playerLines?:Record<string,{label:string;value:number}[]>;
+  // Minute by minute, and who wrote it. The text is the provider's own, not
+  // a fact, so the page names them beside it.
+  commentary?:{minute:string;text:string}[];
+  commentarySource?:string|null};
 
 let cacheTableReady:Promise<unknown>|null=null;
 

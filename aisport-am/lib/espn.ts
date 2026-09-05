@@ -558,15 +558,54 @@ export async function espnLiveMatchDetail(id: string): Promise<import("./live-fo
       xg: "",
     })),
     h2h: detail?.h2h ?? [],
-    // No free equivalent, and inventing either would be worse than an
-    // empty section: a prediction is somebody's opinion and an injury list
-    // is a claim about a person's health.
+    // No free equivalent, and inventing either would be worse than an empty
+    // section: a prediction is somebody's opinion and an injury list is a
+    // claim about a person's health.
     prediction: null,
     injuries: [],
-    standings: null,
+    // The table belongs on a match page and ESPN has it, so the section
+    // that would otherwise have gone missing comes back.
+    standings: league ? await espnStandings(codeForSlug(slug)) : null,
     topScorers: null,
     formGuide: [],
+    // What the old layout had no room for.
+    statRows: statRowsFrom(detail),
+    playerLines: playerLinesFrom(detail),
+    commentary: detail?.commentary ?? [],
+    commentarySource: detail?.commentarySource ?? null,
   };
+}
+
+// The site's league codes are keyed the other way round; this is the only
+// place that needs the reverse.
+function codeForSlug(slug: string): string {
+  const found = Object.entries(ESPN_SLUG_BY_CODE).find(([, s]) => s === slug);
+  return found?.[0] ?? "";
+}
+
+// Home against away, in the order a reader looks for them rather than the
+// order ESPN sends them.
+function statRowsFrom(detail: EspnMatchDetail | null): { label: string; home: string; away: string }[] {
+  if (!detail || detail.statistics.length !== 2) return [];
+  const [home, away] = detail.statistics;
+  const labels = home.rows.map((r) => r.label);
+  return labels
+    .map((label) => ({
+      label,
+      home: home.rows.find((r) => r.label === label)?.value ?? "",
+      away: away.rows.find((r) => r.label === label)?.value ?? "",
+    }))
+    .filter((row) => row.home || row.away);
+}
+
+function playerLinesFrom(detail: EspnMatchDetail | null): Record<string, { label: string; value: number }[]> {
+  const lines: Record<string, { label: string; value: number }[]> = {};
+  for (const lineup of detail?.lineups ?? []) {
+    for (const player of [...lineup.starters, ...lineup.substitutes]) {
+      if (player.did.length) lines[player.name] = player.did;
+    }
+  }
+  return lines;
 }
 
 // Armenian fixtures and results, free.

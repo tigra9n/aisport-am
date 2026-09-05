@@ -462,3 +462,35 @@ html:not([data-theme="light"]) img[src*="noah.am"]{filter:invert(1)}
 .share-button:hover{border-color:var(--blue);color:var(--blue)}
 .share-button.facebook:hover{border-color:#1877f2;color:#1877f2}
 .share-button.telegram:hover{border-color:#2aabee;color:#2aabee}
+
+/* The match page after it moved to ESPN.
+   ESPN sends twenty-eight team statistics where the old provider sent four,
+   fourteen numbers for every named player, and minute-by-minute commentary
+   the page never had at any price. These are the blocks that hold them. */
+
+/* A count of shots is not a share of anything. Only percentages get a bar;
+   counts keep the same grid so the rows still line up, with the track left
+   empty rather than drawn as a split that means nothing. */
+.stat-bar-row-plain .stat-bar-track{background:transparent}
+
+/* What a player did, under his name. Scoped with :has so the chips on every
+   other page - the squad lists, which carry no numbers - keep the single
+   row they have always had. */
+.subs-chip:has(.player-did){flex-direction:column;align-items:flex-start;gap:2px;border-radius:12px;padding:6px 9px}
+.player-did{display:block;font-style:normal;font-size:8px;color:var(--muted);line-height:1.35}
+
+/* Previous meetings, and the commentary. */
+.h2h-panel h2,.commentary-panel h2{font-size:15px;margin:0 0 10px}
+.h2h-list{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.h2h-list li{display:flex;gap:10px;align-items:baseline;padding:8px 10px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px;font-size:12px}
+.h2h-date{color:var(--muted);font-size:11px;min-width:78px}
+.h2h-teams b{margin:0 4px;color:var(--ink)}
+
+/* Newest minute first, and capped in height: a full match is a couple of
+   hundred lines and would otherwise push everything under it off the page.
+   It scrolls inside itself, which is also what stops a long feed breaking
+   the layout on a narrow screen. */
+.commentary-source{display:block;font-weight:400;font-size:11px;color:var(--muted);margin-top:3px}
+.commentary-list{list-style:none;margin:0;padding:0;display:grid;gap:6px;max-height:420px;overflow-y:auto}
+.commentary-list li{display:flex;gap:10px;font-size:12px;line-height:1.5;padding:8px 10px;background:var(--surface-2);border:1px solid var(--line);border-radius:8px}
+.commentary-list b{flex:0 0 40px;color:var(--orange);font-variant-numeric:tabular-nums}
