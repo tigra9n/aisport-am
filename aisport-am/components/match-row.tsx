@@ -8,7 +8,16 @@ import type { LiveMatch } from "../lib/live-football-server";
 export function MatchRow({ match, date }: { match: LiveMatch; date: string }) {
   const router = useRouter();
 
-  const openPopup = () => {
+  // The row opens the match, and the two club names inside it are links to
+  // the club. Until the board moved to ESPN there were no such links - the
+  // row carried no usable club number - so the row's own handler was the
+  // only one, and stopPropagation on the link was enough. It is not: a click
+  // on a club name was opening the match centre instead of the club.
+  //
+  // So the row asks where the click came from. Anything inside an anchor
+  // belongs to that anchor, whatever the handlers below it do.
+  const openPopup = (event?: React.MouseEvent) => {
+    if (event && (event.target as HTMLElement | null)?.closest("a")) return;
     router.push(`/live?date=${date}&match=${match.id}`, { scroll: false });
   };
   const stopAndGo = (event: React.MouseEvent) => {
