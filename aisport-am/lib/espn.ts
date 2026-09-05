@@ -673,3 +673,39 @@ export async function armenianMatchesForDate(date: string): Promise<ArmenianMatc
     })
     .filter((m) => m.home && m.away);
 }
+
+// ---------------------------------------------------------------------
+// What is left, and why it has not moved
+// ---------------------------------------------------------------------
+//
+// Four things still read API-Sports: squads, player pages, top scorers and
+// team pages. ESPN has all four - measured on 6 September, not assumed:
+//
+//   squad      /apis/site/v2/sports/soccer/eng.1/teams/363/roster
+//              200, thirty players, each with jersey number, position, age
+//              and nationality
+//   team       /apis/site/v2/sports/soccer/eng.1/teams/363
+//              200, name and crest at a.espncdn.com/i/teamlogos/soccer/500/
+//   scorers    sports.core.api.espn.com/v2/sports/soccer/leagues/eng.1/
+//              seasons/2026/types/1/leaders
+//              200, and not only goals: assists, shots on target, cards,
+//              fouls, accurate passes, saves. The athletes come back as
+//              $ref links, so a top ten costs ten more calls unless the
+//              byathlete endpoint is used instead, which returns 200 too.
+//   player     /apis/common/v3/sports/soccer/athletes/150818
+//              200, with name, position, age, height, weight, date of
+//              birth, shirt number and club; the core API adds birthplace
+//              and injuries.
+//
+// They have not moved because they are one decision, not four. Every one of
+// them lives behind a URL numbered by API-Sports - /team/50 is Chelsea
+// because API-Sports says 50, and ESPN says 363 - and those URLs are the
+// ones Google has just started indexing after a week of work on exactly
+// that. Swapping the source without a mapping between the two numberings
+// would point every indexed team and player page at a different footballer.
+//
+// So the work is the mapping, not the reading. Tigran chose to wait rather
+// than carry that complexity now, which is the right call: these pages are
+// lightly visited and cached, so what they cost is small, while what a
+// wrong mapping would cost is every indexed page on the site.
+
