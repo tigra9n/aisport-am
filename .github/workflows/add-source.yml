@@ -782,6 +782,99 @@ jobs:
       # earlier says nothing about what its pages are built on. So: read the
       # page, pull every script and every URL that looks like an interface
       # out of it, and try the endpoints those suggest.
+      # The four files still holding the paid key: squads, player pages,
+      # top scorers, and team pages. ESPN very likely covers all of them,
+      # but "very likely" has been wrong three times tonight - it blocks us,
+      # it has no player statistics, its search returns nothing - so these
+      # get measured on the host the Worker can actually reach before a line
+      # is written against them.
+      - name: What ESPN gives for squads, players and scorers
+        if: ${{ github.event.inputs.livescore == 'yes' }}
+        run: |
+          cat > rest.mjs <<'JS'
+          const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+          const WEB = "https://site.web.api.espn.com";
+          const CORE = "https://sports.core.api.espn.com";
+          const out = [];
+          const say = (l) => out.push(l);
+
+          async function get(url) {
+            try {
+              const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(20000) });
+              const text = await res.text();
+              let json = null; try { json = JSON.parse(text) } catch {}
+              return { ok: res.ok, status: res.status, json, text };
+            } catch (e) { return { ok: false, status: 0, json: null, text: String(e) }; }
+          }
+
+          say("=== the squad of one club ===");
+          {
+            // Chelsea, whose ESPN id is 363. The site's own team pages are
+            // numbered by API-Football, which is the complication this has
+            // to answer for, so the first thing to learn is whether the
+            // squad is there at all.
+            const r = await get(`${WEB}/apis/site/v2/sports/soccer/eng.1/teams/363/roster`);
+            say(`  roster: HTTP ${r.status}`);
+            const athletes = r.json?.athletes ?? r.json?.roster ?? [];
+            const flat = Array.isArray(athletes) ? athletes.flatMap((g) => g.items ?? g.athletes ?? [g]) : [];
+            say(`  players: ${flat.length}`);
+            for (const p of flat.slice(0, 4)) {
+              const a = p.athlete ?? p;
+              say(`      #${a.jersey ?? "?"} ${a.displayName ?? a.fullName} - ${a.position?.displayName ?? a.position?.name ?? "?"} - age ${a.age ?? "?"} - ${a.citizenship ?? a.birthPlace?.country ?? "?"}`);
+            }
+            const t = await get(`${WEB}/apis/site/v2/sports/soccer/eng.1/teams/363`);
+            const team = t.json?.team;
+            say(`  team page: HTTP ${t.status}, ${team?.displayName ?? "?"}, venue ${team?.franchise?.venue?.fullName ?? team?.venue?.fullName ?? "?"}`);
+            say(`  crest: ${team?.logos?.[0]?.href ?? "none"}`);
+            const coach = t.json?.coach ?? team?.coach;
+            say(`  coach: ${Array.isArray(coach) ? coach.map((c) => c.firstName + " " + c.lastName).join(", ") : (coach?.displayName ?? "not in this response")}`);
+          }
+
+          say("");
+          say("=== top scorers of a league ===");
+          for (const url of [
+            `${WEB}/apis/site/v2/sports/soccer/eng.1/leaders`,
+            `${WEB}/apis/common/v3/sports/soccer/eng.1/statistics/byathlete?sort=offensive.totalGoals&limit=5`,
+            `${CORE}/v2/sports/soccer/leagues/eng.1/seasons/2026/types/1/leaders`,
+          ]) {
+            const r = await get(url);
+            const path = url.replace(/^https?:\/\/[^/]+/, "").split("?")[0];
+            say(`  ${r.status === 200 ? "PASS" : "fail"}  ${path} -> HTTP ${r.status}`);
+            if (r.status !== 200) continue;
+            const cats = r.json?.leaders?.categories ?? r.json?.categories ?? [];
+            if (cats.length) {
+              say(`        categories: ${cats.map((c) => c.name ?? c.displayName).join(", ").slice(0, 160)}`);
+              const goals = cats.find((c) => /goal/i.test(c.name ?? c.displayName ?? ""));
+              for (const l of (goals?.leaders ?? []).slice(0, 4)) {
+                say(`        ${l.displayValue} - ${l.athlete?.displayName ?? l.athlete?.$ref ?? "?"} (${l.team?.displayName ?? "?"})`);
+              }
+            }
+            const athletes = r.json?.athletes ?? [];
+            for (const a of athletes.slice(0, 4)) {
+              const goals = a.categories?.[0]?.totals?.[0] ?? a.statistics?.[0]?.stats?.[0]?.displayValue;
+              say(`        ${a.athlete?.displayName ?? "?"} (${a.athlete?.team?.displayName ?? "?"}) ${goals ?? ""}`);
+            }
+          }
+
+          say("");
+          say("=== one player's page ===");
+          for (const url of [
+            `${WEB}/apis/common/v3/sports/soccer/athletes/150818`,
+            `${CORE}/v2/sports/soccer/athletes/150818`,
+          ]) {
+            const r = await get(url);
+            const path = url.replace(/^https?:\/\/[^/]+/, "");
+            say(`  ${r.status === 200 ? "PASS" : "fail"}  ${path} -> HTTP ${r.status}`);
+            if (r.status === 200) {
+              const a = r.json?.athlete ?? r.json;
+              say(`        ${a.displayName ?? a.fullName ?? "?"} - ${a.position?.displayName ?? "?"} - ${a.age ?? "?"} - ${a.citizenship ?? "?"} - ${a.team?.displayName ?? ""}`);
+              say(`        keys: ${Object.keys(a).join(", ").slice(0, 220)}`);
+            }
+          }
+          console.log(out.join("\n"));
+          JS
+          node rest.mjs
+
       - name: What is behind the federation's own league site
         if: ${{ github.event.inputs.livescore == 'yes' }}
         run: |
