@@ -163,7 +163,14 @@ export default async function Home() {
       <section className="live-ribbon" aria-label="Ուղիղ արդյունքներ">
         <div className="site-shell live-ribbon-inner">
           <Link className="live-title" href="/live"><span /> LIVE</Link>
-          <div className="live-ticker"><div className="live-ticker-track">{[...live.matches, ...live.matches].map((match, index) => <Link className="live-ribbon-match" href={`/?match=${match.id}`} scroll={false} prefetch={false} key={`${match.id}-${index}`}><small className={match.isLive ? "ticker-live" : ""}>{match.status}</small><strong>{match.home}</strong><b>{match.homeScore ?? "–"}</b><span>:</span><b>{match.awayScore ?? "–"}</b><strong>{match.away}</strong></Link>)}</div></div>
+          {/* The scroll speed has to be derived from how many matches there
+              are. The animation covers one full copy of the list, so with a
+              fixed duration the strip crawls on a quiet afternoon and races
+              on a busy evening - reported unreadable once there were enough
+              fixtures on it. Four seconds per match keeps the pixels-per-
+              second constant whatever the day looks like; the floor stops a
+              three-match strip from snapping round. */}
+          <div className="live-ticker"><div className="live-ticker-track" style={{ animationDuration: `${Math.max(24, live.matches.length * 4)}s` }}>{[...live.matches, ...live.matches].map((match, index) => <Link className="live-ribbon-match" href={`/?match=${match.id}`} scroll={false} prefetch={false} key={`${match.id}-${index}`}><small className={match.isLive ? "ticker-live" : ""}>{match.status}</small><strong>{match.home}</strong><b>{match.homeScore ?? "–"}</b><span>:</span><b>{match.awayScore ?? "–"}</b><strong>{match.away}</strong></Link>)}</div></div>
           <Link className="all-scores" href="/live">Բոլոր խաղերը →</Link>
         </div>
       </section>
