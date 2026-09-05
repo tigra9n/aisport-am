@@ -67,6 +67,6 @@ export default async function MatchDetailsPage({params}:{params:Promise<{id:stri
  {/* Minute by minute. This is the provider's writing rather than its
      facts - a score belongs to nobody, a sentence belongs to whoever wrote
      it - so it is credited in the heading, not silently absorbed. */}
- {(details.commentary?.length??0)>0&&<section className="commentary-panel" style={{marginTop:18}}><h2>Խաղի ընթացքը{details.commentarySource&&<small className="commentary-source">աղբյուր՝ {details.commentarySource}</small>}</h2><ol className="commentary-list">{details.commentary!.slice().reverse().slice(0,60).map((line,index)=><li key={`c-${index}`}><b>{line.minute}</b><span>{line.text}</span></li>)}</ol></section>}
+ {(details.commentary?.length??0)>0&&<section className="commentary-panel" style={{marginTop:18}}><h2>Խաղի ընթացքը{details.commentarySource&&<small className="commentary-source">աղբյուր՝ {details.commentarySource}, բնագիր՝ անգլերեն</small>}</h2><ol className="commentary-list">{details.commentary!.slice().reverse().slice(0,60).map((line,index)=><li key={`c-${index}`}><b>{line.minute}</b><span>{line.text}</span></li>)}</ol></section>}
  </div><SiteFooter/></main>;
 }
