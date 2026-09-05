@@ -60,8 +60,31 @@ export async function GET(request: Request) {
     probe("thesportsdb armenia", "https://www.thesportsdb.com/api/v1/json/3/lookuptable.php?l=4619&s=2026-2027", { "User-Agent": BROWSER_UA }),
   ]);
 
+  // Searching ESPN's league names for "Armenia" was the wrong question -
+  // the league is sponsored, and a listing may file it under Fastex or
+  // under its Armenian name. The right question is whether ESPN knows the
+  // clubs. If Pyunik and Noah are in its database then the league is there
+  // under some name; if they are not, it genuinely does not cover Armenia.
+  const clubs = await Promise.all(
+    ["Pyunik", "Noah Yerevan", "Ararat-Armenia", "Alashkert", "Urartu Yerevan"].map(async (name) => {
+      try {
+        const res = await fetch(
+          `https://site.web.api.espn.com/apis/common/v3/search?query=${encodeURIComponent(name)}&limit=5&sport=soccer`,
+          { headers: { "User-Agent": BROWSER_UA }, signal: AbortSignal.timeout(15_000) },
+        );
+        if (!res.ok) return { name, status: res.status, found: null };
+        const data = await res.json() as { items?: { contents?: { displayName?: string; subtitle?: string }[] }[] };
+        const hits = (data.items ?? []).flatMap((group) => group.contents ?? []).slice(0, 3);
+        return { name, status: res.status, found: hits.map((h) => `${h.displayName} (${h.subtitle ?? "?"})`) };
+      } catch (err) {
+        return { name, status: 0, found: [String(err).slice(0, 60)] };
+      }
+    }),
+  );
+
   return Response.json({
     from: "cloudflare worker",
+    armenianClubsInEspn: clubs,
     colo: request.headers.get("cf-ray")?.split("-")[1] ?? null,
     verdict: results.find((r) => r.label === "browser UA")?.status === 200
       ? "ESPN answers the Worker"

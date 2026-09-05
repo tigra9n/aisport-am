@@ -768,6 +768,9 @@ jobs:
                 let j; try{ j=JSON.parse(d) }catch{ console.log('  not json: '+d.slice(0,200)); return }
                 if (j.error) { console.log('  '+j.error+' - is the route deployed?'); return }
                 console.log('  colo: '+(j.colo??'?')+'  VERDICT: '+j.verdict);
+                for (const c of j.armenianClubsInEspn ?? []) {
+                  console.log('    espn knows '+String(c.name).padEnd(16)+' -> '+(Array.isArray(c.found)&&c.found.length?c.found.join(' | '):'nothing'));
+                }
                 for (const r of j.results ?? []) {
                   console.log('    '+String(r.label).padEnd(24)+' HTTP '+r.status+'  '+r.ms+'ms'+(r.events!==null?('  '+r.events+' fixtures'):'')+(r.body?('  '+r.body.replace(/\\s+/g,' ').slice(0,70)):''));
                 }
