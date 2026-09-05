@@ -1083,28 +1083,59 @@ jobs:
           const noMatches = live.html.match(/[^<>]{0,90}հանդիպումներ չկան[^<>]{0,20}/);
           if (noMatches) say(`  the page says: ${noMatches[0].trim()}`);
 
-          if (espnIds.length) {
-            const id = espnIds[0];
-            const m = await get(`https://aifootball.am/live/match/${id}`);
+          // The first id on the board is the first fixture of the day, which
+          // has not kicked off: no lineups, no statistics, no events, because
+          // none exist yet. Reading that as an empty page said nothing. Ask
+          // ESPN for a match that has finished, then open ours.
+          let played = null;
+          for (const slug of ["eng.1", "esp.1", "ita.1", "ger.1", "usa.1"]) {
+            const d = new Date(Date.now() - 36 * 3600 * 1000).toISOString().slice(0, 10).replace(/-/g, "");
+            const r = await get(`https://site.web.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard?dates=${d}`);
+            let events = [];
+            try { events = JSON.parse(r.html).events ?? []; } catch { /* an Akamai denial is HTML */ }
+            const done = events.find((e) => e && e.status && e.status.type && e.status.type.completed);
+            if (done) { played = `espn-${slug}-${done.id}`; break; }
+          }
+          if (played) {
+            const m = await get(`https://aifootball.am/live/match/${played}`);
             say("");
-            say(`=== /live/match/${id} -> HTTP ${m.status}, ${m.html.length} bytes ===`);
-            say(`  lineup blocks: ${count(m.html, /Կազմ|formation|Մեկնարկային/g)}`);
+            say(`=== /live/match/${played} (a finished match) -> HTTP ${m.status}, ${m.html.length} bytes ===`);
+            say(`  lineup blocks: ${count(m.html, /Կազմ|Մեկնարկային/g)}`);
             say(`  named players: ${count(m.html, /class="[^"]*lineup[^"]*"/g)}`);
-            say(`  statistics rows: ${count(m.html, /Տիրապետում|Հարվածներ|Դարպասի ուղղությամբ/g)}`);
+            say(`  statistics rows: ${count(m.html, /stat-bar-row|Տիրապետում|Հարվածներ/g)}`);
             say(`  events: ${count(m.html, /Գոլ|Դեղին|Կարմիր|Փոխարինում/g)}`);
-            for (const empty of ["Կազմերը հասանելի չեն", "Վիճակագրություն չկա", "տվյալ չկա"]) {
+            say(`  commentary lines: ${count(m.html, /commentary-item|commentary-list/g)}`);
+            for (const empty of ["Կազմերը հասանելի չեն", "Վիճակագրություն չկա", "տվյալ չկա", "չի գտնվել"]) {
               if (m.html.includes(empty)) say(`  !! page says: ${empty}`);
             }
           } else {
-            say("  !! no ESPN match to open - the board has no ESPN ids at all");
+            say("  !! ESPN reported no finished match in the last day and a half");
           }
 
           say("");
-          for (const code of ["PL", "PD", "ARM"]) {
-            const t = await get(`https://aifootball.am/standings?league=${code}`);
-            const rows = count(t.html, /<tr/g);
-            say(`  standings ${code}: HTTP ${t.status}, ${rows} table rows`);
+          // /standings takes no league query: it renders all eight leagues as
+          // tabs and only the active one - the Premier League - reaches the
+          // HTML. So ?league=ARM and ?league=PL both answered with twenty-one
+          // rows because both answered with the Premier League, and I read
+          // that as the Armenian league having twenty clubs. The rest travel
+          // in the payload beside it, so read that instead.
+          const st = await get("https://aifootball.am/standings");
+          say(`=== /standings -> HTTP ${st.status}, ${st.html.length} bytes ===`);
+          say(`  rendered rows (the active tab): ${count(st.html, /<tr/g)}`);
+          for (const pair of [
+            ["ARM", ["Փյունիկ", "Նոա", "Ուրարտու", "Արարատ-Արմենիա", "Ալաշկերտ", "Շիրակ"]],
+            ["PL", ["Արսենալ", "Լիվերպուլ", "Տոտենհեմ", "Նյուքասլ"]],
+            ["SPL", ["Ալ-Հիլալ", "Ալ-Նասր"]],
+            ["MLS", ["Ինտեր Մայամի", "Լոս Անջելես Գալաքսի"]],
+          ]) {
+            const present = pair[1].filter((c) => st.html.includes(c));
+            say(`  ${pair[0]}: ${present.length}/${pair[1].length} of its clubs present${present.length ? ` (${present.join(", ")})` : ""}`);
           }
+          // The spellings the name rules were written to remove. Any of these
+          // still on the site means an entry did not take.
+          const wrong = ["Տոտտենհամ", "Նեվկաստլե", "Ունիտեդ", "Րեդ", "Ագֆ", "Ոֆի", "Ֆկ Կոլոգնե"];
+          const stillWrong = wrong.filter((w) => st.html.includes(w) || live.html.includes(w));
+          say(`  old misspellings still on the site: ${stillWrong.join(", ") || "none"}`);
           console.log(out.join("\n"));
           JS
           node pages.mjs
