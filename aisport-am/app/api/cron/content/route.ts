@@ -581,6 +581,14 @@ export async function GET(request: Request) {
 
   // Publishing window: 10:00-03:00 Yerevan time (UTC+4, no DST). Manual
   // ?mode= calls bypass the window so testing works any time of day.
+  //
+  // Seventeen hours, one article an hour, seventeen a day - and the number
+  // that decides it is not editorial. Generation moved to Gemini's free
+  // tier on 5 September (scripts/cf-deploy.sh), and that tier allows
+  // twenty requests a day. Seventeen leaves three in hand for a retry or a
+  // second attempt at a story; going higher would mean the site stops
+  // mid-evening on the day anything goes wrong, with no provider behind it
+  // to take over.
   const yerevanHour = (new Date().getUTCHours() + 4) % 24;
   if (!forcedMode) {
     const inWindow = yerevanHour >= 10 || yerevanHour < 3;
@@ -617,7 +625,13 @@ export async function GET(request: Request) {
   // real spacing at roughly 19-21 minutes instead of oscillating between
   // 20 and 25. The cost is an occasional 19-minute gap where the brief
   // said 20; the benefit is that the rhythm stops visibly stalling.
-  const MIN_PUBLISH_GAP_MS = 18 * 60 * 1000;
+  // A round 60 here, unlike the 18-not-20 above, and deliberately so. The
+  // dispatcher cannot hit an exact threshold, so the first tick past 60
+  // lands at 60-65 minutes and the day comes up a little short of
+  // seventeen. Under a daily cap that is the right way to be wrong:
+  // sixteen articles is a quiet day, twenty-one is a site that stops
+  // publishing before midnight.
+  const MIN_PUBLISH_GAP_MS = 60 * 60 * 1000;
   const nowForSlot = new Date();
   let slotClaimKey: string | null = null;
   let claimDb: D1Database | null = null;
@@ -637,7 +651,7 @@ export async function GET(request: Request) {
         const sinceMs = nowForSlot.getTime() - lastMs;
         if (Number.isFinite(lastMs) && sinceMs >= 0 && sinceMs < MIN_PUBLISH_GAP_MS) {
           const sinceMin = Math.floor(sinceMs / 60000);
-          await logInvocation({ forced: forcedMode, mode: "skipped", generated: 0, reason: `only ${sinceMin} min since the last article, need 18` });
+          await logInvocation({ forced: forcedMode, mode: "skipped", generated: 0, reason: `only ${sinceMin} min since the last article, need ${MIN_PUBLISH_GAP_MS / 60000}` });
           return Response.json({ ok: true, mode: "skipped", reason: `last article was ${sinceMin} minutes ago, minimum gap is 18 minutes`, generated: 0, log: [] });
         }
       }
