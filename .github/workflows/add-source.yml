@@ -294,6 +294,50 @@ jobs:
             ["The Athletic Football", "https://theathletic.com/football/rss/"],
             ["BBC Premier League", "https://feeds.bbci.co.uk/sport/football/premier-league/rss.xml"],
             ["Premier League Official", "https://www.premierleague.com/rss/news"],
+
+            // --- MLS, second round ---------------------------------------
+            // Four of twelve answered. The national American desks cover
+            // soccer as one sport among many; the club blogs cover a single
+            // MLS side every day, which is the volume this needs. SB Nation
+            // runs a network of them and they share one feed shape.
+            ["Hudson River Blue", "https://www.hudsonriverblue.com/rss/current"],
+            ["Black And Red United", "https://www.blackandredunited.com/rss/current"],
+            ["Dirty South Soccer", "https://www.dirtysouthsoccer.com/rss/current"],
+            ["Massive Report", "https://www.massivereport.com/rss/current"],
+            ["Brotherly Game", "https://www.brotherlygame.com/rss/current"],
+            ["Angels On Parade", "https://www.angelsonparade.com/rss/current"],
+            ["Stumptown Footy", "https://www.stumptownfooty.com/rss/current"],
+            ["RSL Soapbox", "https://www.rslsoapbox.com/rss/current"],
+            ["Sounder At Heart (current)", "https://www.sounderatheart.com/rss/current"],
+            ["E Pluribus Loonum", "https://www.epluribusloonum.com/rss/current"],
+            ["Dynamo Theory", "https://www.dynamotheory.com/rss/current"],
+            ["MLS Soccer (xml)", "https://www.mlssoccer.com/rss.xml"],
+            ["NBC Sports Soccer", "https://soccer.nbcsports.com/feed/"],
+            ["Sports Illustrated Soccer", "https://www.si.com/rss/si_soccer.rss"],
+            ["Goal USA (news)", "https://www.goal.com/en-us/feeds/news"],
+            ["Pro Soccer Wire (alt)", "https://prosoccerwire.usatoday.com/rss"],
+
+            // --- Saudi, second round -------------------------------------
+            // Three of twelve. The Gulf's English press is thin on the
+            // league itself; the Saudi papers are not, and they publish in
+            // Arabic. The model already writes from four languages and the
+            // parser already sniffs the charset, so the language is not the
+            // obstacle - finding a feed that answers is.
+            ["Al Riyadh", "https://www.alriyadh.com/rss.xml"],
+            ["Al Jazirah Sport", "https://www.al-jazirah.com/rss/sport.xml"],
+            ["Al Watan Sport", "https://www.alwatan.com.sa/rss"],
+            ["Okaz", "https://www.okaz.com.sa/rss.xml"],
+            ["Sabq", "https://sabq.org/rss"],
+            ["Al Marsd", "https://al-marsd.com/feed"],
+            ["Saudi Pro League (ar)", "https://www.spl.com.sa/ar/rss"],
+            ["FilGoal (slash)", "https://www.filgoal.com/rss/"],
+            ["Al Arabiya Sport (mrss)", "https://english.alarabiya.net/.mrss/en/sport.xml"],
+            ["Sport360 (slash)", "https://sport360.com/feed/"],
+            ["The National Sport (alt)", "https://www.thenationalnews.com/rss/sport"],
+            ["Gulf News Sport (alt)", "https://gulfnews.com/rss/sport"],
+            ["Arab News Sport (alt)", "https://www.arabnews.com/taxonomy/term/6/feed"],
+            ["Al Yaum Sport", "https://www.alyaum.com/rss/sport"],
+            ["Ahdath", "https://ahdath.info/feed"],
           ];
 
 
