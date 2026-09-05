@@ -7,6 +7,7 @@
 // are measured here, on the deployed site, at a phone's viewport.
 
 import { chromium } from "playwright";
+import { measureAsAReader } from "./measure-as-a-reader.mjs";
 
 const BASE = process.env.WEIGH_BASE_URL ?? "https://aifootball.am";
 // Discovered from the live site so the dynamic routes are measured on real
@@ -52,6 +53,7 @@ const context = await browser.newContext({
   userAgent:
     "Mozilla/5.0 (Linux; Android 12; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36",
 });
+await measureAsAReader(context);
 
 for (const [name, path] of PAGES) {
   const page = await context.newPage();
