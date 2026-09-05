@@ -55,8 +55,8 @@ export function LeagueTabs({ tables, topScorerTables, compact = false }: { table
               {rows.map((row) => (
                 <tr key={row.team} className={row.position <= 4 ? "zone-ucl" : row.position === 5 ? "zone-europa" : row.position > rows.length - 3 ? "zone-drop" : ""}>
                   <td><span className="position-marker">{row.position}</span></td>
-                  <td>{row.teamId ? (
-                    <Link href={`/team/${row.teamId}`} className="team-cell-link">
+                  <td>{(row.teamKey ?? row.teamId) ? (
+                    <Link href={`/team/${row.teamKey ?? row.teamId}`} className="team-cell-link">
                       {row.teamLogo ? <img src={sizedImage(row.teamLogo, 24)} alt="" className="team-badge-logo" loading="lazy" /> : <span className="team-badge">{row.team.slice(0, 1)}</span>}
                       <strong>{row.team}</strong>
                     </Link>

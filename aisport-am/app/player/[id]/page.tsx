@@ -1,4 +1,5 @@
 import { sizedImage } from "../../../lib/image-proxy";
+import Link from "next/link";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
@@ -11,6 +12,16 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
+  if (id.startsWith("espn-")) {
+    const { espnPlayer } = await import("../../../lib/espn");
+    const player = await espnPlayer(id.slice(5));
+    if (!player) return {};
+    return {
+      title: `${player.name} — Խաղացողի պրոֆիլ | AIFootball.am`,
+      description: `${player.name}-ի պրոֆիլը, մրցաշրջանների վիճակագրությունը և ակումբները։`,
+      alternates: { canonical: `https://aifootball.am/player/${id}` },
+    };
+  }
   const playerId = Number.parseInt(id, 10);
   if (!Number.isFinite(playerId)) return {};
   const profile = await getPlayerProfile(playerId);
@@ -32,8 +43,62 @@ const POSITION_HY: Record<string, string> = {
   Attacker: "Հարձակվող",
 };
 
+// ESPN's numbering, under its own prefix, the same as the club pages. The
+// squads and the scoring charts link this way now; the bare numbers below
+// are API-Football's and are what Google indexed, so both are served.
+async function EspnPlayerPage({ id }: { id: string }) {
+  const { espnPlayer } = await import("../../../lib/espn");
+  const player = await espnPlayer(id.slice(5));
+  if (!player) notFound();
+  return <main><SiteHeader /><div className="site-shell inner-page">
+    <span className="page-kicker">Խաղացողի պրոֆիլ</span>
+    <div className="player-header">
+      {player.photo ? <img src={sizedImage(player.photo, 128)} alt="" className="player-header-photo" loading="lazy" /> : <div className="player-header-photo squad-photo-placeholder">{player.name.slice(0, 1)}</div>}
+      <div>
+        <h1 className="page-title">{player.name}</h1>
+        <div className="player-facts">
+          {player.currentTeam && <span>⚽ {player.currentTeamKey ? <Link href={`/team/${player.currentTeamKey}`}>{player.currentTeam}</Link> : player.currentTeam}{player.shirtNumber ? ` · #${player.shirtNumber}` : ""}</span>}
+          {player.position && <span>📋 {POSITION_HY[player.position] ?? player.position}</span>}
+          {player.nationality && <span>🌍 {player.nationality}</span>}
+          {player.birthDate && <span>🎂 {formatDateHy(player.birthDate)}{player.age ? ` (${player.age} տ.)` : ""}{player.birthPlace ? `, ${player.birthPlace}` : ""}</span>}
+          {player.height && <span>📏 {player.height}</span>}
+          {player.weight && <span>⚖️ {player.weight}</span>}
+        </div>
+      </div>
+    </div>
+
+    {/* One table per season and competition, with the provider's own
+        columns rather than a fixed six: a goalkeeper's saves and a
+        striker's shots both survive, and the column keeps the written
+        description the provider gives it as its tooltip. */}
+    {player.seasons.length > 0 ? player.seasons.map((season, index) => (
+      <section className="transfers-section" key={`${season.season}-${season.league}-${index}`}>
+        <h2>
+          {season.season}{season.league ? ` · ${season.league}` : ""}{season.team ? ` · ${season.team}` : ""}
+        </h2>
+        <div className="standings-scroll">
+          <table className="standings-table">
+            <thead><tr>{season.columns.map((column) => <th key={column.label} title={column.note ?? undefined}>{column.label}</th>)}</tr></thead>
+            <tbody><tr>{season.columns.map((column) => <td key={column.label}>{column.value}</td>)}</tr></tbody>
+          </table>
+        </div>
+      </section>
+    )) : <p className="detail-empty">Այս խաղացողի վիճակագրությունը այս պահին հասանելի չէ։</p>}
+
+    {player.clubs.length > 0 && (
+      <section className="transfers-section">
+        <h2>Ակումբները</h2>
+        <div className="subs-grid">
+          {player.clubs.map((club) => <span className="subs-chip" key={club}>{club}</span>)}
+        </div>
+      </section>
+    )}
+  </div><SiteFooter /></main>;
+}
+
 export default async function PlayerPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  if (id.startsWith("espn-")) return EspnPlayerPage({ id });
   const playerId = Number.parseInt(id, 10);
   if (!Number.isFinite(playerId)) notFound();
   const [profile, transfers] = await Promise.all([getPlayerProfile(playerId), getPlayerTransfers(playerId)]);
