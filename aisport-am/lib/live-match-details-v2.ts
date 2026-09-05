@@ -302,6 +302,18 @@ async function resolveSection<T>(
 }
 
 export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|null>{
+  // The board now carries matches from two providers and the id says which:
+  // "espn-eng.1-401879286" against the old "af-1234567". ESPN answers a
+  // whole match page in one free request where this file spends eight to
+  // ten paid ones, so anything it owns goes to it and never comes back
+  // here. Armenian matches keep the "af-" prefix and the path below,
+  // because ESPN does not carry that league.
+  if(id.startsWith("espn-")){
+    try{
+      const {espnLiveMatchDetail}=await import("./espn");
+      return await espnLiveMatchDetail(id);
+    }catch{return null}
+  }
   const fixtureId=id.replace(/^af-/,"").replace(/^fd-/,"");
   if(!/^\d+$/.test(fixtureId))return null;
 
