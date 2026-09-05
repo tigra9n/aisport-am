@@ -18,7 +18,26 @@ export async function GET(request: Request) {
 
   const results: { date: string; matches: number }[] = [];
   const warmed: string[] = [];
-  const MAX_PER_RUN = 8;
+  // 5 September: the day's 7500-request allowance was spent by 15:00 and
+  // every live table on the site froze. The provider's dashboard showed a
+  // flat 400-600 requests an hour from midnight - roughly twice what the
+  // allowance affords, which is 312.
+  //
+  // This job was the spender, and it was running twice. Cloudflare's own
+  // Cron Trigger calls it every five minutes (worker/index.ts), and a
+  // GitHub Actions schedule called it every five minutes as well - an
+  // undocumented duplicate left behind when article generation moved to
+  // Actions. That workflow is deleted; the native trigger was the one the
+  // code documents as the warmer.
+  //
+  // Halving it is not enough on its own. Twelve runs an hour at eight
+  // matches measured out at about 240 requests an hour, before a single
+  // reader, crawler or article-generation tick is counted. Four leaves the
+  // warmer around 2900 a day and the other 4600 for everything else. The
+  // cost is that a match outside the rotation is fetched when its dialog is
+  // first opened rather than before - one slower popup, against a table
+  // that stops working entirely at three in the afternoon.
+  const MAX_PER_RUN = 4;
 
   const candidates: { id: string; priority: number }[] = [];
   for (const offset of [-1, 0]) {

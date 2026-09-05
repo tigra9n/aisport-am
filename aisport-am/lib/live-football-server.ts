@@ -16,15 +16,49 @@ function yerevanDate(dayOffset=0){const [y,m,d]=formatYerevanDate(new Date()).sp
 
 async function ensureCacheTable(db:D1Database){cacheTableReady??=db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();await cacheTableReady}
 
+// How long to stop asking after the provider refuses.
+//
+// 5 September, 20:00 Yerevan: the Armenian league sat at "- : -" through a
+// match while the English games beside it ticked along. The provider was
+// answering every call with {"requests":"You have reached the request limit
+// for the day"} - a 200 response carrying an error - and this cache treated
+// that like any other failure: serve the stale copy, leave saved_at alone,
+// and therefore ask again on the very next page view. Once the daily
+// allowance was gone the site asked for it forever, several times a minute,
+// which is the one thing guaranteed not to bring it back.
+//
+// The api_cache table has carried a retry_after column all along; this is
+// the first caller to use it.
+//
+// Half an hour for a spent daily allowance, deliberately, rather than
+// sleeping until whenever the allowance is believed to reset. The provider
+// does not say whether that is midnight UTC or a rolling twenty-four hours
+// from the first call, and betting on midnight costs a whole day of scores
+// if the guess is wrong: we would wake, be refused once more, and sleep
+// again until the next midnight. Probing every thirty minutes recovers
+// within half an hour of the real reset whenever it happens, and spends at
+// most forty-eight calls a day doing it - against an allowance of 7500.
+function refusalBackoffMs(errs:unknown):number{
+  if(!errs||typeof errs!=="object"||Array.isArray(errs))return 0;
+  const entry=errs as Record<string,unknown>;
+  const text=Object.values(entry).map(String).join(" ").toLowerCase();
+  if("requests" in entry||text.includes("limit for the day"))return 30*60_000;
+  if("rateLimit" in entry||text.includes("rate limit"))return 60_000;
+  return 0;
+}
+
 async function cachedFetch<T>(cacheKey:string,url:string,headers:Record<string,string>,revalidateSeconds:number,allowRequest:boolean):Promise<T|null>{
   const {env}=await import("cloudflare:workers");
   const db=(env as unknown as {DB?:D1Database}).DB;
   if(!db)return null;
   await ensureCacheTable(db);
   const now=Date.now();
-  const row=await db.prepare("SELECT payload,saved_at AS savedAt FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{payload:string;savedAt:number}>();
+  const row=await db.prepare("SELECT payload,saved_at AS savedAt,retry_after AS retryAfter FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{payload:string;savedAt:number;retryAfter:number}>();
   const cached=()=>{try{return row?.savedAt?JSON.parse(row.payload) as T:null}catch{return null}};
   if(row?.savedAt&&now-row.savedAt<revalidateSeconds*1000)return cached();
+  // Still inside a refusal: serve what we have rather than spend another
+  // call learning the same thing.
+  if(row?.retryAfter&&now<row.retryAfter)return cached();
   if(!allowRequest)return cached();
   const requestKey=`req:${cacheKey}`;
   const existing=inFlight.get(requestKey) as Promise<T|null>|undefined;
@@ -36,7 +70,15 @@ async function cachedFetch<T>(cacheKey:string,url:string,headers:Record<string,s
       const payload=await r.json() as T & {errors?:unknown};
       const errs=(payload as {errors?:unknown})?.errors;
       const hasErrors=Array.isArray(errs)?errs.length>0:Boolean(errs&&Object.keys(errs as object).length>0);
-      if(hasErrors)return cached();
+      if(hasErrors){
+        const backoff=refusalBackoffMs(errs);
+        if(backoff>0){
+          // Only the backoff is written. The payload and saved_at belong to
+          // the last answer that actually contained football.
+          await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,'null',0,?) ON CONFLICT(cache_key) DO UPDATE SET retry_after=excluded.retry_after`).bind(cacheKey,Date.now()+backoff).run();
+        }
+        return cached();
+      }
       await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey,JSON.stringify(payload),Date.now()).run();
       return payload;
     }catch{return cached()}

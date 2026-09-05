@@ -80,6 +80,14 @@ async function fetchJson<T>(url:string,key:string):Promise<T|null>{
       const isRateLimit=Boolean(errs&&typeof errs==="object"&&!Array.isArray(errs)&&"rateLimit" in (errs as object));
       const hasErrors=Array.isArray(errs)?errs.length>0:Boolean(errs&&Object.keys(errs as object).length>0);
       if(hasErrors){
+        // A spent daily allowance is not a transient failure, and the three
+        // retries below turned every match dialog into four refused calls
+        // instead of one. Nothing resets in 700ms; give up at once and let
+        // the caller serve its cached sections.
+        const spentForTheDay=Boolean(errs&&typeof errs==="object"&&!Array.isArray(errs)
+          &&("requests" in (errs as object)
+            ||Object.values(errs as Record<string,unknown>).map(String).join(" ").toLowerCase().includes("limit for the day")));
+        if(spentForTheDay)return null;
         if(attempt<3){await new Promise(r=>setTimeout(r,isRateLimit?700:350));continue}
         return null;
       }

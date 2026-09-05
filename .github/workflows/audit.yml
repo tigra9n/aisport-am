@@ -18,6 +18,11 @@ on:
         required: false
         default: true
         type: boolean
+      league:
+        description: 'API-Football league id to interrogate (342 = Armenian Premier League)'
+        required: false
+        default: '342'
+        type: string
 
 jobs:
   audit:
@@ -55,6 +60,55 @@ jobs:
       - name: Accessibility
         run: node a11y.mjs > a11y.txt 2>&1 || true
 
+      # Asked when the Armenian league sat at "- : -" for over an hour while
+      # the English matches on the same page ticked along. The site reads one
+      # /fixtures?date= call for every league at once, so a league that does
+      # not move while its neighbours do is the provider's answer, not ours.
+      # API-Football publishes a per-league coverage block that says outright
+      # whether it carries live data for a competition.
+      - name: What the football API says about a league
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          LEAGUE: ${{ inputs.league }}
+        run: |
+          L="${LEAGUE:-342}"
+          TODAY=$(TZ=Asia/Yerevan date +%F)
+          {
+            echo "=== league $L, coverage ==="
+            curl -s --max-time 20 "https://v3.football.api-sports.io/leagues?id=$L" \
+              -H "x-apisports-key: ${API_FOOTBALL_KEY}" | node -e '
+                let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{
+                  let j;try{j=JSON.parse(d)}catch{console.log("  unreadable answer");process.exit(0)}
+                  if(j.errors&&Object.keys(j.errors).length)console.log("  errors: "+JSON.stringify(j.errors));
+                  const r=(j.response||[])[0];
+                  if(!r){console.log("  the API knows no such league");process.exit(0)}
+                  console.log("  "+r.league.name+" ("+r.country.name+")");
+                  const current=(r.seasons||[]).find(s=>s.current)||(r.seasons||[]).at(-1)||{};
+                  const c=current.coverage||{};
+                  console.log("  season "+current.year+"  "+current.start+" to "+current.end);
+                  console.log("  LIVE COVERAGE: "+(c.fixtures?.events?"events yes":"events NO")
+                    +" | lineups "+(c.fixtures?.lineups?"yes":"no")
+                    +" | statistics "+(c.fixtures?.statistics_fixtures?"yes":"no")
+                    +" | standings "+(c.standings?"yes":"no"));
+                })'
+            echo
+            echo "=== what it reports for $TODAY ==="
+            curl -s --max-time 20 "https://v3.football.api-sports.io/fixtures?date=$TODAY&league=$L&season=2026" \
+              -H "x-apisports-key: ${API_FOOTBALL_KEY}" | node -e '
+                let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{
+                  let j;try{j=JSON.parse(d)}catch{console.log("  unreadable answer");process.exit(0)}
+                  if(j.errors&&Object.keys(j.errors).length)console.log("  errors: "+JSON.stringify(j.errors));
+                  const rows=j.response||[];
+                  if(!rows.length){console.log("  no fixture today");process.exit(0)}
+                  for(const f of rows){
+                    const st=f.fixture.status;
+                    console.log("  "+f.teams.home.name+" "+(f.goals.home??"-")+" : "+(f.goals.away??"-")+" "+f.teams.away.name);
+                    console.log("    kickoff "+f.fixture.date+"  status "+st.short+" ("+st.long+")  elapsed "+(st.elapsed??"-"));
+                  }
+                })'
+          } > league.txt 2>&1 || true
+          cat league.txt
+
       - name: Collect the report
         run: |
           {
@@ -71,6 +125,9 @@ jobs:
             echo
             echo "=============================================="
             cat a11y.txt 2>/dev/null || true
+            echo
+            echo "=============================================="
+            cat league.txt 2>/dev/null || true
             echo
             echo "--- screenshots produced ---"
             ls -la audit 2>&1 || true
