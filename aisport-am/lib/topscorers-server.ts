@@ -39,6 +39,66 @@ function currentSeasonYear() {
   return month >= 7 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
 }
 
+
+// The league's footballers by ESPN id, built from its clubs' rosters and
+// kept for a day. Twenty requests, behind a cache, so a chart costs one.
+async function leagueAthletes(slug: string, db: D1Database | undefined) {
+  const cacheKey = `espn:athletes:${slug}`;
+  if (db) {
+    await ensureCacheTable(db);
+    const row = await db.prepare("SELECT payload,saved_at AS savedAt FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{ payload: string; savedAt: number }>();
+    if (row?.savedAt && Date.now() - row.savedAt < 24 * 60 * 60 * 1000) {
+      try {
+        const parsed = JSON.parse(row.payload) as import("./espn").EspnAthleteIndex;
+        if (Object.keys(parsed).length) return parsed;
+      } catch { /* rebuild */ }
+    }
+  }
+  const { espnLeagueAthletes } = await import("./espn");
+  const index = await espnLeagueAthletes(slug);
+  if (db && Object.keys(index).length) {
+    await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey, JSON.stringify(index), Date.now()).run();
+  }
+  return index;
+}
+
+const readNumber = (text: string, pattern: RegExp) => {
+  const found = text.match(pattern);
+  return found ? Number(found[1]) : 0;
+};
+
+async function scorersFromRosters(code: string, db: D1Database | undefined): Promise<TopScorer[] | null> {
+  const { ESPN_SLUG_BY_CODE, espnCoreLeaders, espnKey } = await import("./espn");
+  const slug = ESPN_SLUG_BY_CODE[code];
+  if (!slug) return null;
+  const leaders = await espnCoreLeaders(slug);
+  if (!leaders?.length) return null;
+  const athletes = await leagueAthletes(slug, db);
+  const rows: TopScorer[] = [];
+  for (const leader of leaders) {
+    const athlete = athletes[leader.id];
+    // A footballer the rosters do not name has left the league or is on
+    // loan from outside it. Skipping is better than a row with no name.
+    if (!athlete) continue;
+    rows.push({
+      rank: rows.length + 1,
+      id: Number(leader.id),
+      key: espnKey(leader.id),
+      teamKey: athlete.teamKey,
+      name: armenianPlayerName(athlete.name),
+      photo: athlete.photo,
+      team: athlete.team,
+      teamId: null,
+      teamLogo: athlete.teamLogo,
+      goals: leader.value || readNumber(leader.long, /Goals:\s*(\d+)/i) || readNumber(leader.short, /\bG:\s*(\d+)/),
+      assists: readNumber(leader.short, /\bA:\s*(\d+)/) || readNumber(leader.long, /Assists:\s*(\d+)/i),
+      appearances: readNumber(leader.long, /Matches:\s*(\d+)/i) || readNumber(leader.short, /\bM:\s*(\d+)/),
+    });
+    if (rows.length >= 20) break;
+  }
+  return rows.length ? rows : null;
+}
+
 export async function getTopScorers(code: string): Promise<{ rows: TopScorer[]; unavailable: boolean }> {
   const { env } = await import("cloudflare:workers");
   const runtime = env as unknown as Record<string, string | undefined>;
@@ -74,7 +134,13 @@ export async function getTopScorers(code: string): Promise<{ rows: TopScorer[]; 
   // when a page falls back to it on every miss.
   try {
     const { espnTopScorers } = await import("./espn");
-    const rows = await espnTopScorers(code);
+    let rows = await espnTopScorers(code);
+    // ESPN took the named list away on 6 September - eight addresses, seven
+    // of them 404 within the hour, one of them 200 an hour before that. What
+    // is left names nobody: fifty entries pointing at athlete documents.
+    // The names come from the league's own rosters instead, which are
+    // twenty requests once a day rather than fifty on every chart.
+    if (!rows?.length) rows = await scorersFromRosters(code, db);
     if (rows && rows.length) {
       if (db) {
         await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey, JSON.stringify(rows), Date.now()).run();

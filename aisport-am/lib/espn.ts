@@ -1335,3 +1335,74 @@ export async function sportsDbSquadPhotos(clubName: string): Promise<Record<stri
 }
 
 export const squadPhotoKey = photoKey;
+
+// ---------------------------------------------------------------------
+// The scoring chart, after ESPN took the named list away
+// ---------------------------------------------------------------------
+//
+// MEASURED on 6 September, from a GitHub runner, eight addresses:
+//
+//   /apis/site/v2/.../leaders          404   (200 with fifty names an hour earlier)
+//   /apis/site/v2/.../leaders?season   404
+//   /apis/v2/.../leaders               404
+//   /apis/common/v3/.../leaders        404
+//   /apis/common/v3/.../statistics     404
+//   cdn.espn.com/core/soccer/stats     404
+//   cdn.espn.com/core/soccer/scoreboard 200, no leaders in it
+//   sports.core.api.../leaders         200, fifty entries - athlete is a $ref
+//
+// So the only list left names nobody: each entry points at an athlete
+// document, and reading fifty of them is fifty requests inside one page
+// render, for one league, of seven.
+//
+// The names are already somewhere cheaper. A league's clubs are one
+// request and each club's roster is one more - twenty for a league, once a
+// day - and between them they name every footballer who can appear in that
+// league's chart. So the chart is one request plus a lookup, and the index
+// is what the caller caches.
+
+export type EspnAthleteIndex = Record<string, { name: string; team: string; teamKey: string | null; teamLogo: string | null; photo: string | null }>;
+
+export async function espnLeagueAthletes(slug: string): Promise<EspnAthleteIndex> {
+  const clubs = await espnTeams(slug);
+  const index: EspnAthleteIndex = {};
+  // Sequential in batches rather than twenty at once: a Worker has a ceiling
+  // on subrequests in flight, and this runs once a day behind a cache.
+  for (let start = 0; start < clubs.length; start += 5) {
+    const batch = clubs.slice(start, start + 5);
+    const rosters = await Promise.all(batch.map((club) => espnSquad(slug, club.id).catch(() => null)));
+    rosters.forEach((roster, offset) => {
+      const club = batch[offset];
+      for (const player of roster?.players ?? []) {
+        index[player.id] ??= {
+          name: player.name,
+          team: armenianTeamName(club.name),
+          teamKey: espnKey(club.id),
+          teamLogo: club.logo,
+          photo: player.photo,
+        };
+      }
+    });
+  }
+  return index;
+}
+
+// The core API writes the footballer as a link ending in their id.
+const athleteIdFromRef = (ref: string | undefined) => ref?.match(/athletes\/(\d+)/)?.[1] ?? null;
+
+export async function espnCoreLeaders(slug: string): Promise<{ id: string; long: string; short: string; value: number }[] | null> {
+  const year = new Date().getUTCMonth() + 1 >= 7 ? new Date().getUTCFullYear() : new Date().getUTCFullYear() - 1;
+  const data = await espnUrl<unknown>(
+    `https://sports.core.api.espn.com/v2/sports/soccer/leagues/${slug}/seasons/${year}/types/1/leaders?limit=50`,
+  );
+  const leaders = data ? findLeaders(data, /goal/i) : null;
+  if (!leaders?.length) return null;
+  return leaders
+    .map((entry) => ({
+      id: athleteIdFromRef((entry.athlete as { $ref?: string } | undefined)?.$ref) ?? "",
+      long: entry.displayValue ?? "",
+      short: entry.shortDisplayValue ?? "",
+      value: Number(entry.value ?? 0),
+    }))
+    .filter((entry) => entry.id);
+}
