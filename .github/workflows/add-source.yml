@@ -386,6 +386,32 @@ jobs:
           JS
           node probe.mjs
 
+      # Which league each passing desk belongs to, counted with the site's
+      # own beatOf rather than a copy of it: the whole point of the split is
+      # that the ranking and this summary agree on what a desk covers, and a
+      # second table would drift the first time one of them was edited.
+      - name: How many desks each league ended up with
+        if: ${{ github.event.inputs.livescore == 'no' && github.event.inputs.espn == 'no' }}
+        run: |
+          npm --prefix aisport-am ci --no-audit --no-fund >/dev/null 2>&1 || npm --prefix aisport-am install --no-audit --no-fund >/dev/null 2>&1
+          cat > beats.mts <<'TS'
+          import fs from "node:fs";
+          import { beatOf } from "./aisport-am/lib/story-ranking.ts";
+          const passing = JSON.parse(fs.readFileSync("passing.json", "utf8")) as { name: string; url: string }[];
+          const byBeat = new Map<string, string[]>();
+          for (const feed of passing) {
+            const beat = beatOf(feed.url);
+            byBeat.set(beat, [...(byBeat.get(beat) ?? []), feed.name]);
+          }
+          const order = ["England", "Spain", "Italy", "Germany", "France", "MLS", "Saudi", "Turkey", "Portugal"];
+          for (const beat of [...order, ...[...byBeat.keys()].filter((b) => !order.includes(b))]) {
+            const desks = byBeat.get(beat);
+            if (!desks) { console.log(`  ${beat.padEnd(9)} 0`); continue; }
+            console.log(`  ${beat.padEnd(9)} ${String(desks.length).padStart(2)}  ${desks.join(", ")}`);
+          }
+          TS
+          npx --prefix aisport-am tsx beats.mts || node --experimental-strip-types beats.mts
+
       - name: Write the passing feeds into D1
         if: ${{ github.event.inputs.apply == 'yes' && github.event.inputs.livescore != 'yes' && github.event.inputs.espn == 'no' }}
         run: |
