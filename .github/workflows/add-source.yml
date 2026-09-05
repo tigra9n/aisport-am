@@ -962,6 +962,61 @@ jobs:
           JS
           node ffa.mjs
 
+      # Types passing is not the same as a page working. The live board,
+      # the match page and the tables were all pointed at new providers in
+      # one change; this opens each of them on the deployed site and reports
+      # what a reader would actually see, because an empty block renders
+      # perfectly and compiles perfectly.
+      - name: Do the pages actually render
+        if: ${{ github.event.inputs.livescore != 'no' }}
+        run: |
+          cat > pages.mjs <<'JS'
+          const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+          const out = [];
+          const say = (l) => out.push(l);
+          const get = async (u) => {
+            try {
+              const r = await fetch(u, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(30000) });
+              return { status: r.status, html: await r.text() };
+            } catch (e) { return { status: 0, html: String(e) }; }
+          };
+          const count = (html, re) => (html.match(re) ?? []).length;
+
+          const live = await get("https://aifootball.am/live");
+          say(`=== /live -> HTTP ${live.status}, ${live.html.length} bytes ===`);
+          const espnIds = [...new Set([...live.html.matchAll(/\/live\/match\/(espn-[a-z0-9.]+-\d+)/g)].map((m) => m[1]))];
+          const sdbIds = [...new Set([...live.html.matchAll(/\/live\/match\/(sdb-\d+)/g)].map((m) => m[1]))];
+          const afIds = [...new Set([...live.html.matchAll(/\/live\/match\/(af-\d+)/g)].map((m) => m[1]))];
+          say(`  matches linked: ${espnIds.length} from ESPN, ${sdbIds.length} Armenian, ${afIds.length} still on the old provider`);
+          say(`  competitions named: ${[...new Set([...live.html.matchAll(/(Չեմպիոնների լիգա|Եվրոպա լիգա|Անգլիայի Պրեմիեր լիգա|Իսպանիայի Լա Լիգա|Իտալիայի Սերիա Ա|Գերմանիայի Բունդեսլիգա|Ֆրանսիայի Լիգա 1|MLS|Հայաստանի Պրեմիեր լիգա)/g)].map((m) => m[1]))].join(", ") || "none"}`);
+          if (/տվյալները հասանելի չեն|unavailable/i.test(live.html)) say("  !! the page is showing its unavailable state");
+
+          if (espnIds.length) {
+            const id = espnIds[0];
+            const m = await get(`https://aifootball.am/live/match/${id}`);
+            say("");
+            say(`=== /live/match/${id} -> HTTP ${m.status}, ${m.html.length} bytes ===`);
+            say(`  lineup blocks: ${count(m.html, /Կազմ|formation|Մեկնարկային/g)}`);
+            say(`  named players: ${count(m.html, /class="[^"]*lineup[^"]*"/g)}`);
+            say(`  statistics rows: ${count(m.html, /Տիրապետում|Հարվածներ|Դարպասի ուղղությամբ/g)}`);
+            say(`  events: ${count(m.html, /Գոլ|Դեղին|Կարմիր|Փոխարինում/g)}`);
+            for (const empty of ["Կազմերը հասանելի չեն", "Վիճակագրություն չկա", "տվյալ չկա"]) {
+              if (m.html.includes(empty)) say(`  !! page says: ${empty}`);
+            }
+          } else {
+            say("  !! no ESPN match to open - the board has no ESPN ids at all");
+          }
+
+          say("");
+          for (const code of ["PL", "PD", "ARM"]) {
+            const t = await get(`https://aifootball.am/standings?league=${code}`);
+            const rows = count(t.html, /<tr/g);
+            say(`  standings ${code}: HTTP ${t.status}, ${rows} table rows`);
+          }
+          console.log(out.join("\n"));
+          JS
+          node pages.mjs
+
       - name: Does ESPN answer the Worker itself
         if: ${{ github.event.inputs.livescore != 'no' }}
         env:
