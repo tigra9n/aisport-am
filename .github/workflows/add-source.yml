@@ -1438,8 +1438,12 @@ jobs:
             const V2 = "https://site.web.api.espn.com/apis/v2/sports/soccer";
             for (const url of [
               `${SITE}/${slug}/leaders`,
+              `${SITE}/${slug}/leaders?season=${YEAR}`,
               `${V2}/${slug}/leaders`,
+              `${COMMON}/${slug}/leaders`,
+              `${COMMON}/${slug}/statistics`,
               `https://cdn.espn.com/core/soccer/stats/_/league/${slug}?xhr=1`,
+              `https://cdn.espn.com/core/soccer/scoreboard?xhr=1&league=${slug}`,
               `https://sports.core.api.espn.com/v2/sports/soccer/leagues/${slug}/seasons/${YEAR}/types/1/leaders?limit=50`,
             ]) {
               const r = await get(url);
@@ -1454,7 +1458,13 @@ jobs:
               };
               const leaders = r.json ? find(r.json) : null;
               const one = leaders?.[0];
-              console.log(`  ${new URL(url).host}${new URL(url).pathname.slice(0, 40)}: HTTP ${r.status}, ${r.text.length}b, leaders ${leaders ? leaders.length : "none"}${one ? ` - ${one.athlete?.displayName ?? "?"} ${one.displayValue ?? one.value ?? ""}` : ""}`);
+              // Whether the footballer's name is in the response or behind
+              // a reference decides everything: the core API answers with
+              // fifty $ref links, and resolving them is fifty more requests
+              // inside one page render.
+              const who = one ? (one.athlete?.displayName ?? (one.athlete?.$ref ? "$ref only" : "?")) : "";
+              const path = new URL(url).pathname + new URL(url).search;
+              console.log(`  ${new URL(url).host}${path.slice(0, 46)}: HTTP ${r.status}, ${r.text.length}b, leaders ${leaders ? leaders.length : "none"}${one ? ` - ${who} | ${one.displayValue ?? one.value ?? ""}` : ""}`);
             }
             for (const url of []) {
               const r = await get(url);
