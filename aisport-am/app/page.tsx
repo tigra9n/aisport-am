@@ -115,7 +115,16 @@ export default async function Home() {
   // the newest articles, and the by-sport sections then took the newest of
   // each category, which for football is the same set. Ask for more than we
   // need and drop what has already appeared.
-  const alreadyShown = new Set([...heroArticles, ...headlineStream].map((item) => item.slug));
+  // Only the slider counts as "already shown". It was written to exclude the
+  // headline stream as well, and that stream has since grown into the whole
+  // river: nine items on top of the slider's six meant the section below
+  // began at the sixteenth-newest article, which on 6 September was six
+  // hours older than the newest - a section that looked frozen while the
+  // ticker beside it moved.
+  //
+  // A story appearing in the ticker and in a section under it is what every
+  // news front page does; a section stuck six hours back is not.
+  const alreadyShown = new Set(heroArticles.map((item) => item.slug));
   const sportSectionsData = await Promise.all(homepageSports.map(async (sport) => {
     if (sport.source === "opinions") {
       const rows = await getOpinions(8, sport.opinionCategory);
