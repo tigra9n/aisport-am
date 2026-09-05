@@ -46,7 +46,7 @@ test("names whose Armenian is a different word, not a different spelling", () =>
   assert.equal(armenianTeamName("Red Star Belgrade"), "Ցրվենա Զվեզդա");
   assert.equal(armenianTeamName("RB Salzburg"), "Զալցբուրգ");
   assert.equal(armenianTeamName("FC Cologne"), "Քյոլն");
-  assert.equal(armenianTeamName("Paris Saint-Germain"), "Փարի Սեն-Ժերմեն");
+  assert.equal(armenianTeamName("Paris Saint-Germain"), "ՊՍԺ");
   assert.equal(armenianTeamName("Internazionale"), "Ինտեր");
 });
 

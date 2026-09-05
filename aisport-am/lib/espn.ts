@@ -324,6 +324,35 @@ const PLAYER_STAT_LABEL: Record<string, string> = {
   ownGoals: "Ինքնագոլ",
 };
 
+// What ESPN calls each thing that happens in a match. It sends these in
+// English - "Goal", "Yellow Card", "Substitution" - and the page printed
+// them as they came, so an Armenian match centre listed its goals in
+// English. Keyed loosely, because ESPN writes the same event several ways
+// ("Penalty - Scored", "Goal - Penalty") depending on the competition.
+const EVENT_LABEL: [RegExp, string][] = [
+  [/own\s*goal/i, "Ինքնագոլ"],
+  [/penalty.*(scored|goal)|goal.*penalty/i, "Գոլ պենալտիից"],
+  [/penalty.*(missed|saved)/i, "Չխփած պենալտի"],
+  [/penalty/i, "Պենալտի"],
+  [/goal/i, "Գոլ"],
+  [/second\s*yellow|yellow\s*red/i, "Երկրորդ դեղին քարտ"],
+  [/yellow/i, "Դեղին քարտ"],
+  [/red\s*card/i, "Կարմիր քարտ"],
+  [/substitut/i, "Փոխարինում"],
+  [/var/i, "VAR"],
+  [/half\s*time|halftime/i, "Ընդմիջում"],
+  [/full\s*time|end\s*(of)?\s*(regular|match|game)?/i, "Խաղի ավարտ"],
+  [/kick\s*off|start/i, "Խաղի սկիզբ"],
+  [/corner/i, "Անկյունային"],
+  [/offside/i, "Խաղից դուրս"],
+  [/foul/i, "Խախտում"],
+];
+
+function eventLabel(text: string) {
+  for (const [pattern, hy] of EVENT_LABEL) if (pattern.test(text)) return hy;
+  return text;
+}
+
 export type EspnPlayerLine = {
   id: null;
   name: string;
@@ -387,7 +416,7 @@ export async function espnMatchDetail(eventId: string, leagueSlug: string): Prom
       team: armenianTeamName(e.team?.displayName ?? ""),
       player: e.athletesInvolved?.[0]?.displayName ?? "",
       assist: e.athletesInvolved?.[1]?.displayName ?? "",
-      label: e.type?.text ?? e.text ?? "",
+      label: eventLabel(e.type?.text ?? e.text ?? ""),
     })).filter((e) => e.label),
     lineups: (data.rosters ?? []).map((r) => ({
       team: armenianTeamName(r.team?.displayName ?? ""),

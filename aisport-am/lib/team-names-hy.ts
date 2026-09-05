@@ -199,7 +199,7 @@ Object.assign(teamNames, {
   cologne: "Քյոլն", "fc cologne": "Քյոլն", "1. fc cologne": "Քյոլն",
 
   // France
-  "paris saint-germain": "Փարի Սեն-Ժերմեն", psg: "Փարի Սեն-Ժերմեն",
+  "paris saint-germain": "ՊՍԺ", psg: "ՊՍԺ", "paris sg": "ՊՍԺ",
   "stade rennais": "Ռեն", rennes: "Ռեն", rennais: "Ռեն",
 
   // The Low Countries
