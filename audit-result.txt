@@ -1,0 +1,159 @@
+# Audit of https://aifootball.am
+# 2026-09-05 16:17 UTC, commit 63356d9
+
+=== sharing cards (Open Graph) ===
+  home (/?cachebust=1788624939460)
+    og:title       AIFootball — սպորտային լուրեր հայերեն
+    og:description Միջազգային ֆուտբոլի և հայկական սպորտի թարմ լուրերը՝ արագ և հ
+    og:image       https://wsrv.nl/?url=https%3A%2F%2Fimages.unsplash.com%2Fphoto-1522778 -> 200 image/jpeg 263KB
+    twitter:card   summary_large_image
+  article (/news/alvaro-gonsales-holandits-tarber-ronaldun-zgestaranum-23549514)
+    og:title       Գոնսալես. Ռոնալդուն զգեստարանում այլ մարդ է, քան խաղադաշտում
+    og:description «Ալ-Նասրի» նախկին պաշտպան Ալվարո Գոնսալեսը պատմել է Կրիշտիան
+    og:image       https://wsrv.nl/?url=https%3A%2F%2Fstaticg.sportskeeda.com%2Feditor%2F -> 200 image/jpeg 180KB
+    twitter:card   summary_large_image
+  league (/league/PL)
+    og:title       Պրեմիեր լիգա — Նորություններ
+    og:description Պրեմիեր լիգա-ի ամենաթարմ նորությունները, տրանսֆերները և վերլ
+    og:image       https://wsrv.nl/?url=https%3A%2F%2Fstaticg.sportskeeda.com%2Feditor%2F -> 200 image/jpeg 40KB
+    twitter:card   summary_large_image
+  opinion (/opinions/ararat-armenian-imatsav-ir-mrtsakitsnerin-evropayi-ligayi-1a2b3c)
+    og:title       Արարատ-Արմենիայի մրցակիցները Եվրոպա Լիգայի հիմնական փուլում
+    og:description Օգոստոսի 28-ին Մոնակոյում կայացած վիճակահանության արդյունքու
+    og:image       https://wsrv.nl/?url=https%3A%2F%2Fmedia.gettyimages.com%2Fid%2F229174 -> 200 image/jpeg 405KB
+    twitter:card   summary_large_image
+
+=== pages never audited (phone) ===
+  article (/news/alvaro-gonsales-holandits-tarber-ronaldun-zgestaranum-23549514): HTTP 200 | 4247px | text 2829 | img 1 (missing alt 0, decorative 0, broken 0)
+    ENGLISH PROSE ON AN ARMENIAN PAGE: September
+    latin names (expected): FOOTBALL, AIFootball, MARCA, OneFootball, Facebook, Telegram
+  standings (/standings): HTTP 200 | 2582px | text 1553 | img 20 (missing alt 0, decorative 20, broken 0)
+    latin names (expected): FOOTBALL, AIFootball, Live, Facebook
+  topscorers (/topscorers): HTTP 200 | 2651px | text 1638 | img 40 (missing alt 0, decorative 40, broken 0)
+    latin names (expected): FOOTBALL, AIFootball, Live, Facebook
+  armenia (/armenia): HTTP 200 | 1849px | text 817 | img 2 (missing alt 0, decorative 0, broken 0)
+    latin names (expected): FOOTBALL, AIFootball, Live, Facebook
+  opinions (/opinions): HTTP 200 | 1341px | text 769 | img 2 (missing alt 0, decorative 0, broken 0)
+    latin names (expected): FOOTBALL, AIFootball, Live, Facebook
+  opinion (/opinions/ararat-armenian-imatsav-ir-mrtsakitsnerin-evropayi-ligayi-1a2b3c): HTTP 200 | 2675px | text 1322 | img 1 (missing alt 0, decorative 0, broken 0)
+    latin names (expected): FOOTBALL, UEFA, Facebook, Telegram, AIFootball, Live
+  podcasts (/podcasts): HTTP 200 | 2279px | text 1255 | img 0 (missing alt 0, decorative 0, broken 0)
+    latin names (expected): FOOTBALL, AIFOOTBALL, AIFootball, Live, Facebook
+  live (/live): HTTP 200 | 10117px | text 6358 | img 280 (missing alt 0, decorative 280, broken 0)
+    latin names (expected): FOOTBALL, Live, Match, Center, LIVE, AIFootball
+  match (/live/match/af-1581516): HTTP 200 | 1170px | text 587 | img 2 (missing alt 0, decorative 2, broken 0)
+    latin names (expected): FOOTBALL, Vazgen, Sargsyan, Republican, Stadium, AIFootball
+  404 page (/this-page-does-not-exist-12345): HTTP 404 | 1227px | text 741 | img 0 (missing alt 0, decorative 0, broken 0)
+    latin names (expected): FOOTBALL, AIFootball, Live, Facebook
+
+=== search ===
+  "Ռեալ": 30 results
+  "Մխիթարյան": 1 results
+  "Բարսելոնա": 30 results
+  "լիգա": 30 results
+
+=== comments ===
+  form present | fields: author, body, website | button: Ուղարկել | comments shown: 0
+
+=== duplicate coverage on the home page ===
+  no near-duplicate headlines among 6 on the page
+
+=== the same story twice, across the last 24 hours ===
+  no repeated stories among the last 30 published
+
+=== light mode contrast ===
+  stylesheet /assets/index-DCM6TpdM.css: light-theme green present: yes
+  dark / home: everything readable
+  dark / article: everything readable
+  dark / live: everything readable
+  dark / search: everything readable
+  light / home: everything readable
+  light / standings: everything readable
+  light / article: everything readable
+  light / live: everything readable
+
+=== player names in Armenian ===
+  top scorers: 20 of 20 in Armenian
+  squad (Man City): 26 of 26 in Armenian
+  squad (Ararat-Armenia): 31 of 31 in Armenian
+  /player/1485: Բրունո Ֆերնանդեշ
+  /player/47323: Միկել Օյարսաբալ
+  /player/276: Նեյմար
+  /player/874: Կրիշտիանու Ռոնալդու
+
+=== clubs sharing a crest ===
+  156 clubs across 8 leagues, 156 distinct crests
+  every club wears its own
+
+=== is the live strip current ===
+  hero:  "Ալվարո Գոնսալես. Հոլանդից տարբեր, Ռոնալդուն "  [AIFootball խմբագրություն • 19:52 •]
+  feed:  "Ալվարո Գոնսալես. Հոլանդից տարբեր, Ռոնալդուն "
+  first five times in the feed: 19:52, 19:32, 18:28, 18:07, 17:47
+
+=== is the home page served from cache ===
+  plain  /            newest headline: "Ալվարո Գոնսալես. Հոլանդից տարբեր, Ռոնալդուն զգ"
+    cf-cache-status: none | age: none | cache-control: no-store, must-revalidate
+  /?cachebust=...     newest headline: "Ալվարո Գոնսալես. Հոլանդից տարբեր, Ռոնալդուն զգ"
+    cf-cache-status: none | age: none
+  same content: yes
+==============================================
+
+==============================================
+
+==============================================
+# Accessibility of https://aifootball.am
+# 2026-09-05 16:16 UTC, axe-core against WCAG 2.1 AA
+
+=== what axe finds ===
+  home        clean
+  article     clean
+  standings   clean
+  live        clean
+  search      clean
+  contact     clean
+
+=== using the site without a mouse ===
+  the first twelve stops:
+    1. a.skip-link                  "Անցնել բովանդակությանը"
+    2. a                            "Փոդքաստներ"
+    3. a                            "Խմբագրություն"
+    4. a.aisport-logo               "AIFootball գլխավոր էջ"
+    5. button.icon-button           "Որոնում"
+    6. button.icon-button           "Փոխել գունային ռեժիմը"
+    7. summary                      "Գլխավոր⌄"
+    8. summary                      "Լիգաներ⌄"
+    9. a.nav-plain-link             "Չեմպիոնների լիգա"
+   10. a.nav-plain-link             "Եվրոպա լիգա"
+   11. a.nav-plain-link             "Կոնֆերենցիա լիգա"
+   12. a.nav-plain-link             "Հայկական ֆուտբոլ"
+  0 of them cannot be named by a screen reader
+  0 of them show nothing when focused
+  skip link: yes
+
+=== the match modal, from the keyboard ===
+  opens: yes
+  focus moves into it: yes
+  role=dialog  aria-modal=true  labelled by=Խաղի մանրամասները
+  closes with Escape: yes
+
+=== the basics ===
+  lang="hy"  |  h1 count: 1  |  landmarks: header, nav, main, footer
+  heading levels skipped: 0
+
+=== the count ===
+  critical 0   serious 0   moderate 0   minor 0
+  nothing that stops someone using the site
+
+==============================================
+=== league 342, coverage ===
+  errors: {"requests":"You have reached the request limit for the day, Go to https://dashboard.api-football.com to upgrade your plan."}
+  the API knows no such league
+
+=== what it reports for 2026-09-05 ===
+  errors: {"requests":"You have reached the request limit for the day, Go to https://dashboard.api-football.com to upgrade your plan."}
+  no fixture today
+
+--- screenshots produced ---
+total 8
+drwxr-xr-x 2 runner runner 4096 Sep  5 16:15 .
+drwxr-xr-x 7 runner runner 4096 Sep  5 16:17 ..
