@@ -1429,7 +1429,34 @@ jobs:
           }
 
           if (want("scorers")) {
-            for (const url of [`${SITE}/${slug}/leaders`, `${COMMON}/${slug}/leaders`, `${SITE}/${slug}/statistics`]) {
+            // The four doors espn.ts now tries, in its order. Door one is
+            // known to answer a runner and known to be refused from
+            // Cloudflare; the other three have never been looked at at all,
+            // and a door that opens onto no scoring chart is no use whether
+            // it opens or not.
+            const YEAR = new Date().getUTCMonth() + 1 >= 7 ? new Date().getUTCFullYear() : new Date().getUTCFullYear() - 1;
+            const V2 = "https://site.web.api.espn.com/apis/v2/sports/soccer";
+            for (const url of [
+              `${SITE}/${slug}/leaders`,
+              `${V2}/${slug}/leaders`,
+              `https://cdn.espn.com/core/soccer/stats/_/league/${slug}?xhr=1`,
+              `https://sports.core.api.espn.com/v2/sports/soccer/leagues/${slug}/seasons/${YEAR}/types/1/leaders?limit=50`,
+            ]) {
+              const r = await get(url);
+              // Look for the list by what it holds, the way the site does.
+              const find = (v) => {
+                if (Array.isArray(v)) { for (const x of v) { const f = find(x); if (f) return f; } return null; }
+                if (v && typeof v === "object") {
+                  if (/goal/i.test(String(v.name ?? "")) && Array.isArray(v.leaders) && v.leaders.length) return v.leaders;
+                  for (const x of Object.values(v)) { const f = find(x); if (f) return f; }
+                }
+                return null;
+              };
+              const leaders = r.json ? find(r.json) : null;
+              const one = leaders?.[0];
+              console.log(`  ${new URL(url).host}${new URL(url).pathname.slice(0, 40)}: HTTP ${r.status}, ${r.text.length}b, leaders ${leaders ? leaders.length : "none"}${one ? ` - ${one.athlete?.displayName ?? "?"} ${one.displayValue ?? one.value ?? ""}` : ""}`);
+            }
+            for (const url of []) {
               const r = await get(url);
               head(url.replace(COMMON, "common").replace(SITE, "site"), r);
               if (r.json) shape(r.json);
