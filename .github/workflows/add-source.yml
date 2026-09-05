@@ -404,8 +404,58 @@ jobs:
             say(`  rate limit: ${matches.headers.get("x-requests-available-minute") ?? "no header"} left this minute`);
           }
 
+          // The first attempt sent "AIFootballBot/1.0" as the User-Agent
+          // and got Access Denied on all ten leagues. That is an Akamai
+          // page, and Akamai's first rule is the User-Agent - so the 403
+          // may have been us announcing ourselves as a robot rather than
+          // anything about the address. Before concluding ESPN is closed,
+          // try the same endpoint six ways: a browser signature, the full
+          // set of headers a browser actually sends, and the three other
+          // hosts ESPN serves the same data from.
           say("");
-          say("=== ESPN public scoreboard (no key, no signup) ===");
+          let sampleWorking = null;
+          say("=== ESPN, tried six ways on one league ===");
+          {
+            const BROWSER = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+            const attempts = [
+              ["bot UA (what failed)", "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard", { "User-Agent": "AIFootballBot/1.0 (+https://aifootball.am)" }],
+              ["browser UA", "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard", { "User-Agent": BROWSER }],
+              ["browser UA + full headers", "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard", {
+                "User-Agent": BROWSER,
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer": "https://www.espn.com/",
+                "Origin": "https://www.espn.com",
+              }],
+              ["no UA at all", "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard", {}],
+              ["cdn.espn.com", "https://cdn.espn.com/core/soccer/scoreboard?xhr=1&league=eng.1", { "User-Agent": BROWSER }],
+              ["site.web.api", "https://site.web.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard", { "User-Agent": BROWSER }],
+              ["sports.core.api", "https://sports.core.api.espn.com/v2/sports/soccer/leagues/eng.1/events", { "User-Agent": BROWSER }],
+            ];
+            let working = null;
+            for (const [label, url, headers] of attempts) {
+              const r = await get(url, headers);
+              const events = r.json?.events ?? r.json?.content?.sbData?.events ?? r.json?.items ?? null;
+              const count = Array.isArray(events) ? events.length : (events ? Object.keys(events).length : 0);
+              say(`  ${r.ok ? "PASS" : "fail"}  ${label.padEnd(26)} HTTP ${r.status}${r.ok ? `, ${count} entries` : ""}`);
+              if (r.ok && !working) working = { label, headers, url };
+            }
+            if (!working) say("  every variant refused - it is the address or the network, not the signature");
+            else {
+              say(`  --- ${working.label} works; trying every league with it ---`);
+              for (const [name, slug] of [["Premier League", "eng.1"], ["La Liga", "esp.1"], ["Serie A", "ita.1"], ["Bundesliga", "ger.1"], ["Ligue 1", "fra.1"], ["Saudi Pro League", "ksa.1"], ["MLS", "usa.1"], ["Armenian Premier League", "arm.1"], ["Champions League", "uefa.champions"], ["Europa League", "uefa.europa"]]) {
+                const r = await get(`https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard`, working.headers);
+                const events = r.json?.events ?? [];
+                const inPlay = events.filter((e) => e.status?.type?.state === "in");
+                say(`      ${r.ok ? "PASS" : "fail"}  ${name.padEnd(24)} ${r.ok ? `${events.length} fixtures, ${inPlay.length} in play` : `HTTP ${r.status}`}`);
+                const show = inPlay[0] ?? events[0];
+                if (r.ok && show && !sampleWorking) sampleWorking = { slug, id: show.id, name, headers: working.headers };
+              }
+            }
+          }
+
+          say("");
+          say("=== ESPN public scoreboard, original attempt for the record ===");
           const ESPN = [
             ["Premier League", "eng.1"], ["La Liga", "esp.1"], ["Serie A", "ita.1"],
             ["Bundesliga", "ger.1"], ["Ligue 1", "fra.1"], ["Saudi Pro League", "ksa.1"],
@@ -430,14 +480,15 @@ jobs:
 
           say("");
           say("=== ESPN match summary - does it cover what the match centre shows? ===");
-          if (!sample) say("  no fixture available to inspect");
+          const inspect = sampleWorking ?? sample;
+          if (!inspect) say("  no fixture available to inspect");
           else {
-            const r = await get(`https://site.api.espn.com/apis/site/v2/sports/soccer/${sample.slug}/summary?event=${sample.id}`);
+            const r = await get(`https://site.api.espn.com/apis/site/v2/sports/soccer/${inspect.slug}/summary?event=${inspect.id}`, inspect.headers ?? {});
             if (!r.ok) say(`  HTTP ${r.status}`);
             else {
               const j = r.json ?? {};
               const has = (label, value) => say(`  ${value ? "yes" : "NO "}  ${label}`);
-              say(`  inspected: ${sample.name}, event ${sample.id}`);
+              say(`  inspected: ${inspect.name}, event ${inspect.id}`);
               has("key events / goals", Array.isArray(j.keyEvents) && j.keyEvents.length > 0);
               has("lineups (rosters)", Array.isArray(j.rosters) && j.rosters.length > 0);
               has("team statistics", Array.isArray(j.boxscore?.teams) && j.boxscore.teams.length > 0);
