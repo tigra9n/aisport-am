@@ -750,6 +750,29 @@ jobs:
           JS
           node livescore.mjs
 
+      # The one measurement that decides everything, and the only one a
+      # runner cannot make: whether ESPN answers from where the site
+      # actually runs. /api/diag/espn asks from inside the Worker, with the
+      # signature that worked here, and reports what comes back. Until the
+      # route is deployed this prints 404, which is itself the answer to
+      # "has it shipped yet".
+      - name: Does ESPN answer the Worker itself
+        if: ${{ github.event.inputs.livescore == 'yes' }}
+        env:
+          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
+        run: |
+          echo "=== asking from inside the Cloudflare Worker ==="
+          curl -s --max-time 60 "https://aisport.am/api/diag/espn?token=${CRON_TOKEN}" \
+            | node -e "
+              let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
+                let j; try{ j=JSON.parse(d) }catch{ console.log('  not json: '+d.slice(0,200)); return }
+                if (j.error) { console.log('  '+j.error+' - is the route deployed?'); return }
+                console.log('  colo: '+(j.colo??'?')+'  VERDICT: '+j.verdict);
+                for (const r of j.results ?? []) {
+                  console.log('    '+String(r.label).padEnd(24)+' HTTP '+r.status+'  '+r.ms+'ms'+(r.events!==null?('  '+r.events+' fixtures'):'')+(r.body?('  '+r.body.replace(/\\s+/g,' ').slice(0,70)):''));
+                }
+              })"
+
       - name: What the sources table holds now
         if: ${{ github.event.inputs.livescore != 'yes' }}
         run: |
