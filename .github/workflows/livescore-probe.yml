@@ -1,0 +1,161 @@
+name: Free livescore probe
+
+# API-Football is the last paid thing on the site. The match centre is what
+# it pays for: one call for the live list, and eight to ten per match for
+# the detail page. Before any of that is rewritten, measure what the free
+# alternatives actually return - especially for the Armenian Premier
+# League, which most of them do not carry at all.
+#
+# Nothing here is decided from documentation. Every claim below is meant to
+# be replaced by what the endpoint really answers.
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: What the free APIs really return
+        env:
+          FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+        run: |
+          cat > probe.mjs <<'JS'
+          const out = [];
+          const say = (line) => { out.push(line); };
+
+          async function get(url, headers = {}) {
+            try {
+              const res = await fetch(url, { headers: { "User-Agent": "AIFootballBot/1.0 (+https://aifootball.am)", ...headers }, signal: AbortSignal.timeout(20000) });
+              const text = await res.text();
+              let json = null;
+              try { json = JSON.parse(text); } catch { /* not json */ }
+              return { ok: res.ok, status: res.status, json, text, headers: res.headers };
+            } catch (err) {
+              return { ok: false, status: 0, json: null, text: String(err), headers: new Headers() };
+            }
+          }
+
+          // ---------------------------------------------------------------
+          // 1. What we pay for today, so the comparison has a baseline.
+          // ---------------------------------------------------------------
+          say("=== API-Football, the paid one, for comparison ===");
+          {
+            const s = await get("https://v3.football.api-sports.io/status", { "x-apisports-key": process.env.API_FOOTBALL_KEY ?? "" });
+            const r = s.json?.response ?? {};
+            say(`  plan ${r.subscription?.plan ?? "?"} | today ${r.requests?.current ?? "?"} of ${r.requests?.limit_day ?? "?"}`);
+          }
+
+          // ---------------------------------------------------------------
+          // 2. football-data.org. The token is already a worker secret, so
+          //    an account exists; what matters is which competitions the
+          //    free tier actually unlocks and whether a match in progress
+          //    carries a live score.
+          // ---------------------------------------------------------------
+          say("");
+          say("=== football-data.org (token already held) ===");
+          {
+            const token = process.env.FOOTBALL_DATA_TOKEN ?? "";
+            const comps = await get("https://api.football-data.org/v4/competitions", { "X-Auth-Token": token });
+            if (!comps.ok) say(`  competitions: HTTP ${comps.status} ${comps.text.slice(0, 120)}`);
+            else {
+              const list = comps.json?.competitions ?? [];
+              say(`  ${list.length} competitions on this tier:`);
+              for (const c of list) say(`      ${String(c.code).padEnd(6)} ${c.name} (${c.area?.name})`);
+              say(`  Armenia present: ${list.some((c) => /armenia/i.test(c.area?.name ?? "")) ? "YES" : "NO"}`);
+            }
+            const today = new Date().toISOString().slice(0, 10);
+            const matches = await get(`https://api.football-data.org/v4/matches?date=${today}`, { "X-Auth-Token": token });
+            if (!matches.ok) say(`  today's matches: HTTP ${matches.status} ${matches.text.slice(0, 160)}`);
+            else {
+              const ms = matches.json?.matches ?? [];
+              const live = ms.filter((m) => ["IN_PLAY", "PAUSED"].includes(m.status));
+              say(`  ${ms.length} matches today, ${live.length} in play`);
+              for (const m of ms.slice(0, 3)) {
+                say(`      ${m.status.padEnd(9)} ${m.homeTeam?.shortName ?? m.homeTeam?.name} ${m.score?.fullTime?.home ?? "-"}:${m.score?.fullTime?.away ?? "-"} ${m.awayTeam?.shortName ?? m.awayTeam?.name}  (minute: ${m.minute ?? "not given"})`);
+              }
+            }
+            const limit = matches.headers.get("x-requests-available-minute");
+            say(`  rate limit header: ${limit ?? "none reported"} requests left this minute`);
+          }
+
+          // ---------------------------------------------------------------
+          // 3. ESPN's public scoreboard. No key, no signup, and it is what
+          //    a great many sites use. Undocumented, which is the risk.
+          // ---------------------------------------------------------------
+          say("");
+          say("=== ESPN public scoreboard (no key) ===");
+          const ESPN = [
+            ["Premier League", "eng.1"], ["La Liga", "esp.1"], ["Serie A", "ita.1"],
+            ["Bundesliga", "ger.1"], ["Ligue 1", "fra.1"], ["Saudi Pro League", "ksa.1"],
+            ["MLS", "usa.1"], ["Armenian Premier League", "arm.1"],
+            ["Champions League", "uefa.champions"], ["Europa League", "uefa.europa"],
+          ];
+          let sampleEvent = null;
+          for (const [name, slug] of ESPN) {
+            const r = await get(`https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard`);
+            if (!r.ok) { say(`  fail  ${name.padEnd(24)} HTTP ${r.status}`); continue; }
+            const events = r.json?.events ?? [];
+            const inPlay = events.filter((e) => e.status?.type?.state === "in");
+            say(`  PASS  ${name.padEnd(24)} ${events.length} fixtures, ${inPlay.length} in play`);
+            const show = inPlay[0] ?? events[0];
+            if (show) {
+              const c = show.competitions?.[0];
+              const [a, b] = c?.competitors ?? [];
+              say(`          ${show.status?.type?.detail ?? "?"} | ${a?.team?.displayName} ${a?.score ?? "-"}:${b?.score ?? "-"} ${b?.team?.displayName} | minute ${show.status?.displayClock ?? "?"}`);
+              if (!sampleEvent) sampleEvent = { slug, id: show.id, name };
+            }
+          }
+
+          // ---------------------------------------------------------------
+          // 4. The match centre needs more than a score: events, lineups,
+          //    statistics, head to head. Does ESPN's summary carry them?
+          // ---------------------------------------------------------------
+          say("");
+          say("=== ESPN match summary - does it cover what the match centre shows? ===");
+          if (!sampleEvent) say("  no fixture available to inspect");
+          else {
+            const r = await get(`https://site.api.espn.com/apis/site/v2/sports/soccer/${sampleEvent.slug}/summary?event=${sampleEvent.id}`);
+            if (!r.ok) say(`  HTTP ${r.status}`);
+            else {
+              const j = r.json ?? {};
+              const has = (label, value) => say(`  ${value ? "yes" : "NO "}  ${label}`);
+              say(`  inspected: ${sampleEvent.name}, event ${sampleEvent.id}`);
+              has("key events / goals", Array.isArray(j.keyEvents) && j.keyEvents.length > 0);
+              has("lineups (rosters)", Array.isArray(j.rosters) && j.rosters.length > 0);
+              has("team statistics", Array.isArray(j.boxscore?.teams) && j.boxscore.teams.length > 0);
+              has("player statistics", Array.isArray(j.boxscore?.players) && j.boxscore.players.length > 0);
+              has("head to head", Boolean(j.headToHeadGames));
+              has("standings alongside", Boolean(j.standings));
+              has("commentary", Array.isArray(j.commentary) && j.commentary.length > 0);
+              say(`  top-level keys: ${Object.keys(j).join(", ").slice(0, 220)}`);
+            }
+          }
+
+          // ---------------------------------------------------------------
+          // 5. TheSportsDB's free key, which is what its documentation
+          //    hands out. Worth one look before it is dismissed.
+          // ---------------------------------------------------------------
+          say("");
+          say("=== TheSportsDB (free test key) ===");
+          {
+            const r = await get("https://www.thesportsdb.com/api/v1/json/3/latestsoccer.php");
+            if (!r.ok) say(`  livescore: HTTP ${r.status} ${r.text.slice(0, 120)}`);
+            else {
+              const teams = r.json?.teams ?? r.json?.events ?? null;
+              say(`  livescore answered; payload keys: ${Object.keys(r.json ?? {}).join(", ").slice(0, 120)}`);
+              say(`  usable rows: ${teams ? (Array.isArray(teams) ? teams.length : Object.keys(teams).length) : 0}`);
+            }
+            const arm = await get("https://www.thesportsdb.com/api/v1/json/3/search_all_leagues.php?c=Armenia&s=Soccer");
+            const leagues = arm.json?.countries ?? [];
+            say(`  Armenian leagues listed: ${Array.isArray(leagues) ? leagues.length : 0}`);
+          }
+
+          console.log(out.join("\n"));
+          JS
+          node probe.mjs
