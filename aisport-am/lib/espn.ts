@@ -65,8 +65,23 @@ type EspnEvent = {
 };
 
 export async function espnJson<T>(path: string): Promise<T | null> {
+  return espnUrl<T>(`${HOST}${path}`);
+}
+
+// ESPN does not keep everything under one root. The scoreboard, the teams
+// and a match summary are under /apis/site/v2/sports/soccer; the league
+// tables are under /apis/v2/sports/soccer. Asking the first for a table
+// returns HTTP 200 with an empty body - not an error, not a table - which
+// is why espnStandings quietly returned nothing from the day it was
+// written and every league page on this site was still being served by the
+// paid provider without anyone noticing. It went unnoticed until that
+// provider's free plan ran out of requests mid-evening and the Saudi and
+// MLS tables went blank.
+const STANDINGS_HOST = "https://site.web.api.espn.com/apis/v2/sports/soccer";
+
+export async function espnUrl<T>(url: string): Promise<T | null> {
   try {
-    const res = await fetch(`${HOST}${path}`, {
+    const res = await fetch(url, {
       headers: { "User-Agent": BROWSER_UA, Accept: "application/json" },
       signal: AbortSignal.timeout(12_000),
     });
@@ -188,8 +203,8 @@ type EspnStandingEntry = {
 export async function espnStandings(code: string): Promise<import("./football").StandingRow[] | null> {
   const slug = ESPN_SLUG_BY_CODE[code];
   if (!slug) return null;
-  const data = await espnJson<{ children?: { standings?: { entries?: EspnStandingEntry[] } }[]; standings?: { entries?: EspnStandingEntry[] } }>(
-    `/${slug}/standings`,
+  const data = await espnUrl<{ children?: { standings?: { entries?: EspnStandingEntry[] } }[]; standings?: { entries?: EspnStandingEntry[] } }>(
+    `${STANDINGS_HOST}/${slug}/standings`,
   );
   // A single-table league puts its entries at the top level; one with
   // groups or conferences puts them under children. MLS is the reason this
