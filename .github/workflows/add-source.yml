@@ -107,8 +107,34 @@ jobs:
             ["Irish Mirror Football", "https://www.irishmirror.ie/sport/soccer/?service=rss"],
 
             // European desks that publish in English.
+            // Volume is not the gap - twenty-nine feeds carry about a
+            // thousand items at any moment against a need of seventeen a
+            // day. Coverage is. The Bundesliga, Ligue 1, the Primeira Liga
+            // and the Eredivisie reach the site only when an English desk
+            // decides to write about them, because the two dedicated feeds
+            // for France and Germany answered 403 and a network error.
+            // These are the alternatives worth trying.
             ["Get French Football News", "https://www.getfootballnewsfrance.com/feed/"],
             ["Get German Football News", "https://www.getgermanfootballnews.com/feed/"],
+            ["Get Football News France (alt)", "https://getfootballnewsfrance.com/feed/"],
+            ["Get German Football News (alt)", "https://getgermanfootballnews.com/feed/"],
+            ["Bundesliga.com News", "https://www.bundesliga.com/en/bundesliga/news/rss"],
+            ["Ligue 1 English", "https://www.ligue1.com/rss/news"],
+            ["Bulinews", "https://www.bulinews.com/feed"],
+            ["Get Italian Football News", "https://www.football-italia.net/feed"],
+            ["Portugoal", "https://www.portugoal.net/index.php?format=feed&type=rss"],
+            ["Football Oranje", "https://www.football-oranje.com/feed/"],
+            ["Turkish Football", "https://turkish-football.com/feed/"],
+            ["Futbol Grad (Russia/CIS)", "https://futbolgrad.com/feed/"],
+            ["Total Football Analysis", "https://totalfootballanalysis.com/feed"],
+            ["These Football Times", "https://thesefootballtimes.co/feed/"],
+            ["Football Ground Map", "https://www.footballgroundmap.com/feed"],
+            ["ESPN FC", "https://www.espn.com/espn/rss/soccer/news?device=featurephone"],
+            ["Goal.com (alt)", "https://www.goal.com/feeds/news?fmt=rss"],
+            ["Football365 (alt)", "https://www.football365.com/rss"],
+            ["TEAMtalk (alt)", "https://www.teamtalk.com/rss"],
+            ["SB Nation Soccer (rss)", "https://www.sbnation.com/rss/current"],
+            ["Yahoo Football (alt)", "https://sports.yahoo.com/soccer/rss/"],
             ["Football Italia (Serie A)", "https://www.football-italia.net/rss.xml"],
             ["Barca Universal", "https://barcauniversal.com/feed/"],
             ["Madrid Universal", "https://madriduniversal.com/feed/"],
