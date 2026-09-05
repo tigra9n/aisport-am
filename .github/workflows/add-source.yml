@@ -119,9 +119,17 @@ jobs:
               const newest = items.map((i) => Date.parse(i.pubDate ?? "")).filter((n) => !Number.isNaN(n)).sort((a, b) => b - a)[0];
               const ageH = newest ? ((Date.now() - newest) / 3600000).toFixed(1) : null;
               const withImage = items.filter((i) => i.image).length;
+              // 90min answers with ninety well-formed items whose newest is
+              // eleven months old, and Marca's English feed with four
+              // months. Both would have had the site publishing last season
+              // as today's news. A feed that carries no dates at all (Sky
+              // Sports) is still accepted - fetchFeed keeps undated items
+              // for the same reason.
+              const stale = ageH !== null && Number(ageH) > 48;
+              const ok = items.length >= 5 && !stale;
               return {
-                name, url, ok: items.length >= 5, ms,
-                why: items.length >= 5 ? "" : `only ${items.length} usable item(s)`,
+                name, url, ok, ms,
+                why: stale ? `stale - newest item is ${(Number(ageH) / 24).toFixed(0)} days old` : items.length >= 5 ? "" : `only ${items.length} usable item(s)`,
                 items: items.length, withImage, ageH,
                 sample: items.slice(0, 2).map((i) => i.title.slice(0, 70)),
               };

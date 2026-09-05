@@ -70,6 +70,26 @@ function extractImage(block: string): string | null {
   return imgTag ? imgTag[1] : null;
 }
 
+// A feed is not necessarily a feed of news. Probing twenty-two football
+// feeds turned up two - 90min and Marca's English edition - that answer
+// perfectly well and hand back items eleven months and four months old at
+// the top of the list. The APITube path has always had a date floor
+// (published_at.start, see recentSinceParam below); the RSS path had none,
+// so a feed that quietly went stale would have had the site reporting last
+// season as today's news, with nothing in the logs to say so.
+//
+// Items carrying no date at all are kept: Sky Sports' feed has no pubDate
+// and is refreshed constantly, and throwing it away would cost a good
+// source to guard against a bad one.
+const MAX_ITEM_AGE_MS = 3 * 24 * 60 * 60 * 1000;
+
+function isRecent(item: FeedItem): boolean {
+  if (!item.pubDate) return true;
+  const at = Date.parse(item.pubDate);
+  if (Number.isNaN(at)) return true;
+  return Date.now() - at < MAX_ITEM_AGE_MS;
+}
+
 export async function fetchFeed(feedUrl: string, limit = 10): Promise<FeedItem[]> {
   // Special-cased: URLs pointing at our own /api/feeds/apitube bridge are
   // fetched directly against api.apitube.io instead of self-fetching our
@@ -94,7 +114,7 @@ export async function fetchFeed(feedUrl: string, limit = 10): Promise<FeedItem[]
       snippet: (extractTag(block, "description") ?? extractTag(block, "summary") ?? "").slice(0, 500),
       imageUrl: extractImage(block),
       pubDate: extractTag(block, "pubDate"),
-    })).filter((item) => item.title && item.link);
+    })).filter((item) => item.title && item.link).filter(isRecent);
   } catch (err) {
     console.error(`[feeds] fetch failed for ${feedUrl}: ${String(err)}`);
     return [];
