@@ -1657,8 +1657,12 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      # Seventy-one rows is seventy-one lines, printed after every probe and
+      # burying whatever ran before it. Behind 'all' with the other settled
+      # listings; what changes day to day is what the site published, not
+      # which feeds are configured.
       - name: What the sources table holds now
-        if: ${{ github.event.inputs.livescore == 'no' && github.event.inputs.espn == 'no' }}
+        if: ${{ github.event.inputs.livescore == 'all' && github.event.inputs.espn == 'no' }}
         run: |
           npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
           npx wrangler d1 execute aisport-db --remote --json --command \
