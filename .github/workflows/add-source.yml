@@ -454,6 +454,78 @@ jobs:
             }
           }
 
+          // Three things the first pass could not settle.
+          //
+          // The Armenian league answered 400, not 403: a bad request, not a
+          // closed door, which means the slug is wrong rather than the
+          // league missing. Ask ESPN for its own list of soccer leagues and
+          // look for Armenia in it.
+          //
+          // Standings answered 403 because that call was made without the
+          // browser signature the scoreboard needed - my omission, not
+          // ESPN's rule.
+          //
+          // And the summary was inspected on a fixture that had not kicked
+          // off, so "no player statistics" may only mean "not played yet".
+          // Inspect one that is actually in play.
+          say("");
+          say("=== The three things the first pass could not settle ===");
+          {
+            const BROWSER = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+            const H = { "User-Agent": BROWSER };
+
+            const leagues = await get("https://sports.core.api.espn.com/v2/sports/soccer/leagues?limit=400", H);
+            const items = leagues.json?.items ?? [];
+            say(`  ESPN lists ${items.length} soccer leagues (HTTP ${leagues.status})`);
+            // The list is references, so resolve only enough of them to
+            // find Armenia rather than fetching four hundred.
+            let armenian = [];
+            for (const ref of items.slice(0, 400)) {
+              const url = typeof ref === "string" ? ref : ref?.$ref;
+              if (!url) continue;
+              if (!/arm/i.test(url)) continue;
+              armenian.push(url.replace(/^https?:\/\/[^/]+/, "").split("?")[0]);
+            }
+            say(`  league paths containing "arm": ${armenian.length ? armenian.join(", ").slice(0, 300) : "none"}`);
+            for (const slug of ["arm.1", "arm.premier", "arm.premier_league", "armenia.1", "arm.bardzragujn"]) {
+              const r = await get(`https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard`, H);
+              say(`      ${slug.padEnd(22)} HTTP ${r.status}${r.ok ? `, ${(r.json?.events ?? []).length} fixtures` : ""}`);
+            }
+
+            const st = await get("https://site.api.espn.com/apis/v2/sports/soccer/eng.1/standings", H);
+            say(`  Premier League standings with a browser signature: HTTP ${st.status}${st.ok ? `, ${st.json?.children?.[0]?.standings?.entries?.length ?? 0} teams` : ""}`);
+            const sc = await get("https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/leaders", H);
+            say(`  Premier League scorers: HTTP ${sc.status}`);
+
+            // A match that is actually being played, so the empty fields
+            // are ESPN's answer rather than the fixture's.
+            let live = null;
+            for (const slug of ["esp.1", "eng.1", "ita.1", "ger.1", "fra.1", "usa.1", "uefa.champions"]) {
+              const r = await get(`https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard`, H);
+              const running = (r.json?.events ?? []).find((e) => e.status?.type?.state === "in")
+                ?? (r.json?.events ?? []).find((e) => e.status?.type?.completed);
+              if (running) { live = { slug, id: running.id, name: running.name, state: running.status?.type?.state }; break; }
+            }
+            if (!live) say("  no match in play or completed to inspect");
+            else {
+              const r = await get(`https://site.api.espn.com/apis/site/v2/sports/soccer/${live.slug}/summary?event=${live.id}`, H);
+              const j = r.json ?? {};
+              const has = (label, value) => say(`  ${value ? "yes" : "NO "}  ${label}`);
+              say(`  inspected a ${live.state === "in" ? "LIVE" : "completed"} match: ${live.name}`);
+              has("key events / goals", Array.isArray(j.keyEvents) && j.keyEvents.length > 0);
+              has("lineups (rosters)", Array.isArray(j.rosters) && j.rosters.length > 0);
+              has("named starters in a roster", Array.isArray(j.rosters?.[0]?.roster) && j.rosters[0].roster.length > 0);
+              has("formation", Boolean(j.rosters?.[0]?.formation));
+              has("team statistics", Array.isArray(j.boxscore?.teams) && j.boxscore.teams.length > 0);
+              has("player statistics", Array.isArray(j.boxscore?.players) && j.boxscore.players.length > 0);
+              has("commentary", Array.isArray(j.commentary) && j.commentary.length > 0);
+              has("previous meetings (seasonseries)", Array.isArray(j.seasonseries) && j.seasonseries.length > 0);
+              has("last five games", Boolean(j.lastFiveGames));
+              const stat = j.boxscore?.teams?.[0]?.statistics?.slice(0, 6) ?? [];
+              say(`  team statistics offered: ${stat.map((x) => x.name ?? x.label).join(", ").slice(0, 200)}`);
+            }
+          }
+
           say("");
           say("=== ESPN public scoreboard, original attempt for the record ===");
           const ESPN = [
