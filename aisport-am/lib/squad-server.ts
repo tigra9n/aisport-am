@@ -6,7 +6,10 @@ import { armenianTeamName } from "./team-names-hy";
 // key is ESPN's id under an "espn-" prefix; id stays API-Football's number
 // so the squads still in the cache from before the move keep working. The
 // card links to whichever it has.
-export type SquadPlayer = { id: number; key?: string | null; name: string; number: number | null; position: string; age: number | null; photo: string | null };
+// latin is the provider's own spelling, kept only so the photograph source
+// can be matched on it. The card renders name, which is Armenian, and an
+// Armenian name has no letters in common with "Gabriel Magalhaes".
+export type SquadPlayer = { id: number; key?: string | null; name: string; latin?: string; number: number | null; position: string; age: number | null; photo: string | null };
 export type Squad = { teamName: string; teamLogo: string | null; players: SquadPlayer[] };
 
 const POSITION_LABEL: Record<string, string> = {
@@ -112,6 +115,20 @@ async function clubPhotos(db: D1Database | undefined, espnId: string, clubName: 
   } catch {
     return {};
   }
+}
+
+
+// Faces on a squad, from TheSportsDB, applied at read time rather than
+// stored with it. Players ESPN already has a headshot for keep it.
+async function withFaces(squad: Squad, db: D1Database | undefined, espnId: string, clubName: string): Promise<Squad> {
+  const missing = squad.players.filter((p) => !p.photo).length;
+  if (missing <= squad.players.length / 3) return squad;
+  const photos = await clubPhotos(db, espnId, clubName);
+  if (!Object.keys(photos).length) return squad;
+  return {
+    ...squad,
+    players: squad.players.map((p) => ({ ...p, photo: p.photo ?? photos[photoKeyOf(p.latin ?? "")] ?? null })),
+  };
 }
 
 export function positionLabel(position: string) {
@@ -263,7 +280,12 @@ export async function getSquad(teamId: number | string): Promise<Squad | null> {
   const key = runtime.API_FOOTBALL_KEY;
 
   const db = (env as unknown as { DB?: D1Database }).DB;
-  const cacheKey = `apifootball:v4:squad:${teamId}`;
+  // v5 on 6 September: the row now carries the provider's own spelling of a
+// player's name beside the Armenian one, because the photograph source is
+// matched on letters and an Armenian name has none in common with
+// "Gabriel Magalhaes". A v4 row has no such field, so it can never be
+// given a face.
+  const cacheKey = `apifootball:v5:squad:${teamId}`;
 
   if (db) {
     await ensureCacheTable(db);
@@ -271,7 +293,16 @@ export async function getSquad(teamId: number | string): Promise<Squad | null> {
     if (row?.savedAt && Date.now() - row.savedAt < 24 * 60 * 60 * 1000) {
       try {
         const squad = JSON.parse(row.payload) as Squad;
-        if (squad.players.length) return squad;
+        // A cached squad still asks for the faces, because the squad and the
+        // faces are cached apart and on different clocks: a day for the
+        // squad, a month for the photographs, and the photographs may have
+        // arrived since - or been refused when the squad was stored.
+        if (squad.players.length) {
+          const espnKeyed = typeof teamId === "string" && teamId.startsWith("espn-") ? teamId.slice(5) : null;
+          if (!espnKeyed) return squad;
+          const club = (await teamIndex(db))[espnKeyed];
+          return withFaces(squad, db, espnKeyed, club?.name ?? "");
+        }
       } catch { /* refetch */ }
     }
   }
@@ -287,13 +318,6 @@ export async function getSquad(teamId: number | string): Promise<Squad | null> {
       if (team) {
         const fetched = await espnSquad(team.slug, espnId);
         if (fetched?.players.length) {
-          // ESPN names a headshot for two of Arsenal's twenty-four, and the
-          // rest do not exist - the file 404s. So where it has none, ask
-          // TheSportsDB, which answers per club rather than per player: one
-          // request, a whole squad, free. Only when it is actually needed,
-          // and cached with the squad for the day.
-          const missing = fetched.players.filter((p) => !p.photo).length;
-          const photos = missing > fetched.players.length / 3 ? await clubPhotos(db, espnId, team.name) : {};
           const squad: Squad = {
             teamName: fetched.teamName,
             teamLogo: fetched.teamLogo,
@@ -301,16 +325,23 @@ export async function getSquad(teamId: number | string): Promise<Squad | null> {
               id: Number(p.id),
               key: `espn-${p.id}`,
               name: armenianPlayerName(p.name),
+              latin: p.name,
               number: p.number,
               position: p.position,
               age: p.age,
-              photo: p.photo ?? photos[photoKeyOf(p.name)] ?? null,
+              photo: p.photo,
             })),
           };
+          // The squad is cached as ESPN gives it, faces and all. The faces
+          // are added after, never before: TheSportsDB rate-limits
+          // Cloudflare's addresses and answers 429 often enough that the
+          // first visit to a club can come back without them - and storing
+          // that squad would have kept a club faceless for a day, because
+          // the row would be fresh and nothing would ask again.
           if (db) {
             await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey, JSON.stringify(squad), Date.now()).run();
           }
-          return squad;
+          return withFaces(squad, db, espnId, team.name);
         }
       }
     } catch { /* fall through to the stale row below */ }
