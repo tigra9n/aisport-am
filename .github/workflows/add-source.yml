@@ -1281,9 +1281,14 @@ jobs:
               const espn = await get(`${SITE}/${slug}/teams?limit=100`);
               const espnTeams = (espn.json?.sports?.[0]?.leagues?.[0]?.teams ?? []).map((t) => t.team).filter(Boolean);
               let afTeams = [];
-              if (key) {
+              if (!key) console.log("  no API_FOOTBALL_KEY in this step");
+              else {
                 const r = await fetch(`https://v3.football.api-sports.io/teams?league=${leagueId}&season=${season}`, { headers: { "x-apisports-key": key, Accept: "application/json" } });
-                if (r.ok) afTeams = ((await r.json()).response ?? []).map((x) => x.team);
+                const body = await r.text();
+                let parsed = null;
+                try { parsed = JSON.parse(body); } catch { /* not json */ }
+                afTeams = (parsed?.response ?? []).map((x) => x.team);
+                if (!afTeams.length) console.log(`  API-Football ${code}: HTTP ${r.status}, errors ${JSON.stringify(parsed?.errors ?? null)}, results ${parsed?.results ?? "?"}`);
               }
               console.log(`\n  ${code}: ${afTeams.length} clubs from API-Football, ${espnTeams.length} from ESPN`);
               // Match on a folded name, then on the longest word each side
