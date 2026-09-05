@@ -33,7 +33,7 @@ export function TopScorersTabs({ tables }: { tables: Record<string, { rows: TopS
                 <tr key={row.name}>
                   <td><span className="position-marker">{row.rank}</span></td>
                   <td>
-                    <Link href={`/player/${row.id}`} className="player-with-photo team-cell-link">
+                    <Link href={`/player/${row.key ?? row.id}`} className="player-with-photo team-cell-link">
                       {row.photo && <img src={sizedImage(row.photo, 32)} alt="" className="player-photo" loading="lazy" />}
                       <strong>{row.name}</strong>
                     </Link>

@@ -81,10 +81,15 @@ const opinionsIndex = await expectPage("opinions index", "/opinions", ["</html>"
 const opinionPath = firstHref(opinionsIndex, /\/opinions\/[a-z0-9-]+/);
 
 const standings = await expectPage("standings", "/standings", ["</html>"]);
-const teamPath = firstHref(standings, /\/team\/\d+/);
+// Both numberings. A club used to be API-Football's bare number; it is now
+// ESPN's under an "espn-" prefix, because the two providers number clubs
+// differently and a bare number cannot say which is meant. Matching only
+// the old shape reported "no link to one was found" for a page full of
+// links, and failed two deploys that had shipped fine.
+const teamPath = firstHref(standings, /\/team\/(?:espn-)?\d+/);
 
 const topscorers = await expectPage("top scorers", "/topscorers", ["</html>"]);
-const playerPath = firstHref(topscorers, /\/player\/\d+/);
+const playerPath = firstHref(topscorers, /\/player\/(?:espn-)?\d+/);
 
 for (const [label, path] of [
   ["news article", newsPath],
