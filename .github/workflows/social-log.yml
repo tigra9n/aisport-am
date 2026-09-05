@@ -95,7 +95,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           npx wrangler d1 execute aisport-db --remote --json --command \
-            "SELECT ts, mode, generated, reason, substr(log,1,400) AS log
+            "SELECT ts, mode, generated, reason, substr(log,1,4000) AS log
              FROM cron_invocations ORDER BY id DESC LIMIT 20" > ticks.json 2>&1 || true
           node -e '
             const fs = require("fs");
@@ -106,8 +106,89 @@ jobs:
             if (!rows.length) { console.log("nothing recorded yet"); process.exit(0) }
             for (const r of rows) {
               console.log(`${r.ts}  ${String(r.mode).padEnd(9)} generated=${r.generated}${r.reason ? "  " + r.reason : ""}`);
-              const notable = (() => { try { return JSON.parse(r.log) } catch { return [] } })()
-                .filter((line) => /fail|error|balance|credit|quota|limit|skip|!!/i.test(line));
-              for (const line of notable.slice(0, 3)) console.log(`     ${line.slice(0, 150)}`);
+              // The log column is fetched truncated so one long tick cannot
+              // dominate the output, and a truncated JSON array does not
+              // parse. The first version let the parse throw and returned an
+              // empty list, so every healthy tick printed its header and
+              // nothing else - hiding the one thing this was extended to
+              // show. Scan the raw text when the parse fails.
+              const NOTABLE = /fail|error|balance|credit|quota|limit|skip|gemini|claude|!!/i;
+              let notable = [];
+              try {
+                notable = JSON.parse(r.log).filter((line) => NOTABLE.test(line));
+              } catch {
+                notable = String(r.log).split(/","/).filter((line) => NOTABLE.test(line));
+              }
+              for (const line of notable.slice(0, 3)) console.log(`     ${line.replace(/^\[?"/, "").slice(0, 150)}`);
+            }
+          '
+
+      # Which source is actually feeding the site. The question that
+      # prompted this: articles kept arriving in "rss" mode and it was not
+      # obvious whether any of them came from APITube, which is a paid
+      # subscription and just one of the rows in the sources table - so
+      # "mode: rss" says nothing about which of them produced the story.
+      # source_name on the article row does.
+      - name: Which sources the articles came from
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT source_name, COUNT(*) AS articles,
+                    MAX(published_at) AS newest
+             FROM articles WHERE published_at > datetime('now','-7 days')
+             GROUP BY source_name ORDER BY articles DESC" > sources.json 2>&1 || true
+          node -e '
+            const fs = require("fs");
+            const raw = fs.readFileSync("sources.json", "utf8");
+            const start = raw.indexOf("[");
+            let rows = [];
+            try { rows = JSON.parse(raw.slice(start))[0].results } catch { console.log(raw.slice(0, 600)); process.exit(0) }
+            if (!rows.length) { console.log("no articles in the last seven days"); process.exit(0) }
+            const total = rows.reduce((sum, r) => sum + r.articles, 0);
+            console.log(`  ${total} articles in the last seven days`);
+            for (const r of rows) {
+              const share = Math.round((r.articles / total) * 100);
+              console.log(`  ${String(r.articles).padStart(4)}  ${String(share + "%").padStart(4)}  ${r.source_name}   (newest ${r.newest})`);
+            }
+          '
+
+      # What is actually in the sources table, and which of them has ever
+      # produced anything. Asked when APITube turned out to be writing 92%
+      # of the site and the free RSS rows almost nothing - before adding
+      # more feeds it is worth knowing whether the existing ones are
+      # misconfigured, disabled, or simply losing every story to the
+      # duplicate check.
+      #
+      # The APITube row carries its API key inside feed_url and this
+      # repository is public, so the log prints the host only. Never select
+      # feed_url raw here.
+      - name: What is in the sources table
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT s.id, s.name, s.enabled, s.language,
+                    substr(replace(replace(s.feed_url,'https://',''),'http://',''), 1,
+                           CASE WHEN instr(replace(replace(s.feed_url,'https://',''),'http://',''),'/') > 0
+                                THEN instr(replace(replace(s.feed_url,'https://',''),'http://',''),'/') - 1
+                                ELSE 60 END) AS host,
+                    (SELECT COUNT(*) FROM articles a
+                      WHERE a.source_name = s.name
+                        AND a.published_at > datetime('now','-7 days')) AS week
+             FROM sources s ORDER BY week DESC, s.id" > srcs.json 2>&1 || true
+          node -e '
+            const fs = require("fs");
+            const raw = fs.readFileSync("srcs.json", "utf8");
+            const start = raw.indexOf("[");
+            let rows = [];
+            try { rows = JSON.parse(raw.slice(start))[0].results } catch { console.log(raw.slice(0, 600)); process.exit(0) }
+            if (!rows.length) { console.log("the sources table is empty"); process.exit(0) }
+            console.log(`  ${rows.length} source(s) configured`);
+            for (const r of rows) {
+              const on = r.enabled ? "on " : "OFF";
+              console.log(`  ${on}  ${String(r.week).padStart(4)} this week  ${String(r.name).padEnd(22)} ${r.host}`);
             }
           '

@@ -1,6 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { sources } from "../../../../db/schema";
+import { articles, sources } from "../../../../db/schema";
 import { articleExistsForSource, lastSaveSkipReason, saveGeneratedArticle } from "../../../../lib/articles";
 import { publishEverywhere } from "../../../../lib/automation";
 import { SITE_URL } from "../../../../lib/site-info";
@@ -319,6 +319,48 @@ async function runPreviews(apiKey: string, log: string[], deadline: number): Pro
   return generated;
 }
 
+
+// Turn one feed item into a published article. Extracted so the ranked pass
+// and the older source-by-source pass write an article the same way rather
+// than in two places that drift apart.
+async function publishFeedItem(
+  apiKey: string,
+  item: FeedItem,
+  sourceName: string,
+  log: string[],
+): Promise<boolean> {
+  // Fetch the actual source article page before generating: the RSS
+  // snippet alone (title + ~1-2 sentences) left the model with almost no
+  // real facts (names, scores) to work from, producing vague
+  // generic-sounding articles. Full body text + og:image in one request.
+  const page = await fetchArticlePage(item.link);
+  const article = await generateFromSourceSnippet(apiKey, { title: item.title, snippet: item.snippet, sourceName, fullText: page.bodyText });
+  if (!article) { log.push(`rss generation failed: ${item.title.slice(0, 40)} | ${lastGenerationDebug}`); return false; }
+  // lastGenerationDebug is otherwise only recorded on failure, which would
+  // make a SUCCESSFUL Gemini rescue invisible - exactly the case worth
+  // seeing, since it means the Anthropic balance is gone and articles are
+  // being written by the cheaper fallback model.
+  if (lastGenerationDebug.startsWith("CLAUDE BILLING FAILURE")) log.push(`!! ${lastGenerationDebug.slice(0, 300)}`);
+  // item.imageUrl (from APITube/RSS directly) can itself be a dead link on
+  // the source's end (found: cappertek.com's own listed image 404'd) -
+  // validate before trusting it, same as page.image.
+  const resolvedImage = (await validateImageUrl(item.imageUrl)) ?? page.image;
+  const saved = await saveGeneratedArticle({
+    ...article, imageUrl: resolvedImage, sourceName, sourceUrl: item.link, uniquePart: String(Date.now()).slice(-8),
+  });
+  if (!saved) {
+    if (lastSaveSkipReason) log.push(`skipped as a repeat: ${item.title.slice(0, 40)} | ${lastSaveSkipReason}`);
+    return false;
+  }
+  log.push(`rewrite: ${item.title.slice(0, 40)}`);
+  // Warm the proxy while we are still here, so the first reader of this
+  // article - and of the home page it is about to lead - does not wait for
+  // the picture to be fetched and re-encoded.
+  await warmImageCache(resolvedImage);
+  await announce(saved, article.title, log);
+  return true;
+}
+
 async function runRss(apiKey: string, log: string[], deadline: number, sourceFilter?: string | null, debugTitleQuery?: string | null): Promise<number> {
   let generated = 0;
   let attempted = 0;
@@ -355,6 +397,64 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
     const tickIndex = Math.floor(Date.now() / (5 * 60 * 1000));
     const offset = allSources.length > 0 ? tickIndex % allSources.length : 0;
     const rotated = [...allSources.slice(offset), ...allSources.slice(0, offset)];
+
+    // Choose the story before choosing the source.
+    //
+    // Seventeen articles a day are written from a pool that is now about a
+    // thousand stories, and until this went in nothing chose between them:
+    // the loop below takes the first source in the rotation and its first
+    // unpublished item. That was the only thing possible with one source in
+    // the table. With thirty-six it means the site writes whatever
+    // Birmingham Live posted four minutes ago while the story every desk in
+    // England is leading with goes unwritten.
+    //
+    // lib/story-ranking.ts gathers the feeds at once and ranks by how many
+    // independent desks are carrying the same story. RSS publishes no read
+    // counts, so "most read" cannot be measured - but how many newsrooms
+    // judged a story worth writing is the signal an editor would use
+    // anyway, and it can be measured exactly.
+    //
+    // The older pass is kept underneath, not replaced: if ranking returns
+    // nothing publishable - every top story already written, a bad night
+    // for the feeds - the site still falls through to the behaviour that
+    // has been working, rather than publishing nothing.
+    const plainFeeds = rotated.filter((s) => !s.feedUrl.includes("/api/feeds/apitube"));
+    if (!sourceFilter && !debugTitleQuery && plainFeeds.length > 1) {
+      try {
+        const { rankStories, beatOf } = await import("../../../../lib/story-ranking");
+        const ranked = await rankStories(plainFeeds.map((s) => ({ name: s.name, feedUrl: s.feedUrl })), log);
+
+        // Weighting the count by the size of each country's press stops the
+        // Premier League winning every hour on arithmetic, but it cannot
+        // stop a genuinely Spanish evening producing six Spanish articles in
+        // a row. A reader opening the site wants a football site, not a La
+        // Liga site that happened to have a good night, so the last few
+        // articles are read back and no country may hold more than four of
+        // the last six.
+        const beatByName = new Map(plainFeeds.map((s) => [s.name, beatOf(s.feedUrl)]));
+        const recentBeats: string[] = [];
+        try {
+          const recent = await db.select({ sourceName: articles.sourceName }).from(articles).orderBy(desc(articles.id)).limit(6);
+          for (const row of recent) recentBeats.push(beatByName.get(row.sourceName) ?? "England");
+        } catch { /* a missing history simply imposes no quota */ }
+        const overRepresented = (beat: string) => recentBeats.filter((b) => b === beat).length >= 4;
+
+        for (const story of ranked) {
+          if (generated >= MAX_PER_TYPE || attempted >= MAX_ATTEMPTS) break;
+          if (Date.now() > deadline) { log.push("rss: time budget exceeded before generation"); break; }
+          if (overRepresented(story.beat)) continue;
+          if (await articleExistsForSource(story.item.link)) continue;
+          attempted++;
+          log.push(`chose: ${story.beat}, ${story.corroboration} desks carrying it (${story.alsoIn.slice(0, 4).join(", ")})`);
+          if (await publishFeedItem(apiKey, story.item, story.sourceName, log)) generated++;
+        }
+        if (generated > 0) return generated;
+        log.push("ranking produced nothing publishable, falling back to the source rotation");
+        attempted = 0;
+      } catch (err) {
+        log.push(`ranking failed, falling back: ${String(err).slice(0, 120)}`);
+      }
+    }
     const enabledSources = sourceFilter
       ? rotated.filter((s) => s.name.toLowerCase().includes(sourceFilter.toLowerCase()))
       : rotated;
@@ -497,36 +597,7 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
         if (Date.now() > deadline) { log.push("rss: time budget exceeded, stopping early"); break; }
         if (await articleExistsForSource(item.link)) continue;
         attempted++;
-        // Fetch the actual source article page before generating: the RSS
-        // snippet alone (title + ~1-2 sentences) left the model with
-        // almost no real facts (names, scores) to work from, producing
-        // vague generic-sounding articles. Full body text + og:image in
-        // one request.
-        const page = await fetchArticlePage(item.link);
-        const article = await generateFromSourceSnippet(apiKey, { title: item.title, snippet: item.snippet, sourceName: source.name, fullText: page.bodyText });
-        if (!article) { log.push(`rss generation failed: ${item.title.slice(0, 40)} | ${lastGenerationDebug}`); continue; }
-        // lastGenerationDebug is otherwise only recorded on failure, which
-        // would make a SUCCESSFUL Gemini rescue invisible - exactly the
-        // case worth seeing, since it means the Anthropic balance is gone
-        // and articles are being written by the cheaper fallback model.
-        if (lastGenerationDebug.startsWith("CLAUDE BILLING FAILURE")) log.push(`!! ${lastGenerationDebug.slice(0, 300)}`);
-        // item.imageUrl (from APITube/RSS directly) can itself be a dead
-        // link on the source's end (found: cappertek.com's own listed
-        // image 404'd) - validate before trusting it, same as page.image.
-        const resolvedImage = (await validateImageUrl(item.imageUrl)) ?? page.image;
-        const saved = await saveGeneratedArticle({
-          ...article, imageUrl: resolvedImage, sourceName: source.name, sourceUrl: item.link, uniquePart: String(Date.now()).slice(-8),
-        });
-        if (saved) {
-          generated++;
-          log.push(`rewrite: ${item.title.slice(0, 40)}`);
-          // Warm the proxy while we are still here, so the first reader of
-          // this article - and of the home page it is about to lead - does
-          // not wait for the picture to be fetched and re-encoded.
-          await warmImageCache(resolvedImage);
-          await announce(saved, article.title, log);
-        }
-        else if (lastSaveSkipReason) log.push(`skipped as a repeat: ${item.title.slice(0, 40)} | ${lastSaveSkipReason}`);
+        if (await publishFeedItem(apiKey, item, source.name, log)) generated++;
       }
     }
   } catch (err) {
@@ -652,7 +723,7 @@ export async function GET(request: Request) {
         if (Number.isFinite(lastMs) && sinceMs >= 0 && sinceMs < MIN_PUBLISH_GAP_MS) {
           const sinceMin = Math.floor(sinceMs / 60000);
           await logInvocation({ forced: forcedMode, mode: "skipped", generated: 0, reason: `only ${sinceMin} min since the last article, need ${MIN_PUBLISH_GAP_MS / 60000}` });
-          return Response.json({ ok: true, mode: "skipped", reason: `last article was ${sinceMin} minutes ago, minimum gap is 18 minutes`, generated: 0, log: [] });
+          return Response.json({ ok: true, mode: "skipped", reason: `last article was ${sinceMin} minutes ago, minimum gap is ${MIN_PUBLISH_GAP_MS / 60000} minutes`, generated: 0, log: [] });
         }
       }
       // BUG FIXED: this used `db` (a Drizzle instance from getDb()),
