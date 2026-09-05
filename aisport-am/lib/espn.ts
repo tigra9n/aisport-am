@@ -610,7 +610,36 @@ async function sportsDb<T>(path: string): Promise<T | null> {
   }
 }
 
-export async function armenianMatchesForDate(date: string): Promise<LiveMatch[]> {
+/**
+ * Is an Armenian match being played right now, or about to be?
+ *
+ * This exists so API-Football is asked only when there is something to ask
+ * about. Nothing about it costs money any more - the subscription is going
+ * and its free plan is what remains - but that plan allows a hundred
+ * requests a day, and asking every eight minutes around the clock spends a
+ * hundred and eighty on nothing. The Armenian league plays a handful of
+ * matches a week, so taking the kick-off times from a free source and only
+ * then spending one of the hundred is the difference between fitting inside
+ * the free plan and needing a subscription.
+ *
+ * The window opens ten minutes before kick-off and closes two and a half
+ * hours after it - long enough for stoppages, a delayed start and a full
+ * match, short enough that a Wednesday afternoon costs nothing.
+ */
+export async function armenianMatchWindow(date: string): Promise<boolean> {
+  const matches = await armenianMatchesForDate(date);
+  const now = Date.now();
+  return matches.some((m) => {
+    if (m.homeScore !== null) return false;
+    const kickoff = m.kickoffMs;
+    if (!kickoff) return false;
+    return now > kickoff - 10 * 60_000 && now < kickoff + 150 * 60_000;
+  });
+}
+
+export type ArmenianMatch = LiveMatch & { kickoffMs: number | null };
+
+export async function armenianMatchesForDate(date: string): Promise<ArmenianMatch[]> {
   const [next, past] = await Promise.all([
     sportsDb<{ events?: SportsDbEvent[] }>(`/eventsnextleague.php?id=${ARMENIAN_LEAGUE_ID}`),
     sportsDb<{ events?: SportsDbEvent[] }>(`/eventspastleague.php?id=${ARMENIAN_LEAGUE_ID}`),
@@ -633,11 +662,14 @@ export async function armenianMatchesForDate(date: string): Promise<LiveMatch[]>
         awayLogo: e.strAwayTeamBadge ?? null,
         homeScore: played ? Number(e.intHomeScore) : null,
         awayScore: played ? Number(e.intAwayScore) : null,
-        // The free tier has no live feed, so nothing here is ever marked
-        // live. Claiming otherwise would put a "LIVE" badge on a score that
-        // is not moving.
+        // TheSportsDB's free tier has no live feed, so nothing from it is
+        // ever marked live. Claiming otherwise would put a "LIVE" badge on
+        // a score that is not moving. While a match is actually in progress
+        // API-Football's free plan fills the minute in, which is what
+        // armenianMatchWindow above decides.
         isLive: false,
-      } satisfies LiveMatch;
+        kickoffMs: kickoff ? kickoff.getTime() : null,
+      };
     })
     .filter((m) => m.home && m.away);
 }
