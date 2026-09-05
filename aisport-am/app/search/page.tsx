@@ -14,7 +14,9 @@ export const metadata: Metadata = {
   // A search result page is not a page of the site; it is a view of it.
   // Indexing one URL per query fills the index with near-identical pages
   // and, worse, competes with the articles themselves. follow is kept so
-  // the crawler still uses these pages as a route to the articles.
+  // that a crawler which does arrive here still reaches the articles - but
+  // the links pointing in now carry rel=nofollow (lib/crawl-hints.ts),
+  // because arriving at all was costing a quarter of the site's crawl.
   robots: { index: false, follow: true },
   alternates: { canonical: "https://aifootball.am/search" },
 };

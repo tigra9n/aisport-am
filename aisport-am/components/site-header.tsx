@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { noFollowSearch } from "../lib/crawl-hints";
 import { FormEvent, useEffect, useState } from "react";
 import { formatLongDateHy } from "../lib/format-date";
 
@@ -109,7 +110,7 @@ export function SiteHeader() {
                 {item.children.map(([label, href]) => <Link href={href} key={href} onClick={() => setMenuOpen(false)}>{label}</Link>)}
               </div>
             </details>)}
-            {plainLinks.map((item) => <Link className="nav-plain-link" prefetch={false} href={item.href} key={item.href} onClick={() => setMenuOpen(false)}>{item.label}</Link>)}
+            {plainLinks.map((item) => <Link className="nav-plain-link" prefetch={false} rel={noFollowSearch(item.href)} href={item.href} key={item.href} onClick={() => setMenuOpen(false)}>{item.label}</Link>)}
             <Link className="podcast-nav-button" prefetch={false} href="/podcasts" onClick={() => setMenuOpen(false)}><span>◉</span> Փոդքաստ</Link>
           </nav>
         </div>
