@@ -615,7 +615,20 @@ export async function espnLiveMatchDetail(id: string): Promise<import("./live-fo
     // The table belongs on a match page and ESPN has it, so the section
     // that would otherwise have gone missing comes back.
     standings: league ? await espnStandings(codeForSlug(slug)) : null,
-    topScorers: null,
+    // Left empty while the scoring chart had no source at all. It has one
+    // now - the core API's list, named from the league's own rosters - and
+    // both are behind a cache, so the tab costs a lookup rather than a
+    // round trip. Imported here rather than at the top because
+    // topscorers-server imports this file.
+    topScorers: league ? await (async () => {
+      try {
+        const { getTopScorers } = await import("./topscorers-server");
+        const chart = await getTopScorers(codeForSlug(slug));
+        return chart.rows.length ? chart.rows.slice(0, 10) : null;
+      } catch {
+        return null;
+      }
+    })() : null,
     formGuide: [],
     // What the old layout had no room for.
     statRows: statRowsFrom(detail),

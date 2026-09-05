@@ -59,7 +59,13 @@ async function ensureCacheTable(db: D1Database) {
 // so the index is built from ESPN's team lists - seventeen requests - and
 // kept for a day, because clubs change competition twice a year.
 async function teamIndex(db: D1Database | undefined): Promise<Record<string, { slug: string; name: string }>> {
-  const cacheKey = "espn:teamindex:v1";
+  // v2 on 6 September. The index was cached for a day when its entries held
+  // only a slug; the club's name was added to it later, for TheSportsDB to
+  // search by, and a day-old row has no name in it - so the photo lookup
+  // asked that source for a club called "undefined", found nothing, and a
+  // squad page showed the two or three faces ESPN itself carries. Bumping
+  // the version is how this codebase forces a refetch.
+  const cacheKey = "espn:teamindex:v2";
   if (db) {
     await ensureCacheTable(db);
     const row = await db.prepare("SELECT payload,saved_at AS savedAt FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{ payload: string; savedAt: number }>();
@@ -96,6 +102,7 @@ async function clubPhotos(db: D1Database | undefined, espnId: string, clubName: 
     }
   }
   try {
+    if (!clubName) return {};
     const { sportsDbSquadPhotos } = await import("./espn");
     const photos = await sportsDbSquadPhotos(clubName);
     if (db && Object.keys(photos).length) {
