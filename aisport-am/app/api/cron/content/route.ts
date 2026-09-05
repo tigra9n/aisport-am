@@ -1,6 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { sources } from "../../../../db/schema";
+import { articles, sources } from "../../../../db/schema";
 import { articleExistsForSource, lastSaveSkipReason, saveGeneratedArticle } from "../../../../lib/articles";
 import { publishEverywhere } from "../../../../lib/automation";
 import { SITE_URL } from "../../../../lib/site-info";
@@ -421,14 +421,31 @@ async function runRss(apiKey: string, log: string[], deadline: number, sourceFil
     const plainFeeds = rotated.filter((s) => !s.feedUrl.includes("/api/feeds/apitube"));
     if (!sourceFilter && !debugTitleQuery && plainFeeds.length > 1) {
       try {
-        const { rankStories } = await import("../../../../lib/story-ranking");
+        const { rankStories, beatOf } = await import("../../../../lib/story-ranking");
         const ranked = await rankStories(plainFeeds.map((s) => ({ name: s.name, feedUrl: s.feedUrl })), log);
+
+        // Weighting the count by the size of each country's press stops the
+        // Premier League winning every hour on arithmetic, but it cannot
+        // stop a genuinely Spanish evening producing six Spanish articles in
+        // a row. A reader opening the site wants a football site, not a La
+        // Liga site that happened to have a good night, so the last few
+        // articles are read back and no country may hold more than four of
+        // the last six.
+        const beatByName = new Map(plainFeeds.map((s) => [s.name, beatOf(s.feedUrl)]));
+        const recentBeats: string[] = [];
+        try {
+          const recent = await db.select({ sourceName: articles.sourceName }).from(articles).orderBy(desc(articles.id)).limit(6);
+          for (const row of recent) recentBeats.push(beatByName.get(row.sourceName) ?? "England");
+        } catch { /* a missing history simply imposes no quota */ }
+        const overRepresented = (beat: string) => recentBeats.filter((b) => b === beat).length >= 4;
+
         for (const story of ranked) {
           if (generated >= MAX_PER_TYPE || attempted >= MAX_ATTEMPTS) break;
           if (Date.now() > deadline) { log.push("rss: time budget exceeded before generation"); break; }
+          if (overRepresented(story.beat)) continue;
           if (await articleExistsForSource(story.item.link)) continue;
           attempted++;
-          log.push(`chose: ${story.corroboration} desks carrying it (${story.alsoIn.slice(0, 4).join(", ")})`);
+          log.push(`chose: ${story.beat}, ${story.corroboration} desks carrying it (${story.alsoIn.slice(0, 4).join(", ")})`);
           if (await publishFeedItem(apiKey, story.item, story.sourceName, log)) generated++;
         }
         if (generated > 0) return generated;

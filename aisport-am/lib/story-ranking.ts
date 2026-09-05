@@ -19,11 +19,42 @@
 import { fetchFeed, type FeedItem } from "./feeds";
 import { storyStems } from "./story-signature";
 
+
+// Which country's press a desk belongs to.
+//
+// Twenty-five of the desks are English and six are Spanish, so counting
+// desks alone would hand every hour to the Premier League by arithmetic
+// rather than by news judgement: a La Liga story every Spanish paper is
+// leading with can be corroborated six times at most, while a mid-table
+// English story reaches eight without being the bigger story. The count is
+// therefore taken as a share of the desks that cover that country at all,
+// which is what makes "four of the six Spanish papers" beat "eight of the
+// twenty-five English ones".
+const BEATS: [RegExp, string][] = [
+  [/marca|as\.com|mundodeportivo|sport\.es|football-espana|barcauniversal|madriduniversal|laliga/i, "Spain"],
+  [/gazzetta|corrieredellosport|tuttosport|football-italia|calciomercato|tuttomercatoweb/i, "Italy"],
+  [/lequipe|rmcsport|bfmtv|getfootballnewsfrance|sofoot|ligue1/i, "France"],
+  [/bundesliga\.com|bulinews|kicker|getgermanfootballnews/i, "Germany"],
+  [/turkish-football/i, "Turkey"],
+  [/record\.pt|abola|portugoal/i, "Portugal"],
+];
+
+export function beatOf(feedUrl: string): string {
+  for (const [pattern, beat] of BEATS) if (pattern.test(feedUrl)) return beat;
+  // Everything else is the English-language press. Not all of it is
+  // English - Ireland, the United States - but it reports the same beat
+  // and competes for the same slot.
+  return "England";
+}
+
 export type RankedStory = {
   item: FeedItem;
   sourceName: string;
+  beat: string;
   // How many other desks are carrying what looks like the same story.
   corroboration: number;
+  // The count after the smaller presses are scaled up to compete.
+  weight: number;
   alsoIn: string[];
 };
 
@@ -41,10 +72,29 @@ const ITEMS_PER_FEED = 25;
 // "unite" are in hundreds of headlines on any given evening. Only the rare
 // words identify an event.
 const COMMON_STEM_SHARE = 0.12;
+// ...but a share alone collapses on a small pool. On a normal tick around
+// five hundred stories are gathered and the cutoff lands near sixty; on a
+// bad night when three feeds answer, a bare share would call any word in
+// four headlines common, which is every club name in the sample. Tested:
+// with fourteen headlines and no floor, "city" appeared in seven and was
+// discarded as meaningless, leaving the story six desks were leading with
+// tied against a Wolves retrospective.
+const COMMON_STEM_FLOOR = 8;
 
 // Two distinctive words in common. "haala" plus "city" is the same story;
 // "haala" alone could be any of a dozen Haaland pieces.
 const MIN_SHARED_DISTINCTIVE = 2;
+
+// How far a smaller press may be scaled up to compete with the largest.
+//
+// Dividing by the size of the country's press outright looked right and was
+// wrong, which the tests caught: a country with one desk in the gathering
+// scores one of one, a perfect share, and a single Barcelona blog outranks
+// the story six English desks are leading with. Scaling the count instead,
+// and capping the scale, keeps both halves true - four of six Spanish
+// papers (4 x 1.5 = 6) beats five of twenty-five English ones (5 x 1 = 5),
+// while one desk of one (1 x 3 = 3) still loses to three desks of ten.
+const MAX_SMALL_PRESS_BOOST = 3;
 
 // Rolling pages, not articles. Their text changes under you all evening, so
 // whatever the model is handed will not be what the link shows an hour
@@ -53,6 +103,8 @@ const MIN_SHARED_DISTINCTIVE = 2;
 // in the first sample each one returned: RMC led with "DIRECT.
 // Nice-Le Mans", Record with "Roma-Atalanta, em direto".
 const ROLLING_PAGE = /\bliveblog\b|\blive blog\b|LIVE[!:]|\bas it happened\b|minute-by-minute|\bDIRECT\.|\ben direct\b|\bem direto\b|\ben directo\b|\bEN VIVO\b|\bin diretta\b|\bLIVETICKER\b|\bliveticker\b/i;
+
+export type GatheredStory = { item: FeedItem; sourceName: string; beat: string };
 
 export async function rankStories(
   sources: { name: string; feedUrl: string }[],
@@ -69,22 +121,47 @@ export async function rankStories(
     window.map(async (source) => ({ source, items: await fetchFeed(source.feedUrl, ITEMS_PER_FEED) })),
   );
 
-  type Entry = { item: FeedItem; sourceName: string; stems: string[] };
-  const entries: Entry[] = [];
+  const gathered: GatheredStory[] = [];
   let quiet = 0;
   for (const { source, items } of fetched) {
     if (!items.length) quiet++;
-    for (const item of items) {
-      if (ROLLING_PAGE.test(item.title)) continue;
-      entries.push({ item, sourceName: source.name, stems: [...storyStems(item.title)] });
-    }
+    for (const item of items) gathered.push({ item, sourceName: source.name, beat: beatOf(source.feedUrl) });
   }
-  log.push(`ranking: ${entries.length} stories from ${window.length - quiet} of ${window.length} feeds`);
-  if (entries.length < 2) return entries.map((e) => ({ item: e.item, sourceName: e.sourceName, corroboration: 0, alsoIn: [] }));
+  log.push(`ranking: ${gathered.length} stories from ${window.length - quiet} of ${window.length} feeds`);
+  const ranked = rankGathered(gathered);
+  for (const story of ranked.slice(0, 3)) log.push(`ranking: ${story.corroboration} desks: ${story.item.title.slice(0, 60)}`);
+  return ranked;
+}
+
+// The judgement, separated from the fetching so it can be exercised
+// without a network - what this gets wrong is not which feeds answered but
+// which headlines it decides are the same story.
+export function rankGathered(gathered: GatheredStory[]): RankedStory[] {
+  type Entry = { item: FeedItem; sourceName: string; beat: string; stems: string[] };
+  const entries: Entry[] = [];
+  for (const { item, sourceName, beat } of gathered) {
+    if (ROLLING_PAGE.test(item.title)) continue;
+    entries.push({ item, sourceName, beat, stems: [...storyStems(item.title)] });
+  }
+  if (entries.length < 2) {
+    return entries.map((e) => ({ item: e.item, sourceName: e.sourceName, beat: e.beat, corroboration: 0, weight: 0, alsoIn: [] }));
+  }
+
+  // How many desks each country has in tonight's gathering, so a count can
+  // be read against the number of desks that could have carried it.
+  const desksPerBeat = new Map<string, Set<string>>();
+  const beatByDesk = new Map<string, string>();
+  for (const entry of entries) {
+    const set = desksPerBeat.get(entry.beat) ?? new Set<string>();
+    set.add(entry.sourceName);
+    desksPerBeat.set(entry.beat, set);
+    beatByDesk.set(entry.sourceName, entry.beat);
+  }
+  const largestBeat = Math.max(...[...desksPerBeat.values()].map((set) => set.size), 1);
 
   const frequency = new Map<string, number>();
   for (const entry of entries) for (const stem of entry.stems) frequency.set(stem, (frequency.get(stem) ?? 0) + 1);
-  const commonAbove = Math.max(3, Math.ceil(entries.length * COMMON_STEM_SHARE));
+  const commonAbove = Math.max(COMMON_STEM_FLOOR, Math.ceil(entries.length * COMMON_STEM_SHARE));
 
   // An inverted index over the distinctive stems only. Comparing every
   // headline with every other would be several hundred thousand set
@@ -113,10 +190,24 @@ export async function rankStories(
         desks.add(entries[other].sourceName);
       }
     }
-    return { item: entry.item, sourceName: entry.sourceName, corroboration: desks.size, alsoIn: [...desks] };
+    // The desk itself counts towards its own country's tally: one of the
+    // six Spanish papers carrying a story is one of six, not none of six.
+    const own = Math.max(desksPerBeat.get(entry.beat)?.size ?? 1, 1);
+    const withinBeat = [...desks].filter((name) => beatByDesk.get(name) === entry.beat).length + 1;
+    return {
+      item: entry.item,
+      sourceName: entry.sourceName,
+      beat: entry.beat,
+      corroboration: desks.size,
+      weight: withinBeat * Math.min(MAX_SMALL_PRESS_BOOST, largestBeat / own),
+      alsoIn: [...desks],
+    };
   });
 
   ranked.sort((a, b) => {
+    // Weight first, raw count second.
+    const weightGap = Math.round(b.weight * 100) - Math.round(a.weight * 100);
+    if (weightGap !== 0) return weightGap;
     if (b.corroboration !== a.corroboration) return b.corroboration - a.corroboration;
     // Among equally corroborated stories, prefer one that comes with a
     // picture - the alternative is a category stock photo - and then the
@@ -126,7 +217,5 @@ export async function rankStories(
     return (Date.parse(b.item.pubDate ?? "") || 0) - (Date.parse(a.item.pubDate ?? "") || 0);
   });
 
-  const top = ranked.slice(0, 3).map((r) => `${r.corroboration} desks: ${r.item.title.slice(0, 60)}`);
-  for (const line of top) log.push(`ranking: ${line}`);
   return ranked;
 }
