@@ -995,10 +995,18 @@ jobs:
           cat > names.mts <<'TS'
           import { armenianTeamName } from "./aisport-am/lib/team-names-hy.ts";
           const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
-          const LEAGUES = ["eng.1","esp.1","ita.1","ger.1","fra.1","usa.1","ksa.1","uefa.champions","uefa.europa","uefa.europa.conf","eng.fa","eng.league_cup","esp.copa_del_rey","ita.coppa_italia","ger.dfb_pokal","fra.coupe_de_france"];
-          // Armenian letters only: if the answer is written in them and did
-          // not come from the table, it came from the transliterator.
-          const isArmenian = (s: string) => /[\u0530-\u058F]/.test(s);
+          // The seven leagues and three European competitions the board
+          // leads with. The domestic cups bring another four hundred clubs
+          // from the fourth tier down, which were never on this site under
+          // the old provider either and are not what a reader sees first.
+          const LEAGUES = ["eng.1","esp.1","ita.1","ger.1","fra.1","usa.1","ksa.1","uefa.champions","uefa.europa","uefa.europa.conf"];
+          // The first version of this asked "is the answer in Armenian
+          // letters", which the transliterator's output also is, so it
+          // reported nothing missing while printing "AGF -> Ագֆ" three
+          // lines below. The question is whether the hand-written table
+          // answered, and the way to ask it is to read the table.
+          const table = await import("node:fs").then((fs) => fs.readFileSync("aisport-am/lib/team-names-hy.ts", "utf8"));
+          const known = new Set([...table.matchAll(/^\s*"([^"]+)":/gm)].map((m) => m[1].toLowerCase()));
           const names = new Set<string>();
           for (const slug of LEAGUES) {
             try {
@@ -1015,11 +1023,10 @@ jobs:
           const found: string[] = [];
           for (const name of [...names].sort()) {
             const hy = armenianTeamName(name);
-            // The table's answers are hand written; the transliterator's are
-            // generated. Telling them apart without exporting internals: a
-            // transliterated name keeps the original's word count and its
-            // capitals, so compare against what the letters alone produce.
-            (hy === name || !isArmenian(hy) ? missing : found).push(`${name} -> ${hy}`);
+            // Same stripping the resolver does, so "AFC Bournemouth" counts
+            // as known through its "bournemouth" entry.
+            const key = name.toLowerCase().replace(/^(?:\d+\s*\.?\s*)?(?:a\.e\.k\.|f\.c\.|f\.k\.|spvgg|stade|cska|aek|afc|acf|asd|bsc|fbc|fsv|gnk|hnk|ifk|kaa|msv|ogc|rcd|rsc|ssc|ssd|tsg|tsv|vfb|vfl|vfr|ac|as|bk|ca|cd|cf|cs|fc|ff|fk|if|kv|nk|rc|sc|sd|sk|ss|sv|ud|us)\s+/, "").replace(/\s+(?:afc|acf|ac|bk|cf|fc|ff|fk|if|sc|sk|sv)$/, "").trim();
+            (known.has(name.toLowerCase()) || known.has(key) ? found : missing).push(`${name} -> ${hy}`);
           }
           console.log(`\n  === untranslated (${missing.length}) ===`);
           for (const m of missing) console.log(`      ${m}`);
@@ -1056,6 +1063,12 @@ jobs:
           say(`  matches linked: ${espnIds.length} from ESPN, ${sdbIds.length} Armenian, ${afIds.length} still on the old provider`);
           say(`  competitions named: ${[...new Set([...live.html.matchAll(/(Չեմպիոնների լիգա|Եվրոպա լիգա|Անգլիայի Պրեմիեր լիգա|Իսպանիայի Լա Լիգա|Իտալիայի Սերիա Ա|Գերմանիայի Բունդեսլիգա|Ֆրանսիայի Լիգա 1|MLS|Հայաստանի Պրեմիեր լիգա)/g)].map((m) => m[1]))].join(", ") || "none"}`);
           if (/տվյալները հասանելի չեն|unavailable/i.test(live.html)) say("  !! the page is showing its unavailable state");
+          // Counting links assumed a shape. Print what is actually there.
+          const rows = [...live.html.matchAll(/<a[^>]*href="(\/live\/match\/[^"]+)"[^>]*>([\s\S]{0,220}?)<\/a>/g)].slice(0, 6);
+          say(`  match links of any shape: ${rows.length}`);
+          for (const [, href, inner] of rows) say(`      ${href}  ${inner.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 90)}`);
+          const noMatches = live.html.match(/[^<>]{0,80}(խաղ չկա|այսօր խաղ|Խաղեր չեն)[^<>]{0,80}/);
+          if (noMatches) say(`  the page says: ${noMatches[0].trim()}`);
 
           if (espnIds.length) {
             const id = espnIds[0];
