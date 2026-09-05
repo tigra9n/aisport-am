@@ -587,6 +587,7 @@ jobs:
           node livescore.mjs
 
       - name: What the sources table holds now
+        if: ${{ github.event.inputs.livescore != 'yes' }}
         run: |
           npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
           npx wrangler d1 execute aisport-db --remote --json --command \
