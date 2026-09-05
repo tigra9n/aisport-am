@@ -55,7 +55,13 @@ export async function getStandings(code: string): Promise<{ rows: StandingRow[];
   if (db) {
     await ensureCacheTable(db);
     const row = await db.prepare("SELECT payload,saved_at AS savedAt FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{ payload: string; savedAt: number }>();
-    if (row?.savedAt && Date.now() - row.savedAt < 30 * 60 * 1000) {
+    // Half an hour for the leagues ESPN serves, which costs nothing, and six
+    // for Armenia, which is the one that reaches a paid provider on a free
+    // plan of a hundred requests a day. Half an hour would spend forty-eight
+    // of them on a table that only changes when a match finishes, and the
+    // live board already carries the match while it is being played.
+    const ttlMs = (code === "ARM" ? 6 * 60 : 30) * 60 * 1000;
+    if (row?.savedAt && Date.now() - row.savedAt < ttlMs) {
       try {
         const rows = JSON.parse(row.payload) as StandingRow[];
         if (rows.length) return { rows, demo: false };
@@ -82,7 +88,15 @@ export async function getStandings(code: string): Promise<{ rows: StandingRow[];
     const { espnStandings, armenianStandings } = await import("./espn");
     // Armenia has no ESPN league; TheSportsDB carries it on a free key.
     const rows = code === "ARM" ? await armenianStandings() : await espnStandings(code);
-    if (rows && rows.length) {
+    // A short table is not a table. TheSportsDB's free key answers the
+    // Armenian league with exactly five rows - measured twice on 6
+    // September, Noah down to Ararat-Armenia and nothing below - and five
+    // rows read as success here, so the site showed half a league and never
+    // reached the source underneath. The Armenian table is the one this
+    // site exists for; it is worth one request a day of a free plan's
+    // hundred to have all of it.
+    const enough = code === "ARM" ? 8 : 1;
+    if (rows && rows.length >= enough) {
       if (db) {
         await db.prepare("INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0")
           .bind(cacheKey, JSON.stringify(rows), Date.now()).run();
