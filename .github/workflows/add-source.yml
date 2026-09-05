@@ -1445,6 +1445,22 @@ jobs:
               `https://cdn.espn.com/core/soccer/stats/_/league/${slug}?xhr=1`,
               `https://cdn.espn.com/core/soccer/scoreboard?xhr=1&league=${slug}`,
               `https://sports.core.api.espn.com/v2/sports/soccer/leagues/${slug}/seasons/${YEAR}/types/1/leaders?limit=50`,
+              // Maybe it is simply called something else now. These are the
+              // names ESPN uses elsewhere in its own site and in its other
+              // sports, tried rather than reasoned about.
+              `${SITE}/${slug}/scorers`,
+              `${SITE}/${slug}/topscorers`,
+              `${SITE}/${slug}/statistics`,
+              `${SITE}/${slug}/stats`,
+              `${SITE}/${slug}/leaders?season=${YEAR}&seasontype=1`,
+              `${SITE}/${slug}/leaders?lang=en&region=us`,
+              `${COMMON}/${slug}/statistics?season=${YEAR}`,
+              `${COMMON}/${slug}/leaders?season=${YEAR}`,
+              `${V2}/${slug}/standings?level=1`,
+              `https://cdn.espn.com/core/soccer/table?xhr=1&league=${slug}`,
+              `https://cdn.espn.com/core/soccer/scorers?xhr=1&league=${slug}`,
+              `https://cdn.espn.com/core/soccer/stats?xhr=1&league=${slug}`,
+              `https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/leaders`,
             ]) {
               const r = await get(url);
               // Look for the list by what it holds, the way the site does.
