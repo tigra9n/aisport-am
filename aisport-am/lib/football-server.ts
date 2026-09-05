@@ -88,13 +88,17 @@ export async function getStandings(code: string): Promise<{ rows: StandingRow[];
     const { espnStandings, armenianStandings } = await import("./espn");
     // Armenia has no ESPN league; TheSportsDB carries it on a free key.
     const rows = code === "ARM" ? await armenianStandings() : await espnStandings(code);
-    // A short table is not a table. TheSportsDB's free key answers the
-    // Armenian league with exactly five rows - measured twice on 6
-    // September, Noah down to Ararat-Armenia and nothing below - and five
-    // rows read as success here, so the site showed half a league and never
-    // reached the source underneath. The Armenian table is the one this
-    // site exists for; it is worth one request a day of a free plan's
-    // hundred to have all of it.
+    // A short table is not a table. The Armenian Premier League has ten
+    // clubs and plays five matches a week; TheSportsDB's free key answers it
+    // with exactly five rows - measured twice on 6 September, Noah down to
+    // Ararat-Armenia and nothing below - so the site was showing precisely
+    // half a league, and five rows read as success here, so it never reached
+    // the source underneath. The Armenian table is the one this site exists
+    // for.
+    //
+    // Eight rather than ten: a floor, not a headcount. A club that withdraws
+    // mid-season, or one the provider spells differently, should not blank
+    // the table - but half of it should never pass again.
     const enough = code === "ARM" ? 8 : 1;
     if (rows && rows.length >= enough) {
       if (db) {
