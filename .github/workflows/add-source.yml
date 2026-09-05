@@ -773,7 +773,10 @@ jobs:
               const table = await get(`${db}/lookuptable.php?l=${top.idLeague}&s=${season}`);
               const rows = table.json?.table;
               say(`  standings (${season}): HTTP ${table.status}, ${Array.isArray(rows) ? rows.length : 0} rows`);
-              if (Array.isArray(rows)) for (const r of rows.slice(0, 4)) say(`      ${r.intRank}. ${r.strTeam} ${r.intPoints} pts (${r.intPlayed} played)`);
+              // Every row, not the first four: the site's Armenian table came
+              // back missing Ուրարտու and Շիրակ, and four rows cannot tell a
+              // short table from a naming mismatch.
+              if (Array.isArray(rows)) for (const r of rows) say(`      ${r.intRank}. ${r.strTeam}  ${r.intPoints} pts (${r.intPlayed} played)`);
               const next = await get(`${db}/eventsnextleague.php?id=${top.idLeague}`);
               const events = next.json?.events;
               say(`  upcoming fixtures: HTTP ${next.status}, ${Array.isArray(events) ? events.length : 0}`);
