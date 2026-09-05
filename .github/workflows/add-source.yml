@@ -25,7 +25,7 @@ on:
       espn:
         description: 'Ask ESPN what it holds for one of the pages still on the paid provider'
         type: choice
-        options: ['no', 'squad', 'player', 'scorers', 'team', 'schedule', 'all']
+        options: ['no', 'squad', 'player', 'scorers', 'team', 'schedule', 'teammap', 'all']
         default: 'no'
       espn_slug:
         description: 'ESPN league slug for that question (eng.1, esp.1, ita.1 ...)'
@@ -1180,6 +1180,7 @@ jobs:
           AREA: ${{ github.event.inputs.espn }}
           SLUG: ${{ github.event.inputs.espn_slug }}
           TEAM: ${{ github.event.inputs.espn_id }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
           cat > espn-probe.mjs <<'JS'
           const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
@@ -1261,6 +1262,50 @@ jobs:
             const r = await get(`${SITE}/${slug}/teams/${team}`);
             head(`${slug} team ${team}`, r);
             if (r.json) shape(r.json);
+          }
+
+
+          if (area === "teammap") {
+            // /team/50 and /player/276 are API-Football's numbers and Google
+            // has indexed them. Moving to ESPN's numbers means a redirect,
+            // and a redirect means a map. Built once, here, by matching the
+            // two providers on the club's name through the site's own
+            // resolver - the same one that turns both spellings into the
+            // same Armenian - and printed as source to be checked in.
+            const CODES = [["PL","eng.1",39],["PD","esp.1",140],["SA","ita.1",135],["BL1","ger.1",78],["FL1","fra.1",61],["SPL","ksa.1",307],["MLS","usa.1",253]];
+            const key = process.env.API_FOOTBALL_KEY;
+            const season = new Date().getUTCMonth() + 1 >= 7 ? new Date().getUTCFullYear() : new Date().getUTCFullYear() - 1;
+            const pairs = [];
+            const unmatched = [];
+            for (const [code, slug, leagueId] of CODES) {
+              const espn = await get(`${SITE}/${slug}/teams?limit=100`);
+              const espnTeams = (espn.json?.sports?.[0]?.leagues?.[0]?.teams ?? []).map((t) => t.team).filter(Boolean);
+              let afTeams = [];
+              if (key) {
+                const r = await fetch(`https://v3.football.api-sports.io/teams?league=${leagueId}&season=${season}`, { headers: { "x-apisports-key": key, Accept: "application/json" } });
+                if (r.ok) afTeams = ((await r.json()).response ?? []).map((x) => x.team);
+              }
+              console.log(`\n  ${code}: ${afTeams.length} clubs from API-Football, ${espnTeams.length} from ESPN`);
+              // Match on a folded name, then on the longest word each side
+              // shares, because "Wolves" and "Wolverhampton Wanderers" are
+              // the same club under two houses' spellings.
+              const fold = (n) => (n ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+              const words = (n) => (n ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z0-9]+/).filter((w) => w.length > 3);
+              for (const af of afTeams) {
+                let hit = espnTeams.find((e) => fold(e.displayName) === fold(af.name) || fold(e.shortDisplayName) === fold(af.name) || fold(e.name) === fold(af.name));
+                if (!hit) {
+                  const mine = words(af.name);
+                  hit = espnTeams.find((e) => words(e.displayName).some((w) => mine.includes(w)));
+                }
+                if (hit) pairs.push(`  ${af.id}: "${hit.id}", // ${af.name} -> ${hit.displayName}`);
+                else unmatched.push(`  // ${af.id} ${af.name} - no ESPN club matched`);
+              }
+            }
+            console.log(`\n=== ${pairs.length} matched, ${unmatched.length} not ===`);
+            console.log("const ESPN_TEAM_ID_BY_API_FOOTBALL_ID: Record<string, string> = {");
+            for (const line of pairs) console.log(line);
+            for (const line of unmatched) console.log(line);
+            console.log("};");
           }
 
           if (want("schedule")) {
