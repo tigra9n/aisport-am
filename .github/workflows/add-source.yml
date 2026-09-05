@@ -1621,6 +1621,42 @@ jobs:
       # correctly, and eighteen tests hold them there. Two hundred lines of
       # log for a question already answered buried the answers below it, so
       # it moves behind 'all' with the other settled probes.
+      # When the site last published, and into which section.
+      #
+      # "Միջազգային ֆուտբոլ" was eight hours stale at half past three in the
+      # morning, and there are several ways that happens - the publishing
+      # window closed at three, the model's daily allowance ran out, the
+      # rotation spent its ticks on other sections, or generation is failing
+      # and saying so only in a log nobody reads. They look identical from
+      # the front page. This asks the table.
+      - name: When the site last published, and where
+        if: ${{ github.event.inputs.livescore == 'no' && github.event.inputs.espn == 'no' }}
+        run: |
+          npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT id, title, category, source_name, published_at FROM articles ORDER BY published_at DESC LIMIT 25" \
+            > recent.json 2>&1 || true
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT category, COUNT(*) AS n, MAX(published_at) AS newest FROM articles WHERE published_at > datetime('now','-2 days') GROUP BY category ORDER BY n DESC" \
+            > bycat.json 2>&1 || true
+          node -e "
+            const fs=require('fs');
+            const read=(f)=>{ const raw=fs.readFileSync(f,'utf8'); try{ return JSON.parse(raw.slice(raw.indexOf('[')))[0].results||[] }catch(e){ console.log('  '+raw.slice(0,300)); return [] } };
+            const recent=read('recent.json');
+            console.log('=== the last 25 articles ===');
+            for(const r of recent){
+              console.log('  '+String(r.published_at).slice(0,16).padEnd(17)+String(r.category??'?').padEnd(22)+String(r.source_name??'?').padEnd(24)+String(r.title??'').slice(0,52));
+            }
+            console.log('');
+            console.log('=== two days, by section ===');
+            for(const r of read('bycat.json')){
+              console.log('  '+String(r.category??'?').padEnd(24)+String(r.n).padStart(4)+'   newest '+String(r.newest).slice(0,16));
+            }
+          "
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
       - name: What the sources table holds now
         if: ${{ github.event.inputs.livescore == 'no' && github.event.inputs.espn == 'no' }}
         run: |
