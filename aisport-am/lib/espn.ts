@@ -1047,6 +1047,71 @@ export async function espnTopScorers(code: string): Promise<import("./topscorers
 // because ESPN nests these differently between competitions, and reading it
 // by an assumed path is what this file has already got wrong twice.
 
+
+// ESPN's own column names, in Armenian. The player page prints one table
+// per season with whatever columns the provider sends, which is what lets a
+// goalkeeper's saves and a striker's shots both survive - but it printed
+// them in English on an Armenian site: STARTS, FOULS COMMITTED, OFFSIDES.
+// Keyed on the displayName ESPN sends, lower-cased, because that is the
+// string the table actually renders.
+const COLUMN_HY: Record<string, string> = {
+  starts: "Մեկնարկային",
+  appearances: "Խաղ",
+  "sub ins": "Փոխարինմամբ",
+  minutes: "Րոպե",
+  "total goals": "Գոլ",
+  goals: "Գոլ",
+  assists: "Ասիստ",
+  shots: "Հարված",
+  "shots on goal": "Դարպասի ուղղությամբ",
+  "shots on target": "Դարպասի ուղղությամբ",
+  "fouls committed": "Խախտում",
+  "fouls suffered": "Իր վրա խախտում",
+  offsides: "Խաղից դուրս",
+  "yellow cards": "Դեղին քարտ",
+  "red cards": "Կարմիր քարտ",
+  "own goals": "Ինքնագոլ",
+  saves: "Փրկում",
+  "goals conceded": "Բաց թողած գոլ",
+  "clean sheets": "Չոր խաղ",
+  "shots faced": "Դիմացի հարված",
+  "penalty kick goals": "Պենալտիից գոլ",
+  "penalty kick shots": "Պենալտի",
+  "penalty kicks saved": "Փրկած պենալտի",
+  "goal assists": "Ասիստ",
+  "total shots": "Հարված",
+  "effective clearance": "Մաքրում",
+  tackles: "Խլում",
+  interceptions: "Ընդհատում",
+  "won corners": "Անկյունային",
+  "game winning goals": "Հաղթական գոլ",
+  "total passes": "Փոխանցում",
+  "accurate passes": "Ճշգրիտ փոխանցում",
+  "pass pct": "Փոխանցման ճշգրտություն",
+  "shot pct": "Հարվածի ճշգրտություն",
+};
+
+// ESPN reports a footballer's position in English and in its own words.
+const POSITION_ESPN_HY: Record<string, string> = {
+  goalkeeper: "Դարպասապահ",
+  defender: "Պաշտպան",
+  midfielder: "Կիսապաշտպան",
+  forward: "Հարձակվող",
+  attacker: "Հարձակվող",
+  striker: "Հարձակվող",
+  "center back": "Կենտրոնական պաշտպան",
+  "full back": "Եզրային պաշտպան",
+  winger: "Եզրային հարձակվող",
+};
+
+// Inches and pounds mean nothing to an Armenian reader; ESPN sends both the
+// raw numbers and its own "6' 4\"" rendering of them, so the raw ones are
+// converted rather than the string reformatted.
+const centimetres = (inches: number | undefined) =>
+  typeof inches === "number" && inches > 0 ? `${Math.round(inches * 2.54)} սմ` : null;
+const kilograms = (pounds: number | undefined) =>
+  typeof pounds === "number" && pounds > 0 ? `${Math.round(pounds * 0.45359237)} կգ` : null;
+
 const ATHLETE_HOST = "https://site.web.api.espn.com/apis/common/v3/sports/soccer";
 
 type EspnStatCategory = {
@@ -1072,6 +1137,8 @@ type EspnAthleteResponse = {
     fullName?: string;
     age?: number;
     dateOfBirth?: string;
+    height?: number;
+    weight?: number;
     displayHeight?: string;
     displayWeight?: string;
     citizenship?: string;
@@ -1143,7 +1210,10 @@ export async function espnPlayer(athleteId: string): Promise<EspnPlayer | null> 
       const team = block.teamId ? teamsById[String(block.teamId)] : undefined;
       const league = block.leagueSlug ? leaguesBySlug[block.leagueSlug] : undefined;
       const columns = (block.stats ?? [])
-        .map((value, index) => ({ label: labels[index] ?? "", value: String(value ?? ""), note: notes[index] ?? null }))
+        .map((value, index) => {
+          const english = labels[index] ?? "";
+          return { label: COLUMN_HY[english.toLowerCase()] ?? english, value: String(value ?? ""), note: notes[index] ?? null };
+        })
         .filter((column) => column.label && column.value !== "" && column.value !== "0");
       if (!columns.length) continue;
       const key = `${block.season?.displayName ?? block.season?.year ?? ""}|${block.leagueSlug ?? ""}|${block.teamId ?? ""}`;
@@ -1152,7 +1222,11 @@ export async function espnPlayer(athleteId: string): Promise<EspnPlayer | null> 
       // the second one adds its columns rather than a second row.
       if (existing) { existing.columns.push(...columns); continue; }
       seasons.push({
-        season: String(block.season?.displayName ?? block.season?.year ?? ""),
+        // ESPN writes the season as "2026-27 English Premier League", so
+        // printing it whole put the competition's English name beside its
+        // Armenian one on every heading. Keep the years.
+        season: (block.season?.displayName ?? "").match(/^\d{4}(?:-\d{2,4})?/)?.[0]
+          ?? String(block.season?.year ?? ""),
         league: league?.displayName ? armenianCompetition(league.displayName) : "",
         leagueLogo: league?.logos?.[0]?.href ?? null,
         team: team?.name ? armenianTeamName(team.name) : "",
@@ -1172,10 +1246,13 @@ export async function espnPlayer(athleteId: string): Promise<EspnPlayer | null> 
     nationality: athlete.citizenship ? armenianCountry(athlete.citizenship) : null,
     birthDate: athlete.dateOfBirth ? athlete.dateOfBirth.slice(0, 10) : null,
     birthPlace: birthPlace || null,
-    height: athlete.displayHeight ?? null,
-    weight: athlete.displayWeight ?? null,
+    height: centimetres(athlete.height) ?? athlete.displayHeight ?? null,
+    weight: kilograms(athlete.weight) ?? athlete.displayWeight ?? null,
     age: typeof athlete.age === "number" ? athlete.age : null,
-    position: athlete.position?.displayName ?? athlete.position?.name ?? null,
+    position: (() => {
+      const raw = athlete.position?.displayName ?? athlete.position?.name ?? "";
+      return POSITION_ESPN_HY[raw.toLowerCase()] ?? (raw || null);
+    })(),
     currentTeam: athlete.team?.displayName ? armenianTeamName(athlete.team.displayName) : null,
     currentTeamKey: athlete.team?.id ? espnKey(athlete.team.id) : null,
     currentTeamLogo: athlete.team?.logos?.[0]?.href ?? null,

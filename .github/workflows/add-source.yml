@@ -1418,6 +1418,26 @@ jobs:
             console.log(`  athletes: ${Array.isArray(athletes) ? athletes.length : 0}`);
             const first = Array.isArray(athletes) ? (athletes[0]?.items?.[0] ?? athletes[0]) : null;
             if (first) { console.log("  one player:"); shape(first); }
+            // Most squad cards render a letter rather than a face. Either
+            // ESPN has no photo for those players, or it has one and simply
+            // does not name it in the roster - and those are different
+            // problems. Count the field, then ask the CDN for the ones
+            // without it.
+            const flat = Array.isArray(athletes) ? athletes.flatMap((a) => a?.items ?? [a]) : [];
+            const withPhoto = flat.filter((a) => a?.headshot?.href);
+            console.log(`\n  headshot named for ${withPhoto.length} of ${flat.length}`);
+            for (const a of flat.filter((x) => x && !x.headshot?.href).slice(0, 5)) {
+              const direct = `https://a.espncdn.com/i/headshots/soccer/players/full/${a.id}.png`;
+              const combiner = `https://a.espncdn.com/combiner/i?img=/i/headshots/soccer/players/full/${a.id}.png&w=350&h=254`;
+              const d = await get(direct);
+              const c = await get(combiner);
+              console.log(`    ${String(a.displayName).padEnd(24)} direct HTTP ${d.status}, combiner HTTP ${c.status}, combiner bytes ${c.text.length}`);
+            }
+            const named = withPhoto[0]?.headshot?.href;
+            if (named) {
+              const n = await get(named);
+              console.log(`    a named one: HTTP ${n.status}, ${n.text.length} bytes  ${named}`);
+            }
           }
 
           if (want("player")) {
