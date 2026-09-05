@@ -1291,3 +1291,47 @@ export async function espnPlayer(athleteId: string): Promise<EspnPlayer | null> 
     seasons: seasons.filter((season) => season.season),
   };
 }
+
+// ---------------------------------------------------------------------
+// The faces
+// ---------------------------------------------------------------------
+//
+// MEASURED on 6 September: ESPN names a headshot for two of Arsenal's
+// twenty-four players, and for the other twenty-two the file does not exist
+// - the direct address and the combiner both answer 404. So a squad page
+// drawn from ESPN alone is a grid of letters. API-Football had a photo for
+// almost everyone, and that is the one thing being given up by leaving it.
+//
+// TheSportsDB fills it, for nothing, and per club rather than per player:
+// one request returns a whole squad with a cutout each. Twenty clubs in
+// seven leagues is a hundred and forty requests in total, not four thousand,
+// and only for a club somebody actually opens. The caller caches the answer
+// for a month, because a squad photograph does not change on a Tuesday.
+
+type SportsDbTeamSearch = { teams?: { idTeam?: string; strTeam?: string }[] };
+type SportsDbPlayers = {
+  player?: { strPlayer?: string; strCutout?: string | null; strThumb?: string | null; strRender?: string | null }[];
+};
+
+// Compared on letters alone: the two providers punctuate differently
+// ("Gabriel Magalhães" against "Gabriel Magalhaes") and one of them will
+// write a middle name the other leaves out.
+const photoKey = (name: string) =>
+  name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z]/g, "");
+
+export async function sportsDbSquadPhotos(clubName: string): Promise<Record<string, string>> {
+  const found = await sportsDb<SportsDbTeamSearch>(`/searchteams.php?t=${encodeURIComponent(clubName)}`);
+  const teamId = found?.teams?.[0]?.idTeam;
+  if (!teamId) return {};
+  const squad = await sportsDb<SportsDbPlayers>(`/lookup_all_players.php?id=${teamId}`);
+  const photos: Record<string, string> = {};
+  for (const player of squad?.player ?? []) {
+    // The cutout is a transparent head-and-shoulders and is what the card
+    // wants; the thumbnail is a match photograph and is the fallback.
+    const url = player.strCutout || player.strThumb || player.strRender;
+    if (player.strPlayer && url) photos[photoKey(player.strPlayer)] = url;
+  }
+  return photos;
+}
+
+export const squadPhotoKey = photoKey;
