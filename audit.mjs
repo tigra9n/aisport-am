@@ -298,6 +298,65 @@ try {
   log(`  this check failed: ${String(err).slice(0, 160)}`);
 }
 
+// ---------- 8z. Do two different clubs wear the same crest?
+// Reported twice by hand: FC Noah carried another club's badge, and then
+// Ararat Yerevan carried Ararat-Armenia's. Both came from upstream - the
+// crest is whatever API-Football's standings row says it is - and both were
+// found by a reader looking at the table, which is the wrong way round.
+// Comparing the images the page actually renders finds them all at once,
+// including the case where two different URLs return the same artwork.
+log(`\n=== clubs sharing a crest ===`);
+try {
+  const { createHash } = await import("node:crypto");
+  await p.goto(`${BASE}/standings`, { waitUntil: "load", timeout: 60000 }).catch(() => {});
+  await p.waitForTimeout(1500);
+  // The page renders one table at a time - the first pass of this check saw
+  // twenty clubs and declared everything fine, having looked at the Premier
+  // League and nothing else. Walk the league picker instead.
+  const codes = await p.evaluate(() =>
+    [...document.querySelectorAll(".league-select option")].map((o) => o.value));
+  const teams = [];
+  for (const code of codes.length ? codes : [null]) {
+    if (code) {
+      await p.selectOption(".league-select", code).catch(() => {});
+      await p.waitForTimeout(600);
+    }
+    teams.push(...await p.evaluate(() =>
+      [...document.querySelectorAll("a.team-cell-link")]
+        .map((a) => ({
+          id: (a.getAttribute("href") ?? "").split("/").pop() ?? "?",
+          name: a.querySelector("strong")?.textContent?.trim() ?? "",
+          src: a.querySelector("img")?.getAttribute("src") ?? "",
+        }))
+        .filter((t) => t.src && t.name)));
+  }
+  // One fetch per distinct image, not per club: a league table repeats the
+  // same badge across every row a club appears in.
+  const hashes = new Map();
+  for (const src of new Set(teams.map((t) => t.src))) {
+    try {
+      const body = Buffer.from(await (await fetch(src)).arrayBuffer());
+      hashes.set(src, createHash("sha1").update(body).digest("hex"));
+    } catch {
+      hashes.set(src, `unfetched:${src}`);
+    }
+  }
+  const byImage = new Map();
+  for (const t of teams) {
+    const key = hashes.get(t.src);
+    if (!byImage.has(key)) byImage.set(key, new Map());
+    byImage.get(key).set(t.id, t.name);
+  }
+  const shared = [...byImage.values()].filter((clubs) => clubs.size > 1);
+  log(`  ${new Set(teams.map((t) => t.id)).size} clubs across ${codes.length || 1} leagues, ${hashes.size} distinct crests`);
+  if (!shared.length) log(`  every club wears its own`);
+  for (const clubs of shared) {
+    log(`  SAME CREST: ${[...clubs].map(([id, name]) => `${name} (${id})`).join("  +  ")}`);
+  }
+} catch (err) {
+  log(`  this check failed: ${String(err).slice(0, 160)}`);
+}
+
 // ---------- 8a. Is the live strip actually showing the newest article?
 // This is the check that was missing: every measurement was green while a
 // strip labelled "24/7, updating" sat two hours behind the site.

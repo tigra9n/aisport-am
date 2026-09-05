@@ -16,8 +16,9 @@ const PROXY = "https://wsrv.nl/";
 //
 // Every badge on the site is that API's own image, addressed by team id -
 // media.api-sports.io/football/teams/3684.png - and when the upstream is out
-// of date there is nowhere else the picture could come from. Tigran reports
-// FC Noah's is not the club's crest.
+// of date there is nowhere else the picture could come from. Two clubs have
+// turned up wrong so far, both reported by a reader looking at the Armenian
+// table; audit.mjs now compares the rendered crests and finds them itself.
 //
 // The correction goes here rather than in the six server modules that read a
 // logo (standings, live, match details, player, squad, cache), because every
@@ -29,6 +30,12 @@ const PROXY = "https://wsrv.nl/";
 const TEAM_LOGO_OVERRIDES: Record<string, string> = {
   // FC Noah, from the club's own site.
   "3684": "https://noah.am/images/white_logo.svg",
+  // FC Ararat Yerevan. API-Football hands out Ararat-Armenia's badge (3683)
+  // for it as well - the audit compares the rendered crests and found this
+  // to be the only such clash among 156 clubs across eight leagues. Served
+  // from public/ rather than from the club's site, so nobody else's asset
+  // reorganisation can put a hole in the Armenian table.
+  "3682": "/crests/ararat-yerevan.png",
 };
 
 const API_FOOTBALL_TEAM_LOGO = /^https?:\/\/media\.api-sports\.io\/football\/teams\/(\d+)\.png$/i;
