@@ -176,7 +176,7 @@ export default async function Home() {
       </section>
 
       <div className="site-shell home-main">
-        <section className="trending-bar" aria-label="Թրենդային թեմաներ"><strong>Թրենդային</strong>{trendingTopics.map((topic) => <Link prefetch={false} href={`/search?q=${encodeURIComponent(topic.query)}`} key={topic.label}>{topic.label}</Link>)}</section>
+        <section className="trending-bar" aria-label="Թրենդային թեմաներ"><strong>Թրենդային</strong>{trendingTopics.map((topic) => <Link prefetch={false} rel="nofollow" href={`/search?q=${encodeURIComponent(topic.query)}`} key={topic.label}>{topic.label}</Link>)}</section>
 
         <section className="hero-news-grid newsroom-hero">
           <aside className="headline-feed" aria-label="Լրահոս">
