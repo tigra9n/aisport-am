@@ -1002,11 +1002,38 @@ const readNumber = (text: string, pattern: RegExp) => {
   return found ? Number(found[1]) : 0;
 };
 
+// Four doors to the same list, tried in order.
+//
+// MEASURED from inside the Worker on 6 September: every other ESPN call the
+// site makes answers - the tables, the clubs, a squad, a player - and
+// /apis/site/v2/.../leaders alone comes back empty in under thirty
+// milliseconds, while the identical URL answers a GitHub runner with fifty
+// names. So it is not the reader and not the host: Akamai refuses that one
+// path from Cloudflare's addresses. cdn.espn.com and the core API are
+// different doors to the same data, and cdn.espn.com already answers this
+// Worker.
+//
+// findLeaders searches by what a thing holds rather than where it sits, so
+// it copes with all four shapes without a parser each.
+export function leaderUrls(slug: string): string[] {
+  const year = new Date().getUTCMonth() + 1 >= 7 ? new Date().getUTCFullYear() : new Date().getUTCFullYear() - 1;
+  return [
+    `${HOST}/${slug}/leaders`,
+    `${STANDINGS_HOST}/${slug}/leaders`,
+    `https://cdn.espn.com/core/soccer/stats/_/league/${slug}?xhr=1`,
+    `https://sports.core.api.espn.com/v2/sports/soccer/leagues/${slug}/seasons/${year}/types/1/leaders?limit=50`,
+  ];
+}
+
 export async function espnTopScorers(code: string): Promise<import("./topscorers-server").TopScorer[] | null> {
   const slug = ESPN_SLUG_BY_CODE[code];
   if (!slug) return null;
-  const data = await espnJson<unknown>(`/${slug}/leaders`);
-  const leaders = data ? findLeaders(data, /goal/i) : null;
+  let leaders: EspnLeaderEntry[] | null = null;
+  for (const url of leaderUrls(slug)) {
+    const data = await espnUrl<unknown>(url);
+    leaders = data ? findLeaders(data, /goal/i) : null;
+    if (leaders?.length) break;
+  }
   if (!leaders?.length) return null;
   return leaders.slice(0, 20).map((entry, index) => {
     const long = entry.displayValue ?? "";

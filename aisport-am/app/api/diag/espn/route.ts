@@ -129,12 +129,22 @@ export async function GET(request: Request) {
       await say("espnTeams(eng.1)", () => espn.espnTeams("eng.1"));
       await say("espnSquad(eng.1,359)", () => espn.espnSquad("eng.1", "359"));
       await say("espnPlayer(169532)", () => espn.espnPlayer("169532"));
-      // The raw leaders response, so a null from espnTopScorers can be told
-      // apart from a leaders list this reader cannot find.
-      await say("raw /eng.1/leaders", async () => {
-        const raw = await espn.espnJson<{ stats?: { name?: string; leaders?: unknown[] }[] }>("/eng.1/leaders");
-        return raw ? `keys ${Object.keys(raw).join(",")} stats ${(raw.stats ?? []).map((s) => `${s.name}:${(s.leaders ?? []).length}`).join(" ")}` : null;
-      });
+      // Which of the four doors to the scoring chart this Worker can open.
+      // The first one answers a GitHub runner with fifty names and this
+      // Worker with nothing, in under thirty milliseconds - so each is asked
+      // separately rather than only the chain's verdict.
+      for (const [index, url] of espn.leaderUrls("eng.1").entries()) {
+        await say(`leaders door ${index + 1}`, async () => {
+          const started = Date.now();
+          const res = await fetch(url, {
+            headers: { "User-Agent": BROWSER_UA, Accept: "application/json" },
+            signal: AbortSignal.timeout(12_000),
+          });
+          const text = await res.text();
+          const host = new URL(url).host;
+          return `${host} HTTP ${res.status} ${text.length}b ${Date.now() - started}ms ${text.slice(0, 60).replace(/\s+/g, " ")}`;
+        });
+      }
     } catch (err) {
       out.import = `threw: ${String(err).slice(0, 120)}`;
     }
