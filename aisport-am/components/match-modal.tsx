@@ -171,7 +171,7 @@ export function MatchModal() {
   const matchId = searchParams.get("match");
   const [details, setDetails] = useState<LiveMatchDetail | null>(null);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<"events" | "lineups" | "stats" | "h2h" | "prediction" | "standings" | "topscorers" | "form">("events");
+  const [tab, setTab] = useState<"events" | "lineups" | "stats" | "h2h" | "prediction" | "standings" | "topscorers" | "form" | "commentary">("events");
   const dialog = useRef<HTMLDivElement>(null);
   // Closing means removing ?match= from the URL, and on a force-dynamic page
   // that is a round trip to the server before anything on screen changes -
@@ -280,6 +280,7 @@ export function MatchModal() {
               <button className={tab === "lineups" ? "active" : ""} onClick={() => setTab("lineups")}>Կազմեր</button>
               <button className={tab === "stats" ? "active" : ""} onClick={() => setTab("stats")}>Վիճակագրություն</button>
               {details.h2h.length > 0 && <button className={tab === "h2h" ? "active" : ""} onClick={() => setTab("h2h")}>H2H</button>}
+              {(details.commentary?.length ?? 0) > 0 && <button className={tab === "commentary" ? "active" : ""} onClick={() => setTab("commentary")}>Խաղի ընթացքը</button>}
               {details.formGuide.length > 0 && <button className={tab === "form" ? "active" : ""} onClick={() => setTab("form")}>Մարզավիճակ</button>}
               {details.prediction && <button className={tab === "prediction" ? "active" : ""} onClick={() => setTab("prediction")}>Կանխատեսում</button>}
               {details.standings && details.standings.length > 0 && <button className={tab === "standings" ? "active" : ""} onClick={() => setTab("standings")}>Աղյուսակ</button>}
@@ -342,18 +343,27 @@ export function MatchModal() {
                         lineup.substitutes.length > 0 && (
                           <div className="subs-list" key={lineup.team}>
                             <h3>{lineup.team} · Պահեստայիններ</h3>
+                            {/* What each substitute actually did, when the
+                                provider says. ESPN attaches fourteen numbers
+                                to every roster entry in the same request as
+                                the lineup; API-Football charged for them, so
+                                the chip only ever carried a name. */}
                             <div className="subs-grid">
-                              {lineup.substitutes.map((player, index) => (
-                                player.id ? (
+                              {lineup.substitutes.map((player, index) => {
+                                const did = details.playerLines?.[player.name] ?? [];
+                                const line = did.length > 0
+                                  ? <em className="player-did">{did.map((d) => (d.value > 1 ? `${d.label} ×${d.value}` : d.label)).join(" · ")}</em>
+                                  : null;
+                                return player.id ? (
                                   <Link href={`/player/${player.id}`} className="subs-chip subs-chip-link" key={`${player.name}-${index}`}>
-                                    <b>{player.number ?? "•"}</b>{player.name}
+                                    <b>{player.number ?? "•"}</b>{player.name}{line}
                                   </Link>
                                 ) : (
                                   <span className="subs-chip" key={`${player.name}-${index}`}>
-                                    <b>{player.number ?? "•"}</b>{player.name}
+                                    <b>{player.number ?? "•"}</b>{player.name}{line}
                                   </span>
-                                )
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         )
@@ -369,11 +379,51 @@ export function MatchModal() {
 
             {tab === "stats" && (
               <div className="match-modal-scroll">
-                {details.statistics.length === 2 ? (
+                {/* The provider sends twenty-eight numbers where the four bars
+                    below were built for API-Football's four. A bar only means
+                    something for a share of a hundred - possession, passing
+                    accuracy - so everything else is drawn as two numbers with
+                    a label between them, the same as on the match page. */}
+                {(details.statRows?.length ?? 0) > 0 ? (
+                  <div className="stat-bars">
+                    {details.statRows!.filter((row) => row.home !== "" || row.away !== "").map((row) => {
+                      const home = Number.parseFloat(row.home) || 0;
+                      const away = Number.parseFloat(row.away) || 0;
+                      const total = home + away || 1;
+                      const homePct = Math.round((home / total) * 100);
+                      const share = /տիրապետում|ճշգրտություն|տոկոս/i.test(row.label);
+                      return (
+                        <div className={`stat-bar-row${share ? "" : " stat-bar-row-plain"}`} key={row.label}>
+                          <b>{row.home || "—"}</b>
+                          <div className="stat-bar-track home">{share && <div className="stat-bar-fill" style={{ width: `${homePct}%` }} />}</div>
+                          <span>{row.label}</span>
+                          <div className="stat-bar-track away">{share && <div className="stat-bar-fill" style={{ width: `${100 - homePct}%` }} />}</div>
+                          <b>{row.away || "—"}</b>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : details.statistics.length === 2 ? (
                   <StatBars home={details.statistics[0]} away={details.statistics[1]} />
                 ) : (
                   <p className="detail-empty">Վիճակագրական տվյալներ դեռ հասանելի չեն։</p>
                 )}
+              </div>
+            )}
+
+            {/* Minute by minute, in the provider's own words and language.
+                Credited rather than absorbed: a score belongs to nobody, a
+                sentence belongs to whoever wrote it. */}
+            {tab === "commentary" && (details.commentary?.length ?? 0) > 0 && (
+              <div className="match-modal-scroll">
+                <div className="commentary-panel">
+                  {details.commentarySource && <p className="commentary-source">աղբյուր՝ {details.commentarySource}, բնագիր՝ անգլերեն</p>}
+                  <ol className="commentary-list">
+                    {details.commentary!.slice().reverse().slice(0, 80).map((line, index) => (
+                      <li key={`c-${index}`}><b>{line.minute}</b><span>{line.text}</span></li>
+                    ))}
+                  </ol>
+                </div>
               </div>
             )}
 

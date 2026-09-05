@@ -2,6 +2,11 @@ export type StandingRow = {
   position: number;
   team: string;
   teamId: number | null;
+  // ESPN's own id under an "espn-" prefix. The two providers number clubs
+  // differently and a bare number cannot say which is meant, so the prefix
+  // is the difference: teamId is API-Football's, teamKey is ESPN's, and a
+  // link prefers whichever the row actually has.
+  teamKey?: string | null;
   teamLogo: string | null;
   played: number;
   won: number;
