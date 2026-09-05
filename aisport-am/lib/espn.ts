@@ -121,11 +121,13 @@ function toMatch(event: EspnEvent, league: { slug: string; priority: number; lab
     competition: league.label,
     home: armenianTeamName(home.team.displayName),
     away: armenianTeamName(away.team.displayName),
-    // ESPN's team ids are strings and belong to ESPN, not to API-Football.
-    // The site's team pages are built on API-Football's numbering, so these
-    // are left null rather than linked to a page about a different club.
+    // ESPN's team ids are strings and belong to ESPN, not to API-Football,
+    // so they travel under their own prefix. Left as ids the board would
+    // link a reader to a page about a different club.
     homeId: null,
     awayId: null,
+    homeKey: home.team.id ? espnKey(home.team.id) : null,
+    awayKey: away.team.id ? espnKey(away.team.id) : null,
     homeLogo: crest(home.team),
     awayLogo: crest(away.team),
     homeScore: score(home),
@@ -211,10 +213,11 @@ export async function espnStandings(code: string): Promise<import("./football").
   const rows = entries.map((entry) => ({
     position: stat(entry, "rank") || 0,
     team: armenianTeamName(entry.team?.displayName ?? ""),
-    // ESPN's ids are not API-Football's, and the site's team pages are
-    // built on API-Football's numbering. Linking one to the other would
-    // send a reader to a page about a different club.
+    // ESPN's ids are not API-Football's, so they travel under their own
+    // prefix rather than as a bare number that would send a reader to a
+    // page about a different club. The team page reads both.
     teamId: null,
+    teamKey: entry.team?.id ? espnKey(entry.team.id) : null,
     teamLogo: entry.team?.logos?.[0]?.href ?? null,
     played: stat(entry, "gamesPlayed"),
     won: stat(entry, "wins"),
@@ -866,6 +869,24 @@ export async function findEspnTeamByName(name: string): Promise<EspnTeam | null>
     if (hit) return hit;
   }
   return null;
+}
+
+// Which competition a club plays in, by ESPN's id. The roster endpoint is
+// addressed by league and club together, and a link only carries the club,
+// so the index is built once from the same team lists the name search
+// uses. Seventeen requests, and clubs move between competitions twice a
+// year, so the caller caches it for a day.
+export async function espnTeamIndex(): Promise<Record<string, EspnTeam>> {
+  const index: Record<string, EspnTeam> = {};
+  for (const league of ESPN_LEAGUES) {
+    for (const team of await espnTeams(league.slug)) {
+      // A club in both a domestic league and a European one is listed
+      // twice; the first entry wins, and ESPN_LEAGUES puts the European
+      // competitions first, where a club's roster is just as complete.
+      index[team.id] ??= team;
+    }
+  }
+  return index;
 }
 
 type EspnRosterResponse = {
