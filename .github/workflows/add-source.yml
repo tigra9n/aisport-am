@@ -337,6 +337,51 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
+      # WHAT THIS FOUND, so the next session does not measure it again.
+      #
+      # ESPN's public API is open and carries the whole match centre. Two
+      # wrong conclusions were reached first, and both were mine:
+      #
+      #   1. "ESPN blocks us" - it does not. Sending
+      #      "User-Agent: AIFootballBot/1.0" gets Access Denied from Akamai
+      #      on every league. A browser User-Agent gets HTTP 200 on every
+      #      league, as do cdn.espn.com, site.web.api and sports.core.api.
+      #      No User-Agent at all is refused too, so it is the signature and
+      #      nothing else.
+      #   2. "ESPN has no player statistics" - it does. They were looked for
+      #      in boxscore.players, which is ESPN's shape for the American
+      #      sports; boxscore holds only "teams" in soccer. The per-player
+      #      numbers hang off rosters[].roster[], alongside jersey, starter,
+      #      subbedIn, subbedOut and formationPlace: fourteen of them per
+      #      player, goals, assists, shots, shots on target, saves, fouls
+      #      won and committed, cards.
+      #
+      # Team statistics are twenty-eight, not the six the first sample
+      # printed: possession, shots, shots on target, passes and pass
+      # accuracy, crosses, long balls, tackles, interceptions, clearances,
+      # blocks, corners, offsides, fouls, cards. That is not less than
+      # API-Football gives.
+      #
+      # Also free from ESPN: standings (with the same browser signature -
+      # the 403 seen at first was that header missing again), the Europa
+      # League, which football-data.org charges for, and per-match
+      # commentary, formations, previous meetings and last-five-games form.
+      #
+      # What ESPN does NOT have is Armenia. Asked for its own list, it
+      # returns 218 soccer leagues and not one of them matches "arm"; five
+      # spellings of the slug all answer 400. TheSportsDB's free key does
+      # carry the Armenian Premier League (id 4619) - table, fixtures and
+      # results, current - but its livescore endpoint is now paid.
+      #
+      # And football-data.org's free tier is a scoreboard, not a match
+      # centre: a live match returns score, referees and odds, with no
+      # minute, no scorers, no cards, no lineups and no statistics.
+      #
+      # STILL UNKNOWN: all of the above was measured from a GitHub runner.
+      # Cloudflare Workers leave from different addresses, and whether ESPN
+      # answers them is the one thing that decides this. That is the first
+      # thing to test, before rewriting six files around it.
+      #
       # API-Football is the last paid thing on the site, and the match
       # centre is what it pays for: one call for the live list and eight to
       # ten per match for the detail page. Before any of that is rewritten,
