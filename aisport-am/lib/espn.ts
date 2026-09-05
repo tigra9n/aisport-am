@@ -24,6 +24,7 @@
 // where it is until a free source for the domestic league is found.
 import { formatTimeYerevan } from "./format-date";
 import { armenianTeamName } from "./team-names-hy";
+import { armenianPlayerName } from "./player-names-hy";
 import type { LiveMatch } from "./live-football-server";
 
 const HOST = "https://site.web.api.espn.com/apis/site/v2/sports/soccer";
@@ -791,3 +792,199 @@ export async function armenianMatchesForDate(date: string): Promise<ArmenianMatc
 // lightly visited and cached, so what they cost is small, while what a
 // wrong mapping would cost is every indexed page on the site.
 
+
+// ---------------------------------------------------------------------
+// The four pages that were still on the paid provider
+// ---------------------------------------------------------------------
+//
+// The note above says the work is the mapping, and that turned out to be
+// half right. It assumed the mapping had to be built from API-Football's
+// club list, which on 6 September answered "You have reached the request
+// limit for the day" - the free plan's hundred, spent. A map that cannot
+// be built from a source that is being cancelled is not a map to build.
+//
+// What the site already has is better: every club it links to is in the
+// standings rows in its own D1 cache, with API-Football's number beside
+// the club's name. So the old number resolves through the name, at the
+// moment somebody follows an indexed link, and no table has to be kept in
+// step with two providers. New links carry ESPN's number under an
+// "espn-" prefix, which cannot be mistaken for the old one.
+
+export const ESPN_ID_PREFIX = "espn-";
+export const espnKey = (id: string | number) => `${ESPN_ID_PREFIX}${id}`;
+export function parseEspnKey(value: string): string | null {
+  return value.startsWith(ESPN_ID_PREFIX) ? value.slice(ESPN_ID_PREFIX.length) : null;
+}
+
+export type EspnTeam = { id: string; slug: string; name: string; shortName: string; logo: string | null };
+
+type EspnTeamsResponse = {
+  sports?: { leagues?: { teams?: { team?: { id?: string; displayName?: string; shortDisplayName?: string; name?: string; logos?: { href?: string }[] } }[] }[] }[];
+};
+
+// One league's clubs. Small, changes twice a year, and asked for by every
+// lookup below, so it is worth the round trip only once per league.
+export async function espnTeams(slug: string): Promise<EspnTeam[]> {
+  const data = await espnJson<EspnTeamsResponse>(`/${slug}/teams?limit=100`);
+  return (data?.sports?.[0]?.leagues?.[0]?.teams ?? [])
+    .map((entry) => entry.team)
+    .filter((team): team is NonNullable<typeof team> => Boolean(team?.id && team?.displayName))
+    .map((team) => ({
+      id: String(team.id),
+      slug,
+      name: team.displayName ?? "",
+      shortName: team.shortDisplayName ?? team.name ?? team.displayName ?? "",
+      logo: team.logos?.[0]?.href ?? null,
+    }));
+}
+
+// The two providers spell a club differently often enough that an exact
+// match finds about four in five. Fold the punctuation and the accents
+// first, then fall back to a shared long word, which is what makes
+// "Wolves" and "Wolverhampton Wanderers" the same club.
+const foldName = (name: string) =>
+  name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+const longWords = (name: string) =>
+  name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z0-9]+/).filter((word) => word.length > 3);
+
+export function matchTeamByName(teams: EspnTeam[], name: string): EspnTeam | null {
+  const folded = foldName(name);
+  const exact = teams.find((team) => foldName(team.name) === folded || foldName(team.shortName) === folded);
+  if (exact) return exact;
+  const wanted = longWords(name);
+  if (!wanted.length) return null;
+  return teams.find((team) => longWords(team.name).some((word) => wanted.includes(word))) ?? null;
+}
+
+// Search every competition the board carries. Used only when somebody
+// follows a link numbered by the old provider, which is rare enough that
+// searching is cheaper than maintaining a table.
+export async function findEspnTeamByName(name: string): Promise<EspnTeam | null> {
+  for (const league of ESPN_LEAGUES) {
+    const teams = await espnTeams(league.slug);
+    const hit = matchTeamByName(teams, name);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+type EspnRosterResponse = {
+  team?: { id?: string; displayName?: string; logos?: { href?: string }[] };
+  athletes?: {
+    id?: string;
+    displayName?: string;
+    fullName?: string;
+    jersey?: string;
+    age?: number;
+    citizenship?: string;
+    headshot?: { href?: string };
+    position?: { name?: string; displayName?: string };
+    items?: unknown[];
+  }[];
+  coach?: { id?: string; firstName?: string; lastName?: string }[];
+};
+
+// ESPN's own position words, in the site's four groups. It says Forward
+// where API-Football said Attacker, and the squad page orders its sections
+// by these strings, so the mapping is to the site's vocabulary rather than
+// to ESPN's.
+const ESPN_POSITION: Record<string, string> = {
+  Goalkeeper: "Goalkeeper",
+  Defender: "Defender",
+  Midfielder: "Midfielder",
+  Forward: "Attacker",
+  Attacker: "Attacker",
+};
+
+export type EspnSquad = {
+  teamName: string;
+  teamLogo: string | null;
+  players: { id: string; name: string; number: number | null; position: string; age: number | null; photo: string | null }[];
+};
+
+// One request for the whole squad, with the shirt number, the position,
+// the age and the headshot. API-Football charged for the photos.
+export async function espnSquad(slug: string, teamId: string): Promise<EspnSquad | null> {
+  const data = await espnJson<EspnRosterResponse>(`/${slug}/teams/${teamId}/roster`);
+  const athletes = data?.athletes ?? [];
+  if (!athletes.length) return null;
+  return {
+    teamName: armenianTeamName(data?.team?.displayName ?? ""),
+    teamLogo: data?.team?.logos?.[0]?.href ?? null,
+    players: athletes
+      .filter((athlete) => athlete.id && athlete.displayName)
+      .map((athlete) => ({
+        id: String(athlete.id),
+        name: athlete.displayName ?? "",
+        number: athlete.jersey ? Number(athlete.jersey) : null,
+        position: ESPN_POSITION[athlete.position?.name ?? ""] ?? athlete.position?.displayName ?? "",
+        age: typeof athlete.age === "number" ? athlete.age : null,
+        photo: athlete.headshot?.href ?? null,
+      })),
+  };
+}
+
+type EspnLeaderEntry = {
+  displayValue?: string;
+  shortDisplayValue?: string;
+  value?: number;
+  athlete?: { id?: string; displayName?: string; headshot?: { href?: string }; team?: { id?: string; displayName?: string; logos?: { href?: string }[] } };
+};
+
+// ESPN nests the scoring charts differently between competitions, so the
+// list is found by what it holds rather than by where it sits: the first
+// array of leaders whose name says goals. Guessing the path is exactly
+// what put this file's player statistics in the wrong place twice.
+function findLeaders(value: unknown, wanted: RegExp): EspnLeaderEntry[] | null {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findLeaders(item, wanted);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const name = typeof record.name === "string" ? record.name : "";
+    const leaders = record.leaders;
+    if (wanted.test(name) && Array.isArray(leaders) && leaders.length) return leaders as EspnLeaderEntry[];
+    for (const nested of Object.values(record)) {
+      const found = findLeaders(nested, wanted);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+// ESPN writes the rest of a leader's season into a sentence rather than
+// into fields: displayValue is "Matches: 3, Goals: 3" and
+// shortDisplayValue is "M: 3, G: 3: A: 0". The assists live only in the
+// short one, so both are read.
+const readNumber = (text: string, pattern: RegExp) => {
+  const found = text.match(pattern);
+  return found ? Number(found[1]) : 0;
+};
+
+export async function espnTopScorers(code: string): Promise<import("./topscorers-server").TopScorer[] | null> {
+  const slug = ESPN_SLUG_BY_CODE[code];
+  if (!slug) return null;
+  const data = await espnJson<unknown>(`/${slug}/leaders`);
+  const leaders = data ? findLeaders(data, /goal/i) : null;
+  if (!leaders?.length) return null;
+  return leaders.slice(0, 20).map((entry, index) => {
+    const long = entry.displayValue ?? "";
+    const short = entry.shortDisplayValue ?? "";
+    return {
+      rank: index + 1,
+      id: Number(entry.athlete?.id ?? 0),
+      name: armenianPlayerName(entry.athlete?.displayName ?? ""),
+      photo: entry.athlete?.headshot?.href ?? null,
+      team: armenianTeamName(entry.athlete?.team?.displayName ?? ""),
+      teamId: null,
+      teamLogo: entry.athlete?.team?.logos?.[0]?.href ?? null,
+      goals: Number(entry.value ?? 0) || readNumber(long, /Goals:\s*(\d+)/i) || readNumber(short, /\bG:\s*(\d+)/),
+      assists: readNumber(short, /\bA:\s*(\d+)/) || readNumber(long, /Assists:\s*(\d+)/i),
+      appearances: readNumber(long, /Matches:\s*(\d+)/i) || readNumber(short, /\bM:\s*(\d+)/),
+    };
+  }).filter((row) => row.name);
+}

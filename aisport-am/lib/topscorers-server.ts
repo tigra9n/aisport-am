@@ -40,7 +40,10 @@ export async function getTopScorers(code: string): Promise<{ rows: TopScorer[]; 
   const runtime = env as unknown as Record<string, string | undefined>;
   const key = runtime.API_FOOTBALL_KEY;
   const leagueId = LEAGUE_ID_BY_CODE[code];
-  if (!key || !leagueId) return { rows: [], unavailable: true };
+  // The cache key is the paid provider's league number because that is what
+  // it has always been; ESPN fills the same row. A code neither provider
+  // knows has no page to fill.
+  if (!leagueId) return { rows: [], unavailable: true };
 
   const db = (env as unknown as { DB?: D1Database }).DB;
   const season = currentSeasonYear();
@@ -57,7 +60,27 @@ export async function getTopScorers(code: string): Promise<{ rows: TopScorer[]; 
     }
   }
 
+  // ESPN first, and free. Its leaders endpoint answers in about a tenth of
+  // a second and carries fifty names where this page shows twenty, with the
+  // goals, the assists, the appearances and a headshot each. API-Football
+  // stays underneath because it is what the Armenian league still comes
+  // from - ESPN has no Armenian competition - and because on the day this
+  // was written the paid provider answered "You have reached the request
+  // limit for the day", which is what a hundred requests a day looks like
+  // when a page falls back to it on every miss.
   try {
+    const { espnTopScorers } = await import("./espn");
+    const rows = await espnTopScorers(code);
+    if (rows && rows.length) {
+      if (db) {
+        await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey, JSON.stringify(rows), Date.now()).run();
+      }
+      return { rows, unavailable: false };
+    }
+  } catch { /* the paid provider below is the fallback */ }
+
+  try {
+    if (!key) throw new Error("no key");
     const response = await fetch(`https://v3.football.api-sports.io/players/topscorers?league=${leagueId}&season=${season}`, {
       headers: { "x-apisports-key": key, Accept: "application/json" },
     });
