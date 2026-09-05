@@ -551,6 +551,26 @@ jobs:
               say(`      ${slug.padEnd(22)} HTTP ${r.status}${r.ok ? `, ${(r.json?.events ?? []).length} fixtures` : ""}`);
             }
 
+            // ESPN knows Pyunik - id 2493, with a crest - but files it
+            // under uefa.europa.conf_qual, the competition it qualified in,
+            // not under an Armenian league. So the question is no longer
+            // whether ESPN has the club but whether it has the club's
+            // domestic fixtures: a team's own schedule may carry every
+            // match it plays, league included, even when the league itself
+            // is not published as a competition.
+            say("  --- ESPN knows the clubs; does it know their league games? ---");
+            for (const [club, id] of [["Pyunik", "2493"], ["Noah", "20309"], ["Ararat-Armenia", "17939"]]) {
+              const sched = await get(`https://site.api.espn.com/apis/site/v2/sports/soccer/uefa.europa.conf_qual/teams/${id}/schedule`, H);
+              const events = sched.json?.events ?? [];
+              const leagues = new Set(events.map((e) => e.season?.slug ?? e.league?.slug ?? e.competitions?.[0]?.type?.slug ?? "?"));
+              say(`      ${club.padEnd(16)} schedule HTTP ${sched.status}, ${events.length} matches, competitions: ${[...leagues].join(", ").slice(0, 120)}`);
+              for (const e of events.slice(0, 3)) say(`          ${e.date?.slice(0, 10)} ${e.name ?? e.shortName} [${e.seasonType?.name ?? e.league?.name ?? "?"}]`);
+              // The core API keeps a team's events independently of any one
+              // competition, which is the likelier home for domestic games.
+              const core = await get(`https://sports.core.api.espn.com/v2/sports/soccer/teams/${id}/events?limit=10`, H);
+              say(`      ${club.padEnd(16)} core events HTTP ${core.status}, ${core.json?.count ?? 0} total`);
+            }
+
             const st = await get("https://site.api.espn.com/apis/v2/sports/soccer/eng.1/standings", H);
             say(`  Premier League standings with a browser signature: HTTP ${st.status}${st.ok ? `, ${st.json?.children?.[0]?.standings?.entries?.length ?? 0} teams` : ""}`);
             const sc = await get("https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/leaders", H);
