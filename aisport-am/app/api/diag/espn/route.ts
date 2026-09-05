@@ -43,7 +43,13 @@ export async function GET(request: Request) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // MEASURED, not assumed: from inside this Worker, site.api.espn.com
+  // answers 403 to every signature - browser, bot and none alike - while
+  // site.web.api.espn.com and cdn.espn.com answer 200 in about a tenth of
+  // a second. The block is on Cloudflare's addresses at one hostname, not
+  // on the request. So the working host is what gets exercised here.
   const scoreboard = "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard";
+  const WEB = "https://site.web.api.espn.com";
   const results = await Promise.all([
     probe("browser UA", scoreboard, { "User-Agent": BROWSER_UA }),
     probe("bot UA", scoreboard, { "User-Agent": "AIFootballBot/1.0 (+https://aifootball.am)" }),
@@ -58,6 +64,13 @@ export async function GET(request: Request) {
     probe("site.web.api", "https://site.web.api.espn.com/apis/site/v2/sports/soccer/eng.1/scoreboard", { "User-Agent": BROWSER_UA }),
     probe("standings", "https://site.api.espn.com/apis/v2/sports/soccer/eng.1/standings", { "User-Agent": BROWSER_UA }),
     probe("thesportsdb armenia", "https://www.thesportsdb.com/api/v1/json/3/lookuptable.php?l=4619&s=2026-2027", { "User-Agent": BROWSER_UA }),
+    // Does the host that works serve the rest of the match centre, or only
+    // the scoreboard? Nothing moves until these answer too.
+    probe("web: standings", `${WEB}/apis/v2/sports/soccer/eng.1/standings`, { "User-Agent": BROWSER_UA }),
+    probe("web: summary", `${WEB}/apis/site/v2/sports/soccer/eng.1/summary?event=401879286`, { "User-Agent": BROWSER_UA }),
+    probe("web: la liga", `${WEB}/apis/site/v2/sports/soccer/esp.1/scoreboard`, { "User-Agent": BROWSER_UA }),
+    probe("web: europa league", `${WEB}/apis/site/v2/sports/soccer/uefa.europa/scoreboard`, { "User-Agent": BROWSER_UA }),
+    probe("cdn: scoreboard json", "https://cdn.espn.com/core/soccer/scoreboard?xhr=1&league=esp.1", { "User-Agent": BROWSER_UA }),
   ]);
 
   // Searching ESPN's league names for "Armenia" was the wrong question -
@@ -69,13 +82,17 @@ export async function GET(request: Request) {
     ["Pyunik", "Noah Yerevan", "Ararat-Armenia", "Alashkert", "Urartu Yerevan"].map(async (name) => {
       try {
         const res = await fetch(
-          `https://site.web.api.espn.com/apis/common/v3/search?query=${encodeURIComponent(name)}&limit=5&sport=soccer`,
+          `${WEB}/apis/common/v3/search?query=${encodeURIComponent(name)}&limit=5&sport=soccer`,
           { headers: { "User-Agent": BROWSER_UA }, signal: AbortSignal.timeout(15_000) },
         );
         if (!res.ok) return { name, status: res.status, found: null };
-        const data = await res.json() as { items?: { contents?: { displayName?: string; subtitle?: string }[] }[] };
-        const hits = (data.items ?? []).flatMap((group) => group.contents ?? []).slice(0, 3);
-        return { name, status: res.status, found: hits.map((h) => `${h.displayName} (${h.subtitle ?? "?"})`) };
+        // The results are the items themselves. Reading them as
+        // items[].contents[] - ESPN's shape for the American sports, the
+        // same wrong assumption that hid the player statistics - returned
+        // "nothing" for clubs whose entries Tigran had open in a browser.
+        const data = await res.json() as { items?: { id?: string; displayName?: string; type?: string; defaultLeagueSlug?: string }[] };
+        const hits = (data.items ?? []).filter((i) => i.type === "team").slice(0, 3);
+        return { name, status: res.status, found: hits.map((h) => `${h.displayName} id=${h.id} league=${h.defaultLeagueSlug ?? "?"}`) };
       } catch (err) {
         return { name, status: 0, found: [String(err).slice(0, 60)] };
       }
@@ -86,9 +103,15 @@ export async function GET(request: Request) {
     from: "cloudflare worker",
     armenianClubsInEspn: clubs,
     colo: request.headers.get("cf-ray")?.split("-")[1] ?? null,
-    verdict: results.find((r) => r.label === "browser UA")?.status === 200
-      ? "ESPN answers the Worker"
-      : "ESPN refuses the Worker",
+    // The first version of this line read one host and announced "ESPN
+    // refuses the Worker" while two others were answering 200 in the same
+    // response. A verdict drawn from part of its own evidence is worse
+    // than no verdict.
+    verdict: results.some((r) => r.status === 200 && r.label.startsWith("web:"))
+      ? "ESPN answers the Worker on site.web.api"
+      : results.some((r) => r.status === 200)
+        ? "ESPN answers the Worker on some hosts - see the list"
+        : "ESPN refuses the Worker everywhere",
     results,
   });
 }
