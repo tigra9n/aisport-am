@@ -982,6 +982,52 @@ jobs:
                 }
               })"
 
+      # ESPN names clubs differently from the provider the Armenian table
+      # was built against - "Tottenham Hotspur" where it said "Tottenham",
+      # "Wolverhampton Wanderers" where it said "Wolves" - and a name the
+      # table misses falls through to the transliterator, which spells it
+      # out letter by letter. That is the most visible thing on the board,
+      # so count the misses rather than wait for a reader to find them.
+      - name: Which ESPN club names the Armenian table does not know
+        if: ${{ github.event.inputs.livescore != 'no' }}
+        run: |
+          npm --prefix aisport-am ci --no-audit --no-fund >/dev/null 2>&1 || npm --prefix aisport-am install --no-audit --no-fund >/dev/null 2>&1
+          cat > names.mts <<'TS'
+          import { armenianTeamName } from "./aisport-am/lib/team-names-hy.ts";
+          const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+          const LEAGUES = ["eng.1","esp.1","ita.1","ger.1","fra.1","usa.1","ksa.1","uefa.champions","uefa.europa","uefa.europa.conf","eng.fa","eng.league_cup","esp.copa_del_rey","ita.coppa_italia","ger.dfb_pokal","fra.coupe_de_france"];
+          // Armenian letters only: if the answer is written in them and did
+          // not come from the table, it came from the transliterator.
+          const isArmenian = (s: string) => /[\u0530-\u058F]/.test(s);
+          const names = new Set<string>();
+          for (const slug of LEAGUES) {
+            try {
+              const res = await fetch(`https://site.web.api.espn.com/apis/site/v2/sports/soccer/${slug}/teams?limit=100`, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20000) });
+              if (!res.ok) { console.log(`  ${slug}: HTTP ${res.status}`); continue; }
+              const data = await res.json() as { sports?: { leagues?: { teams?: { team?: { displayName?: string } }[] }[] }[] };
+              const teams = data.sports?.[0]?.leagues?.[0]?.teams ?? [];
+              for (const t of teams) if (t.team?.displayName) names.add(t.team.displayName);
+              console.log(`  ${slug}: ${teams.length} clubs`);
+            } catch (e) { console.log(`  ${slug}: ${String(e).slice(0, 60)}`); }
+          }
+          console.log(`\n  ${names.size} distinct club names from ESPN`);
+          const missing: string[] = [];
+          const found: string[] = [];
+          for (const name of [...names].sort()) {
+            const hy = armenianTeamName(name);
+            // The table's answers are hand written; the transliterator's are
+            // generated. Telling them apart without exporting internals: a
+            // transliterated name keeps the original's word count and its
+            // capitals, so compare against what the letters alone produce.
+            (hy === name || !isArmenian(hy) ? missing : found).push(`${name} -> ${hy}`);
+          }
+          console.log(`\n  === untranslated (${missing.length}) ===`);
+          for (const m of missing) console.log(`      ${m}`);
+          console.log(`\n  === a sample of what the table does answer ===`);
+          for (const f of found.slice(0, 12)) console.log(`      ${f}`);
+          TS
+          npx --prefix aisport-am tsx names.mts || node --experimental-strip-types names.mts
+
       # Types passing is not the same as a page working. The live board,
       # the match page and the tables were all pointed at new providers in
       # one change; this opens each of them on the deployed site and reports
