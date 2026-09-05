@@ -28,18 +28,21 @@ async function ensureCacheTable(db:D1Database){cacheTableReady??=db.prepare(`CRE
 // which is the one thing guaranteed not to bring it back.
 //
 // The api_cache table has carried a retry_after column all along; this is
-// the first caller to use it. A daily allowance resets at midnight UTC, so
-// there is nothing to gain by asking before then; a per-minute rate limit
-// clears on its own in about a minute.
+// the first caller to use it.
+//
+// Half an hour for a spent daily allowance, deliberately, rather than
+// sleeping until whenever the allowance is believed to reset. The provider
+// does not say whether that is midnight UTC or a rolling twenty-four hours
+// from the first call, and betting on midnight costs a whole day of scores
+// if the guess is wrong: we would wake, be refused once more, and sleep
+// again until the next midnight. Probing every thirty minutes recovers
+// within half an hour of the real reset whenever it happens, and spends at
+// most forty-eight calls a day doing it - against an allowance of 7500.
 function refusalBackoffMs(errs:unknown):number{
   if(!errs||typeof errs!=="object"||Array.isArray(errs))return 0;
   const entry=errs as Record<string,unknown>;
   const text=Object.values(entry).map(String).join(" ").toLowerCase();
-  if("requests" in entry||text.includes("limit for the day")){
-    const now=new Date();
-    const nextReset=Date.UTC(now.getUTCFullYear(),now.getUTCMonth(),now.getUTCDate()+1);
-    return Math.max(60_000,nextReset-Date.now());
-  }
+  if("requests" in entry||text.includes("limit for the day"))return 30*60_000;
   if("rateLimit" in entry||text.includes("rate limit"))return 60_000;
   return 0;
 }
