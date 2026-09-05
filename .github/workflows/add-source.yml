@@ -138,6 +138,34 @@ jobs:
             ["Football Italia (Serie A)", "https://www.football-italia.net/rss.xml"],
             ["Barca Universal", "https://barcauniversal.com/feed/"],
             ["Madrid Universal", "https://madriduniversal.com/feed/"],
+
+            // The continental papers, in their own languages. Every English
+            // desk we read is downstream of these on Serie A, La Liga and
+            // Ligue 1 news: Gazzetta breaks the Milan and Juventus stories
+            // and everyone else translates it an hour later. Reading them
+            // directly is the opposite of the second-hand problem, not an
+            // instance of it - what disqualified the Russian-language sites
+            // was that they are downstream of the same English desks we
+            // already have, not the language.
+            //
+            // fetchFeed already sniffs the charset from the header and the
+            // XML prolog, which is what a Turkish feed served as
+            // windows-1254 forced it to learn.
+            ["Gazzetta dello Sport", "https://www.gazzetta.it/rss/calcio.xml"],
+            ["Gazzetta dello Sport (home)", "https://www.gazzetta.it/rss/home.xml"],
+            ["Corriere dello Sport", "https://www.corrieredellosport.it/rss/calcio"],
+            ["Tuttosport", "https://www.tuttosport.com/rss/calcio"],
+            ["Calciomercato", "https://www.calciomercato.com/rss"],
+            ["Tuttomercatoweb", "https://www.tuttomercatoweb.com/rss"],
+            ["Marca", "https://e00-marca.uecdn.es/rss/futbol/primera-division.xml"],
+            ["AS", "https://as.com/rss/futbol/primera.xml"],
+            ["Mundo Deportivo", "https://www.mundodeportivo.com/feed/rss/futbol/"],
+            ["Sport.es", "https://www.sport.es/es/rss/futbol/rss.xml"],
+            ["L Equipe Football", "https://www.lequipe.fr/rss/actu_rss_Football.xml"],
+            ["RMC Sport Football", "https://rmcsport.bfmtv.com/rss/football/"],
+            ["Kicker", "https://newsfeed.kicker.de/news/aktuell"],
+            ["Record", "https://www.record.pt/rss"],
+            ["A Bola", "https://www.abola.pt/rss"],
           ];
 
 
