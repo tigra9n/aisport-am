@@ -99,8 +99,51 @@ export async function GET(request: Request) {
     }),
   );
 
+  // The raw hosts answering is not the same as the library working. The
+  // scoring charts went blank with "Տվյալ չկա" while every probe above
+  // returned 200, so this exercises the functions the pages actually call
+  // and reports what each one gives back rather than whether it threw.
+  const library = await (async () => {
+    const out: Record<string, string> = {};
+    const say = async (name: string, run: () => Promise<unknown>) => {
+      const started = Date.now();
+      try {
+        const value = await run();
+        const size = Array.isArray(value)
+          ? `${value.length} row(s)`
+          : typeof value === "string"
+            ? value.slice(0, 160)
+            : value
+              ? `an object (${Object.keys(value as object).length} keys)`
+              : String(value);
+        out[name] = `${size} in ${Date.now() - started}ms`;
+      } catch (err) {
+        out[name] = `threw: ${String(err).slice(0, 120)}`;
+      }
+    };
+    try {
+      const espn = await import("../../../../lib/espn");
+      await say("espnTopScorers(PL)", () => espn.espnTopScorers("PL"));
+      await say("espnStandings(PL)", () => espn.espnStandings("PL"));
+      await say("espnStandings(SPL)", () => espn.espnStandings("SPL"));
+      await say("espnTeams(eng.1)", () => espn.espnTeams("eng.1"));
+      await say("espnSquad(eng.1,359)", () => espn.espnSquad("eng.1", "359"));
+      await say("espnPlayer(169532)", () => espn.espnPlayer("169532"));
+      // The raw leaders response, so a null from espnTopScorers can be told
+      // apart from a leaders list this reader cannot find.
+      await say("raw /eng.1/leaders", async () => {
+        const raw = await espn.espnJson<{ stats?: { name?: string; leaders?: unknown[] }[] }>("/eng.1/leaders");
+        return raw ? `keys ${Object.keys(raw).join(",")} stats ${(raw.stats ?? []).map((s) => `${s.name}:${(s.leaders ?? []).length}`).join(" ")}` : null;
+      });
+    } catch (err) {
+      out.import = `threw: ${String(err).slice(0, 120)}`;
+    }
+    return out;
+  })();
+
   return Response.json({
     from: "cloudflare worker",
+    library,
     armenianClubsInEspn: clubs,
     colo: request.headers.get("cf-ray")?.split("-")[1] ?? null,
     // The first version of this line read one host and announced "ESPN
