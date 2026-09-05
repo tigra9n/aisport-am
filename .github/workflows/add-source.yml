@@ -18,9 +18,9 @@ on:
         required: false
         default: ''
       livescore:
-        description: 'Probe the free livescore APIs instead of the feeds'
+        description: 'Probe the livescore APIs instead of the feeds (all = replay the settled ones too)'
         type: choice
-        options: ['no', 'yes']
+        options: ['no', 'yes', 'all']
         default: 'no'
 
 jobs:
@@ -39,7 +39,7 @@ jobs:
       # with the SAME parser lib/feeds.ts uses, so a feed that passes here
       # is a feed the worker can actually read, and only those are written.
       - name: Probe the candidate feeds
-        if: ${{ github.event.inputs.livescore != 'yes' }}
+        if: ${{ github.event.inputs.livescore == 'no' }}
         run: |
           cat > probe.mjs <<'JS'
           import fs from "node:fs";
@@ -391,8 +391,10 @@ jobs:
       #
       # Nothing here decides anything. It replaces documentation with what
       # the endpoints actually return.
+      # Settled. Its answer is in the comment above; it only runs when
+      # asked for explicitly, because its output buries what is still open.
       - name: What the free livescore APIs really return
-        if: ${{ github.event.inputs.livescore == 'yes' }}
+        if: ${{ github.event.inputs.livescore == 'all' }}
         env:
           FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
@@ -789,7 +791,7 @@ jobs:
       # get measured on the host the Worker can actually reach before a line
       # is written against them.
       - name: What ESPN gives for squads, players and scorers
-        if: ${{ github.event.inputs.livescore == 'yes' }}
+        if: ${{ github.event.inputs.livescore != 'no' }}
         run: |
           cat > rest.mjs <<'JS'
           const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
@@ -875,8 +877,10 @@ jobs:
           JS
           node rest.mjs
 
+      # Settled. Its answer is in the comment above; it only runs when
+      # asked for explicitly, because its output buries what is still open.
       - name: What is behind the federation's own league site
-        if: ${{ github.event.inputs.livescore == 'yes' }}
+        if: ${{ github.event.inputs.livescore == 'all' }}
         run: |
           cat > ffa.mjs <<'JS'
           const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
@@ -940,7 +944,7 @@ jobs:
           node ffa.mjs
 
       - name: Does ESPN answer the Worker itself
-        if: ${{ github.event.inputs.livescore == 'yes' }}
+        if: ${{ github.event.inputs.livescore != 'no' }}
         env:
           CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
         run: |
@@ -960,7 +964,7 @@ jobs:
               })"
 
       - name: What the sources table holds now
-        if: ${{ github.event.inputs.livescore != 'yes' }}
+        if: ${{ github.event.inputs.livescore == 'no' }}
         run: |
           npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
           npx wrangler d1 execute aisport-db --remote --json --command \
