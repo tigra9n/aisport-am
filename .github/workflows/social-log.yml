@@ -95,7 +95,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           npx wrangler d1 execute aisport-db --remote --json --command \
-            "SELECT ts, mode, generated, reason, substr(log,1,400) AS log
+            "SELECT ts, mode, generated, reason, substr(log,1,4000) AS log
              FROM cron_invocations ORDER BY id DESC LIMIT 20" > ticks.json 2>&1 || true
           node -e '
             const fs = require("fs");
@@ -106,8 +106,19 @@ jobs:
             if (!rows.length) { console.log("nothing recorded yet"); process.exit(0) }
             for (const r of rows) {
               console.log(`${r.ts}  ${String(r.mode).padEnd(9)} generated=${r.generated}${r.reason ? "  " + r.reason : ""}`);
-              const notable = (() => { try { return JSON.parse(r.log) } catch { return [] } })()
-                .filter((line) => /fail|error|balance|credit|quota|limit|skip|gemini|claude|!!/i.test(line));
-              for (const line of notable.slice(0, 3)) console.log(`     ${line.slice(0, 150)}`);
+              // The log column is fetched truncated so one long tick cannot
+              // dominate the output, and a truncated JSON array does not
+              // parse. The first version let the parse throw and returned an
+              // empty list, so every healthy tick printed its header and
+              // nothing else - hiding the one thing this was extended to
+              // show. Scan the raw text when the parse fails.
+              const NOTABLE = /fail|error|balance|credit|quota|limit|skip|gemini|claude|!!/i;
+              let notable = [];
+              try {
+                notable = JSON.parse(r.log).filter((line) => NOTABLE.test(line));
+              } catch {
+                notable = String(r.log).split(/","/).filter((line) => NOTABLE.test(line));
+              }
+              for (const line of notable.slice(0, 3)) console.log(`     ${line.replace(/^\[?"/, "").slice(0, 150)}`);
             }
           '
