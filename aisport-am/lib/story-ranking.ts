@@ -49,7 +49,10 @@ const MIN_SHARED_DISTINCTIVE = 2;
 // Rolling pages, not articles. Their text changes under you all evening, so
 // whatever the model is handed will not be what the link shows an hour
 // later - and the headline is never about one thing anyway.
-const ROLLING_PAGE = /\bliveblog\b|\blive blog\b|LIVE!|\bas it happened\b|minute-by-minute/i;
+// The continental papers mark them in their own languages, and they were
+// in the first sample each one returned: RMC led with "DIRECT.
+// Nice-Le Mans", Record with "Roma-Atalanta, em direto".
+const ROLLING_PAGE = /\bliveblog\b|\blive blog\b|LIVE[!:]|\bas it happened\b|minute-by-minute|\bDIRECT\.|\ben direct\b|\bem direto\b|\ben directo\b|\bEN VIVO\b|\bin diretta\b|\bLIVETICKER\b|\bliveticker\b/i;
 
 export async function rankStories(
   sources: { name: string; feedUrl: string }[],

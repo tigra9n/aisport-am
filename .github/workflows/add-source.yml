@@ -151,20 +151,27 @@ jobs:
             // fetchFeed already sniffs the charset from the header and the
             // XML prolog, which is what a Turkish feed served as
             // windows-1254 forced it to learn.
-            ["Gazzetta dello Sport", "https://www.gazzetta.it/rss/calcio.xml"],
-            ["Gazzetta dello Sport (home)", "https://www.gazzetta.it/rss/home.xml"],
+            // Gazzetta's and AS's published RSS addresses are abandoned -
+            // 158 and 1478 days since the newest item - and L'Equipe's
+            // 404s. All three have since moved to a different feed system,
+            // so try those addresses rather than conclude the papers have
+            // no feed.
+            ["Gazzetta dello Sport", "https://www.gazzetta.it/dynamic-feed/rss/section/Calcio.xml"],
+            ["Gazzetta Serie A", "https://www.gazzetta.it/dynamic-feed/rss/section/Calcio/Serie-A.xml"],
+            ["L Equipe Football", "https://dwh.lequipe.fr/api/edito/rss?path=/Football"],
+            ["AS Futbol", "https://as.com/rss/futbol/portada.xml"],
+            ["AS Ultimas", "https://as.com/rss/tags/ultimas_noticias.xml"],
+            // kicker.de/news/aktuell is every sport - the first sample it
+            // returned led with volleyball. The football desk has its own.
+            ["Kicker Fussball", "https://newsfeed.kicker.de/news/fussball"],
             ["Corriere dello Sport", "https://www.corrieredellosport.it/rss/calcio"],
             ["Tuttosport", "https://www.tuttosport.com/rss/calcio"],
             ["Calciomercato", "https://www.calciomercato.com/rss"],
             ["Tuttomercatoweb", "https://www.tuttomercatoweb.com/rss"],
             ["Marca", "https://e00-marca.uecdn.es/rss/futbol/primera-division.xml"],
-            ["AS", "https://as.com/rss/futbol/primera.xml"],
             ["Mundo Deportivo", "https://www.mundodeportivo.com/feed/rss/futbol/"],
             ["Sport.es", "https://www.sport.es/es/rss/futbol/rss.xml"],
-            ["L Equipe Football", "https://www.lequipe.fr/rss/actu_rss_Football.xml"],
             ["RMC Sport Football", "https://rmcsport.bfmtv.com/rss/football/"],
-            ["Kicker", "https://newsfeed.kicker.de/news/aktuell"],
-            ["Record", "https://www.record.pt/rss"],
             ["A Bola", "https://www.abola.pt/rss"],
           ];
 
