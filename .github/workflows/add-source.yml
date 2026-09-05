@@ -8,6 +8,11 @@ on:
         type: choice
         options: ['no', 'yes']
         default: 'no'
+      apitube:
+        description: 'The APITube row: leave it as it is, switch it off, or switch it back on'
+        type: choice
+        options: ['leave', 'off', 'on']
+        default: 'leave'
 
 jobs:
   add:
@@ -179,6 +184,26 @@ jobs:
             console.log(sql.replace(/^/gm,'  '));
           "
           npx wrangler d1 execute aisport-db --remote --file=sources.sql 2>&1 | tail -20
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # Switched off rather than deleted. The row carries the APITube key,
+      # and deleting it would mean re-entering a paid credential by hand to
+      # undo a decision made in one evening; enabled=0 is read by the cron
+      # route's `where(eq(sources.enabled, true))` and stops every APITube
+      # request just as completely.
+      #
+      # What goes with it, so it is not a surprise later: the rotating
+      # club/player search in lib/football-entities.ts runs only for the
+      # APITube source, and that search was the only thing bringing
+      # Armenian club news in. The English feeds do not carry it.
+      - name: Switch the APITube source off or back on
+        if: ${{ github.event.inputs.apitube != 'leave' }}
+        run: |
+          npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
+          npx wrangler d1 execute aisport-db --remote --command \
+            "UPDATE sources SET enabled=${{ github.event.inputs.apitube == 'on' && '1' || '0' }} WHERE feed_url LIKE '%apitube%'" 2>&1 | tail -8
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
