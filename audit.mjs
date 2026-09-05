@@ -310,14 +310,26 @@ try {
   const { createHash } = await import("node:crypto");
   await p.goto(`${BASE}/standings`, { waitUntil: "load", timeout: 60000 }).catch(() => {});
   await p.waitForTimeout(1500);
-  const teams = await p.evaluate(() =>
-    [...document.querySelectorAll("a.team-cell-link")]
-      .map((a) => ({
-        id: (a.getAttribute("href") ?? "").split("/").pop() ?? "?",
-        name: a.querySelector("strong")?.textContent?.trim() ?? "",
-        src: a.querySelector("img")?.getAttribute("src") ?? "",
-      }))
-      .filter((t) => t.src && t.name));
+  // The page renders one table at a time - the first pass of this check saw
+  // twenty clubs and declared everything fine, having looked at the Premier
+  // League and nothing else. Walk the league picker instead.
+  const codes = await p.evaluate(() =>
+    [...document.querySelectorAll(".league-select option")].map((o) => o.value));
+  const teams = [];
+  for (const code of codes.length ? codes : [null]) {
+    if (code) {
+      await p.selectOption(".league-select", code).catch(() => {});
+      await p.waitForTimeout(600);
+    }
+    teams.push(...await p.evaluate(() =>
+      [...document.querySelectorAll("a.team-cell-link")]
+        .map((a) => ({
+          id: (a.getAttribute("href") ?? "").split("/").pop() ?? "?",
+          name: a.querySelector("strong")?.textContent?.trim() ?? "",
+          src: a.querySelector("img")?.getAttribute("src") ?? "",
+        }))
+        .filter((t) => t.src && t.name)));
+  }
   // One fetch per distinct image, not per club: a league table repeats the
   // same badge across every row a club appears in.
   const hashes = new Map();
@@ -336,7 +348,7 @@ try {
     byImage.get(key).set(t.id, t.name);
   }
   const shared = [...byImage.values()].filter((clubs) => clubs.size > 1);
-  log(`  ${new Set(teams.map((t) => t.id)).size} clubs on the standings page, ${hashes.size} distinct crests`);
+  log(`  ${new Set(teams.map((t) => t.id)).size} clubs across ${codes.length || 1} leagues, ${hashes.size} distinct crests`);
   if (!shared.length) log(`  every club wears its own`);
   for (const clubs of shared) {
     log(`  SAME CREST: ${[...clubs].map(([id, name]) => `${name} (${id})`).join("  +  ")}`);
