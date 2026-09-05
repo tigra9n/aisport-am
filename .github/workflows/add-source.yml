@@ -22,6 +22,19 @@ on:
         type: choice
         options: ['no', 'yes', 'all']
         default: 'no'
+      espn:
+        description: 'Ask ESPN what it holds for one of the pages still on the paid provider'
+        type: choice
+        options: ['no', 'squad', 'player', 'scorers', 'team', 'schedule', 'teammap', 'all']
+        default: 'no'
+      espn_slug:
+        description: 'ESPN league slug for that question (eng.1, esp.1, ita.1 ...)'
+        required: false
+        default: 'eng.1'
+      espn_id:
+        description: 'ESPN team id for that question (359 = Arsenal)'
+        required: false
+        default: '359'
 
 jobs:
   add:
@@ -39,7 +52,7 @@ jobs:
       # with the SAME parser lib/feeds.ts uses, so a feed that passes here
       # is a feed the worker can actually read, and only those are written.
       - name: Probe the candidate feeds
-        if: ${{ github.event.inputs.livescore == 'no' }}
+        if: ${{ github.event.inputs.livescore == 'no' && github.event.inputs.espn == 'no' }}
         run: |
           cat > probe.mjs <<'JS'
           import fs from "node:fs";
@@ -272,7 +285,7 @@ jobs:
           node probe.mjs
 
       - name: Write the passing feeds into D1
-        if: ${{ github.event.inputs.apply == 'yes' && github.event.inputs.livescore != 'yes' }}
+        if: ${{ github.event.inputs.apply == 'yes' && github.event.inputs.livescore != 'yes' && github.event.inputs.espn == 'no' }}
         run: |
           npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
           # INSERT OR IGNORE against the unique index on feed_url, so
@@ -305,7 +318,7 @@ jobs:
       # APITube source, and that search was the only thing bringing
       # Armenian club news in. The English feeds do not carry it.
       - name: Switch the APITube source off or back on
-        if: ${{ github.event.inputs.apitube != 'leave' }}
+        if: ${{ github.event.inputs.apitube != 'leave' && github.event.inputs.espn == 'no' }}
         run: |
           npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
           npx wrangler d1 execute aisport-db --remote --command \
@@ -321,7 +334,7 @@ jobs:
       # them - so switching a row off by name has to be possible without a
       # deploy.
       - name: Switch named sources off
-        if: ${{ github.event.inputs.disable != '' }}
+        if: ${{ github.event.inputs.disable != '' && github.event.inputs.espn == 'no' }}
         run: |
           npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
           node -e "
@@ -392,7 +405,7 @@ jobs:
       # Nothing here decides anything. It replaces documentation with what
       # the endpoints actually return.
       - name: What the free livescore APIs really return
-        if: ${{ github.event.inputs.livescore != 'no' }}
+        if: ${{ github.event.inputs.livescore != 'no' && github.event.inputs.espn == 'no' }}
         env:
           FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
@@ -813,7 +826,7 @@ jobs:
       # get measured on the host the Worker can actually reach before a line
       # is written against them.
       - name: What ESPN gives for squads, players and scorers
-        if: ${{ github.event.inputs.livescore != 'no' }}
+        if: ${{ github.event.inputs.livescore != 'no' && github.event.inputs.espn == 'no' }}
         run: |
           cat > rest.mjs <<'JS'
           const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
@@ -902,7 +915,7 @@ jobs:
       # Settled. Its answer is in the comment above; it only runs when
       # asked for explicitly, because its output buries what is still open.
       - name: What is behind the federation's own league site
-        if: ${{ github.event.inputs.livescore == 'all' }}
+        if: ${{ github.event.inputs.livescore == 'all' && github.event.inputs.espn == 'no' }}
         run: |
           cat > ffa.mjs <<'JS'
           const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
@@ -966,7 +979,7 @@ jobs:
           node ffa.mjs
 
       - name: Does ESPN answer the Worker itself
-        if: ${{ github.event.inputs.livescore != 'no' }}
+        if: ${{ github.event.inputs.livescore != 'no' && github.event.inputs.espn == 'no' }}
         env:
           CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
         run: |
@@ -992,7 +1005,7 @@ jobs:
       # out letter by letter. That is the most visible thing on the board,
       # so count the misses rather than wait for a reader to find them.
       - name: Which ESPN club names the Armenian table does not know
-        if: ${{ github.event.inputs.livescore != 'no' }}
+        if: ${{ github.event.inputs.livescore != 'no' && github.event.inputs.espn == 'no' }}
         run: |
           npm --prefix aisport-am ci --no-audit --no-fund >/dev/null 2>&1 || npm --prefix aisport-am install --no-audit --no-fund >/dev/null 2>&1
           cat > names.mts <<'TS'
@@ -1053,7 +1066,7 @@ jobs:
       # what a reader would actually see, because an empty block renders
       # perfectly and compiles perfectly.
       - name: Do the pages actually render
-        if: ${{ github.event.inputs.livescore != 'no' }}
+        if: ${{ github.event.inputs.livescore != 'no' && github.event.inputs.espn == 'no' }}
         run: |
           cat > pages.mjs <<'JS'
           const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
@@ -1154,8 +1167,164 @@ jobs:
           JS
           node pages.mjs
 
+      # One question, one answer, nothing else in the log.
+      #
+      # The step above asks the same things but prints two hundred club names
+      # first, and GitHub truncates before the answer arrives - which is how a
+      # measurement of ESPN's player statistics came to be read out of the
+      # wrong part of the response twice. This prints field names and one
+      # example each, so a 400 KB response fits in a screen.
+      - name: What ESPN returns, asked one question at a time
+        if: ${{ github.event.inputs.espn != 'no' }}
+        env:
+          AREA: ${{ github.event.inputs.espn }}
+          SLUG: ${{ github.event.inputs.espn_slug }}
+          TEAM: ${{ github.event.inputs.espn_id }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+        run: |
+          cat > espn-probe.mjs <<'JS'
+          const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+          const area = process.env.AREA || "all";
+          const slug = process.env.SLUG || "eng.1";
+          const team = process.env.TEAM || "359";
+          const want = (name) => area === "all" || area === name;
+
+          async function get(url) {
+            try {
+              const r = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20000) });
+              const text = await r.text();
+              let json = null;
+              try { json = JSON.parse(text); } catch { /* an Akamai denial is HTML */ }
+              return { status: r.status, json, text };
+            } catch (e) { return { status: 0, json: null, text: String(e) }; }
+          }
+          // Print a value's shape rather than the value: field names with one
+          // example each. Reading the value is what buried the answer before.
+          const shape = (value, depth = 0, path = "") => {
+            const pad = "  ".repeat(depth + 1);
+            if (Array.isArray(value)) {
+              console.log(`${pad}${path}[] ${value.length} item(s)`);
+              if (value.length && depth < 2) shape(value[0], depth + 1, "");
+              return;
+            }
+            if (value && typeof value === "object") {
+              for (const [k, v] of Object.entries(value)) {
+                if (Array.isArray(v)) { shape(v, depth, k); continue; }
+                if (v && typeof v === "object") {
+                  if (depth < 2) { console.log(`${pad}${k}:`); shape(v, depth + 1, ""); }
+                  else console.log(`${pad}${k}: {${Object.keys(v).slice(0, 8).join(",")}}`);
+                  continue;
+                }
+                console.log(`${pad}${k}: ${String(v).slice(0, 60)}`);
+              }
+              return;
+            }
+            console.log(`${pad}${path}${String(value).slice(0, 60)}`);
+          };
+          const head = (title, res) => console.log(`\n=== ${title} -> HTTP ${res.status} ===${res.json ? "" : ` ${res.text.slice(0, 100).replace(/\s+/g, " ")}`}`);
+
+          const SITE = "https://site.web.api.espn.com/apis/site/v2/sports/soccer";
+          const COMMON = "https://site.web.api.espn.com/apis/common/v3/sports/soccer";
+
+          if (want("squad")) {
+            const r = await get(`${SITE}/${slug}/teams/${team}/roster`);
+            head(`${slug} team ${team} roster`, r);
+            const athletes = r.json?.athletes ?? [];
+            console.log(`  athletes: ${Array.isArray(athletes) ? athletes.length : 0}`);
+            const first = Array.isArray(athletes) ? (athletes[0]?.items?.[0] ?? athletes[0]) : null;
+            if (first) { console.log("  one player:"); shape(first); }
+          }
+
+          if (want("player")) {
+            const roster = await get(`${SITE}/${slug}/teams/${team}/roster`);
+            const list = roster.json?.athletes ?? [];
+            const one = Array.isArray(list) ? (list[0]?.items?.[0] ?? list[0]) : null;
+            const id = one?.id;
+            console.log(`\n  a player id from that roster: ${id ?? "none"}`);
+            if (id) {
+              for (const url of [`${COMMON}/athletes/${id}`, `${COMMON}/athletes/${id}/stats`, `${SITE}/athletes/${id}`]) {
+                const r = await get(url);
+                head(url.replace(COMMON, "common").replace(SITE, "site"), r);
+                if (r.json) shape(r.json);
+              }
+            }
+          }
+
+          if (want("scorers")) {
+            for (const url of [`${SITE}/${slug}/leaders`, `${COMMON}/${slug}/leaders`, `${SITE}/${slug}/statistics`]) {
+              const r = await get(url);
+              head(url.replace(COMMON, "common").replace(SITE, "site"), r);
+              if (r.json) shape(r.json);
+            }
+          }
+
+          if (want("team")) {
+            const r = await get(`${SITE}/${slug}/teams/${team}`);
+            head(`${slug} team ${team}`, r);
+            if (r.json) shape(r.json);
+          }
+
+
+          if (area === "teammap") {
+            // /team/50 and /player/276 are API-Football's numbers and Google
+            // has indexed them. Moving to ESPN's numbers means a redirect,
+            // and a redirect means a map. Built once, here, by matching the
+            // two providers on the club's name through the site's own
+            // resolver - the same one that turns both spellings into the
+            // same Armenian - and printed as source to be checked in.
+            const CODES = [["PL","eng.1",39],["PD","esp.1",140],["SA","ita.1",135],["BL1","ger.1",78],["FL1","fra.1",61],["SPL","ksa.1",307],["MLS","usa.1",253]];
+            const key = process.env.API_FOOTBALL_KEY;
+            const season = new Date().getUTCMonth() + 1 >= 7 ? new Date().getUTCFullYear() : new Date().getUTCFullYear() - 1;
+            const pairs = [];
+            const unmatched = [];
+            for (const [code, slug, leagueId] of CODES) {
+              const espn = await get(`${SITE}/${slug}/teams?limit=100`);
+              const espnTeams = (espn.json?.sports?.[0]?.leagues?.[0]?.teams ?? []).map((t) => t.team).filter(Boolean);
+              let afTeams = [];
+              if (!key) console.log("  no API_FOOTBALL_KEY in this step");
+              else {
+                const r = await fetch(`https://v3.football.api-sports.io/teams?league=${leagueId}&season=${season}`, { headers: { "x-apisports-key": key, Accept: "application/json" } });
+                const body = await r.text();
+                let parsed = null;
+                try { parsed = JSON.parse(body); } catch { /* not json */ }
+                afTeams = (parsed?.response ?? []).map((x) => x.team);
+                if (!afTeams.length) console.log(`  API-Football ${code}: HTTP ${r.status}, errors ${JSON.stringify(parsed?.errors ?? null)}, results ${parsed?.results ?? "?"}`);
+              }
+              console.log(`\n  ${code}: ${afTeams.length} clubs from API-Football, ${espnTeams.length} from ESPN`);
+              // Match on a folded name, then on the longest word each side
+              // shares, because "Wolves" and "Wolverhampton Wanderers" are
+              // the same club under two houses' spellings.
+              const fold = (n) => (n ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+              const words = (n) => (n ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").split(/[^a-z0-9]+/).filter((w) => w.length > 3);
+              for (const af of afTeams) {
+                let hit = espnTeams.find((e) => fold(e.displayName) === fold(af.name) || fold(e.shortDisplayName) === fold(af.name) || fold(e.name) === fold(af.name));
+                if (!hit) {
+                  const mine = words(af.name);
+                  hit = espnTeams.find((e) => words(e.displayName).some((w) => mine.includes(w)));
+                }
+                if (hit) pairs.push(`  ${af.id}: "${hit.id}", // ${af.name} -> ${hit.displayName}`);
+                else unmatched.push(`  // ${af.id} ${af.name} - no ESPN club matched`);
+              }
+            }
+            console.log(`\n=== ${pairs.length} matched, ${unmatched.length} not ===`);
+            console.log("const ESPN_TEAM_ID_BY_API_FOOTBALL_ID: Record<string, string> = {");
+            for (const line of pairs) console.log(line);
+            for (const line of unmatched) console.log(line);
+            console.log("};");
+          }
+
+          if (want("schedule")) {
+            const r = await get(`${SITE}/${slug}/teams/${team}/schedule`);
+            head(`${slug} team ${team} schedule`, r);
+            const events = r.json?.events ?? [];
+            console.log(`  events: ${Array.isArray(events) ? events.length : 0}`);
+            if (Array.isArray(events) && events.length) shape(events[0]);
+          }
+          JS
+          node espn-probe.mjs
+
       - name: What the sources table holds now
-        if: ${{ github.event.inputs.livescore == 'no' }}
+        if: ${{ github.event.inputs.livescore == 'no' && github.event.inputs.espn == 'no' }}
         run: |
           npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
           npx wrangler d1 execute aisport-db --remote --json --command \

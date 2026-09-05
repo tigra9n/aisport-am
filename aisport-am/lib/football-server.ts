@@ -45,7 +45,12 @@ export async function getStandings(code: string): Promise<{ rows: StandingRow[];
 
   const db = (env as unknown as { DB?: D1Database }).DB;
   const season = currentSeasonYear();
-  const cacheKey = `apifootball:v3:standings:${leagueId}:${season}`;
+  // v4 on 6 September, when the club-name rules changed. The cached payload
+  // holds rows that were already translated, so a corrected spelling does not
+  // reach a reader until the cache expires - Տոտտենհամ sat on the board for
+  // half an hour after the fix shipped. Bumping the version is how this
+  // codebase forces a refetch; the old rows fall out on their own.
+  const cacheKey = `apifootball:v4:standings:${leagueId}:${season}`;
 
   if (db) {
     await ensureCacheTable(db);

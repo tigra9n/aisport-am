@@ -62,7 +62,7 @@ export async function getLiveMatches(dayOffset=0,allowProviderRequest=true){
   const espnMatches=await (async()=>{
     try{
       const {espnMatchesForDate}=await import("./espn");
-      const cacheKey=`espn:date:${date}`;
+      const cacheKey=`espn:v2:date:${date}`;
       const db=(env as unknown as {DB?:D1Database}).DB;
       if(db){
         await ensureCacheTable(db);
@@ -95,7 +95,7 @@ export async function getLiveMatches(dayOffset=0,allowProviderRequest=true){
   const armenian=await (async()=>{
     try{
       const {armenianMatchesForDate}=await import("./espn");
-      const cacheKey=`sportsdb:armenia:${date}`;
+      const cacheKey=`sportsdb:v2:armenia:${date}`;
       const db=(env as unknown as {DB?:D1Database}).DB;
       if(db){
         await ensureCacheTable(db);

@@ -196,7 +196,7 @@ export async function getSquad(teamId: number): Promise<Squad | null> {
   if (!key) return null;
 
   const db = (env as unknown as { DB?: D1Database }).DB;
-  const cacheKey = `apifootball:v3:squad:${teamId}`;
+  const cacheKey = `apifootball:v4:squad:${teamId}`;
 
   if (db) {
     await ensureCacheTable(db);
