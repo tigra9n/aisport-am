@@ -1,0 +1,333 @@
+== Checking for existing D1 database 'aisport-db' ==
+== Using D1 database id: ef7c1c83-6fb3-4569-85ce-34e0d502979b ==
+== Building the site ==
+
+> lureri-hosq@0.1.0 build
+> bash scripts/build-verified.sh
+
+/usr/bin/timeout
+Running bounded vinext build...
+
+  vinext build  (Vite 8.0.13)
+
+[vinext] middleware.ts is deprecated in Next.js 16. Rename to proxy.ts and export a default or named proxy function.
+[34m[1/5] analyze client references...[39m
+[2Ktransforming...✓ 338 modules transformed.
+rendering chunks...
+[32m✓ built in 821ms[39m
+[34m[2/5] analyze server references...[39m
+[2Ktransforming...✓ 82 modules transformed.
+rendering chunks...
+[32m✓ built in 124ms[39m
+[34m[3/5] build rsc environment...[39m
+[2Ktransforming...✓ 343 modules transformed.
+rendering chunks...
+computing gzip size...
+[32m✓ built in 781ms[39m
+[34m[4/5] build client environment...[39m
+[2Ktransforming...✓ 90 modules transformed.
+rendering chunks...
+computing gzip size...
+[32m✓ built in 214ms[39m
+[34m[5/5] build ssr environment...[39m
+[2Ktransforming...✓ 88 modules transformed.
+rendering chunks...
+computing gzip size...
+[32m✓ built in 283ms[39m
+[0m
+  Route (app)
+  ┌ ƒ /                     
+  ├ ? /about                
+  ├ λ /api/articles         
+  ├ λ /api/automation/run   
+  ├ λ /api/automation/status
+  ├ λ /api/comments         
+  ├ λ /api/comments/moderate
+  ├ λ /api/cron/content     
+  ├ λ /api/cron/dispatch    
+  ├ λ /api/cron/warm        
+  ├ λ /api/feeds/apitube    
+  ├ λ /api/live/match/:id   
+  ├ λ /api/opinions         
+  ├ λ /api/sources          
+  ├ ƒ /armenia              
+  ├ ƒ /category/:slug       
+  ├ ƒ /coach/:id            
+  ├ ? /contact              
+  ├ ? /control              
+  ├ ƒ /control/opinions     
+  ├ ƒ /control/opinions/:id 
+  ├ ? /editorial            
+  ├ ƒ /league/:code         
+  ├ ƒ /live                 
+  ├ ƒ /live/match/:id       
+  ├ ? /moderate             
+  ├ λ /news-sitemap.xml     
+  ├ ƒ /news/:slug           
+  ├ ƒ /opinions             
+  ├ ƒ /opinions/:slug       
+  ├ ƒ /player/:id           
+  ├ ? /podcasts             
+  ├ ? /privacy              
+  ├ ƒ /search               
+  ├ ? /standings            
+  ├ ƒ /team/:id             
+  ├ ? /terms                
+  └ ƒ /topscorers           
+
+  λ API  ƒ Dynamic  ? Unknown
+
+  ? Some routes could not be classified. vinext currently uses static analysis
+    and cannot detect dynamic API usage (headers(), cookies(), etc.) at build time.
+    Automatic classification will be improved in a future release.
+
+  Build complete. Run `vinext start` to start the production server.
+
+Validated Sites artifact: ESM Worker default.fetch and hosting manifest are present.
+== Patching generated wrangler config for production deploy ==
+== Checking whether aifootball.am zone is active in Cloudflare ==
+aifootball.am zone status: active
+Adding route for aifootball.am (zone confirmed active)
+Patched wrangler.json: {
+  "topLevelName": "lureri-hosq",
+  "dev": {
+    "ip": "localhost",
+    "local_protocol": "http",
+    "upstream_protocol": "http",
+    "enable_containers": true,
+    "generate_types": false
+  },
+  "name": "aisport-am",
+  "compatibility_date": "2026-05-15",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "vars": {},
+  "durable_objects": {
+    "bindings": []
+  },
+  "kv_namespaces": [],
+  "queues": {
+    "producers": [],
+    "consumers": []
+  },
+  "r2_buckets": [],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "aisport-db",
+      "database_id": "ef7c1c83-6fb3-4569-85ce-34e0d502979b"
+    }
+  ],
+  "vectorize": [],
+  "ai_search_namespaces": [],
+  "ai_search": [],
+  "hyperdrive": [],
+  "workflows": [],
+  "secrets_store_secrets": [],
+  "artifacts": [],
+  "services": [],
+  "analytics_engine_datasets": [],
+  "unsafe_hello_world": [],
+  "flagship": [],
+  "ratelimits": [],
+  "worker_loaders": [],
+  "legacy_env": true,
+  "main": "index.js",
+  "jsx_factory": "React.createElement",
+  "jsx_fragment": "React.Fragment",
+  "migrations": [],
+  "triggers": {
+    "crons": [
+      "*/5 * * * *"
+    ]
+  },
+  "rules": [
+    {
+      "type": "ESModule",
+      "globs": [
+        "**/*.js",
+        "**/*.mjs"
+      ]
+    }
+  ],
+  "build": {
+    "watch_dir": "./src"
+  },
+  "no_bundle": true,
+  "dispatch_namespaces": [],
+  "logfwdr": {
+    "bindings": []
+  },
+  "assets": {
+    "directory": "../client"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "python_modules": {
+    "exclude": [
+      "**/*.pyc"
+    ]
+  },
+  "define": {},
+  "cloudchamber": {},
+  "send_email": [],
+  "mtls_certificates": [],
+  "pipelines": [],
+  "vpc_services": [],
+  "vpc_networks": [],
+  "routes": [
+    {
+      "pattern": "aisport.am/*",
+      "zone_name": "aisport.am"
+    },
+    {
+      "pattern": "aifootball.am/*",
+      "zone_name": "aifootball.am"
+    }
+  ]
+}
+== Deploying to Cloudflare Workers ==
+
+ ⛅️ wrangler 4.92.0 (update available 4.129.0)
+──────────────────────────────────────────────
+
+Cloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md
+Attaching additional modules:
+┌───────────────────────────────────────────────┬──────┬────────────┐
+│ Name                                          │ Type │ Size       │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ __vite_rsc_assets_manifest.js                 │ esm  │ 5.52 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ assets/apitube-registry-C683Z6ji.js           │ esm  │ 1.41 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ assets/drizzle-orm-B3tPYXRl.js                │ esm  │ 0.07 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ assets/drizzle-orm-D1ttr_1-.js                │ esm  │ 37.39 KiB  │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ assets/schema-CHgfJt0k.js                     │ esm  │ 20.45 KiB  │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/__vite_rsc_assets_manifest.js             │ esm  │ 5.52 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/comment-form-mP2IkJoh.js           │ esm  │ 2.68 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/comment-list-U9dW5z8Y.js           │ esm  │ 1.74 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/error-boundary-gYVAejYD.js         │ esm  │ 8.22 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/football-BV4Y3J73.js               │ esm  │ 0.99 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/headline-feed-C5g3J5Vt.js          │ esm  │ 3.59 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/hero-carousel-5kIBHciN.js          │ esm  │ 3.82 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/image-proxy-DQ9nVG1Y.js            │ esm  │ 2.46 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/layout-segment-context-LTf0l20F.js │ esm  │ 1.70 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/league-tabs-Ts89W6zZ.js            │ esm  │ 10.18 KiB  │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/link-CzfiNNe_.js                   │ esm  │ 24.07 KiB  │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/live-auto-refresh-Co5Sodyj.js      │ esm  │ 0.50 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/match-modal-NrwAKVbv.js            │ esm  │ 34.38 KiB  │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/match-modal-lazy-CJxBR8uI.js       │ esm  │ 0.67 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/match-row-Dq-OlGN3.js              │ esm  │ 2.64 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/opinion-edit-form-Dd6CRFXG.js      │ esm  │ 7.10 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/opinion-form-Bho-5qbD.js           │ esm  │ 5.85 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/page-BpkahTI-.js                   │ esm  │ 4.52 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/podcast-player-CeMiVg6c.js         │ esm  │ 3.09 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/reveal-grid-aT6W1vY2.js            │ esm  │ 1.34 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/router-CUbN9ulp.js                 │ esm  │ 22.72 KiB  │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/script-CXxtSrSZ.js                 │ esm  │ 5.13 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/share-row-BvTT8Ry3.js              │ esm  │ 1.56 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/site-header-B7ZGcs_J.js            │ esm  │ 9.80 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/assets/top-scorers-tabs-BxBTtY9a.js       │ esm  │ 5.28 KiB   │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ ssr/index.js                                  │ esm  │ 576.01 KiB │
+├───────────────────────────────────────────────┼──────┼────────────┤
+│ Total (31 modules)                            │      │ 810.39 KiB │
+└───────────────────────────────────────────────┴──────┴────────────┘
+🌀 Building list of assets...
+✨ Read 41 files from the assets directory /home/runner/work/aisport-am/aisport-am/aisport-am/dist/client
+🌀 Starting asset upload...
+No updated asset files to upload. Proceeding with deployment...
+Total Upload: 1962.36 KiB / gzip: 436.77 KiB
+Worker Startup Time: 20 ms
+Your Worker has access to the following bindings:
+Binding                  Resource         
+env.DB (aisport-db)      D1 Database      
+
+Uploaded aisport-am (2.86 sec)
+Deployed aisport-am triggers (0.94 sec)
+  aisport.am/* (zone name: aisport.am)
+  aifootball.am/* (zone name: aifootball.am)
+  schedule: */5 * * * *
+Current Version ID: 8bd9a35f-797a-456d-81ed-5b4a94fa13bc
+== Setting FOOTBALL_DATA_TOKEN secret on the worker ==
+
+ ⛅️ wrangler 4.92.0 (update available 4.129.0)
+──────────────────────────────────────────────
+🌀 Creating the secret for the Worker "aisport-am" 
+✨ Success! Uploaded secret FOOTBALL_DATA_TOKEN
+== Setting API_FOOTBALL_KEY secret on the worker ==
+
+ ⛅️ wrangler 4.92.0 (update available 4.129.0)
+──────────────────────────────────────────────
+🌀 Creating the secret for the Worker "aisport-am" 
+✨ Success! Uploaded secret API_FOOTBALL_KEY
+== Setting CRON_TOKEN secret on the worker ==
+
+ ⛅️ wrangler 4.92.0 (update available 4.129.0)
+──────────────────────────────────────────────
+🌀 Creating the secret for the Worker "aisport-am" 
+✨ Success! Uploaded secret CRON_TOKEN
+== Setting ANTHROPIC_API_KEY secret on the worker ==
+
+ ⛅️ wrangler 4.92.0 (update available 4.129.0)
+──────────────────────────────────────────────
+🌀 Creating the secret for the Worker "aisport-am" 
+✨ Success! Uploaded secret ANTHROPIC_API_KEY
+== Setting META_PAGE_ID secret on the worker ==
+
+ ⛅️ wrangler 4.92.0 (update available 4.129.0)
+──────────────────────────────────────────────
+🌀 Creating the secret for the Worker "aisport-am" 
+✨ Success! Uploaded secret META_PAGE_ID
+== Setting META_PAGE_ACCESS_TOKEN secret on the worker ==
+
+ ⛅️ wrangler 4.92.0 (update available 4.129.0)
+──────────────────────────────────────────────
+🌀 Creating the secret for the Worker "aisport-am" 
+✨ Success! Uploaded secret META_PAGE_ACCESS_TOKEN
+== Setting GEMINI_API_KEY secret on the worker ==
+
+ ⛅️ wrangler 4.92.0 (update available 4.129.0)
+──────────────────────────────────────────────
+🌀 Creating the secret for the Worker "aisport-am" 
+✨ Success! Uploaded secret GEMINI_API_KEY
+== Pinning CONTENT_MODEL_PROVIDER=claude on the worker ==
+
+ ⛅️ wrangler 4.92.0 (update available 4.129.0)
+──────────────────────────────────────────────
+🌀 Creating the secret for the Worker "aisport-am" 
+✨ Success! Uploaded secret CONTENT_MODEL_PROVIDER
+== Deploy complete ==
+== Purging Cloudflare edge cache ==
+"success":true
+== Purging aifootball.am edge cache (zone 5599de66fee8b758b5fcb4125989ce56) ==
+"success":true
