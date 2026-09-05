@@ -1301,6 +1301,19 @@ jobs:
           }
 
           say("");
+          // The smoke test cannot find a /player/ link on the scoring
+          // charts, which means the chart the page opens on is empty rather
+          // than that the link is shaped wrong - the club links beside it
+          // were found. So read what the page says.
+          const ts = await get("https://aifootball.am/topscorers");
+          say(`=== /topscorers -> HTTP ${ts.status}, ${ts.html.length} bytes ===`);
+          say(`  player links: ${count(ts.html, /\/player\/(?:espn-)?\d+/g)}`);
+          say(`  rows: ${count(ts.html, /position-marker/g)}`);
+          if (ts.html.includes("Տվյալ չկա")) say("  !! the chart says Տվյալ չկա");
+          const names = [...ts.html.matchAll(/\/player\/((?:espn-)?\d+)/g)].slice(0, 3).map((m) => m[1]);
+          if (names.length) say(`  first ids: ${names.join(", ")}`);
+
+          say("");
           // /standings takes no league query: it renders all eight leagues as
           // tabs and only the active one - the Premier League - reaches the
           // HTML. So ?league=ARM and ?league=PL both answered with twenty-one
