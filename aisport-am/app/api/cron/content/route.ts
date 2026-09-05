@@ -579,14 +579,29 @@ export async function GET(request: Request) {
 
   const forcedMode = url.searchParams.get("mode");
 
-  // Publishing window: 10:00-03:00 Yerevan time (UTC+4, no DST). Manual
+  // Publishing window: 12:00-00:00 Yerevan time (UTC+4, no DST). Manual
   // ?mode= calls bypass the window so testing works any time of day.
+  //
+  // Narrowed from 10:00-03:00 on 5 September, alongside the gap below, to
+  // land twelve articles a day instead of about fifty. Three reasons, and
+  // the money is the least interesting of them. The Anthropic balance was
+  // down to ten cents and fifty a day costs roughly $45 a month against
+  // $13. Google indexes barely thirty of the site's ~390 pages, so fifty a
+  // day is far more than a three-week-old domain gets crawled. And the
+  // Gemini fallback's free tier allows twenty requests a day: at fifty it
+  // covered under half a day, at twelve it covers a full one with room to
+  // spare, which turns an exhausted balance from an outage into a
+  // downgrade nobody notices until morning.
+  //
+  // Twelve hours, twelve articles: the window and the rate are the same
+  // number on purpose, so the site publishes about once an hour and the
+  // arithmetic stays obvious to whoever reads this next.
   const yerevanHour = (new Date().getUTCHours() + 4) % 24;
   if (!forcedMode) {
-    const inWindow = yerevanHour >= 10 || yerevanHour < 3;
+    const inWindow = yerevanHour >= 12;
     if (!inWindow) {
       await logInvocation({ forced: forcedMode, mode: "skipped", generated: 0, reason: "outside window" });
-      return Response.json({ ok: true, mode: "skipped", reason: "outside 10:00-03:00 Yerevan publishing window", generated: 0, log: [] });
+      return Response.json({ ok: true, mode: "skipped", reason: "outside 12:00-00:00 Yerevan publishing window", generated: 0, log: [] });
     }
   }
 
@@ -617,7 +632,12 @@ export async function GET(request: Request) {
   // real spacing at roughly 19-21 minutes instead of oscillating between
   // 20 and 25. The cost is an occasional 19-minute gap where the brief
   // said 20; the benefit is that the rhythm stops visibly stalling.
-  const MIN_PUBLISH_GAP_MS = 18 * 60 * 1000;
+  // 55 rather than 60, for the same reason it was 18 rather than 20: the
+  // dispatcher fires roughly every five minutes and cannot hit an exact
+  // threshold, so a round number means the first tick past it lands at
+  // 60-65 minutes and the day comes up short. 55 lets the twelfth tick
+  // clear every time, which pins the real spacing near an hour.
+  const MIN_PUBLISH_GAP_MS = 55 * 60 * 1000;
   const nowForSlot = new Date();
   let slotClaimKey: string | null = null;
   let claimDb: D1Database | null = null;
@@ -637,7 +657,7 @@ export async function GET(request: Request) {
         const sinceMs = nowForSlot.getTime() - lastMs;
         if (Number.isFinite(lastMs) && sinceMs >= 0 && sinceMs < MIN_PUBLISH_GAP_MS) {
           const sinceMin = Math.floor(sinceMs / 60000);
-          await logInvocation({ forced: forcedMode, mode: "skipped", generated: 0, reason: `only ${sinceMin} min since the last article, need 18` });
+          await logInvocation({ forced: forcedMode, mode: "skipped", generated: 0, reason: `only ${sinceMin} min since the last article, need ${MIN_PUBLISH_GAP_MS / 60000}` });
           return Response.json({ ok: true, mode: "skipped", reason: `last article was ${sinceMin} minutes ago, minimum gap is 18 minutes`, generated: 0, log: [] });
         }
       }
