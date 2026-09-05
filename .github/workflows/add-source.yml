@@ -1176,8 +1176,12 @@ jobs:
       # table misses falls through to the transliterator, which spells it
       # out letter by letter. That is the most visible thing on the board,
       # so count the misses rather than wait for a reader to find them.
+      # Settled: all 214 club names across the ten competitions read
+      # correctly, and eighteen tests hold them there. Two hundred lines of
+      # log for a question already answered buried the answers below it, so
+      # it moves behind 'all' with the other settled probes.
       - name: Which ESPN club names the Armenian table does not know
-        if: ${{ github.event.inputs.livescore != 'no' && github.event.inputs.espn == 'no' }}
+        if: ${{ github.event.inputs.livescore == 'all' && github.event.inputs.espn == 'no' }}
         run: |
           npm --prefix aisport-am ci --no-audit --no-fund >/dev/null 2>&1 || npm --prefix aisport-am install --no-audit --no-fund >/dev/null 2>&1
           cat > names.mts <<'TS'
