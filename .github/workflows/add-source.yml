@@ -1318,8 +1318,24 @@ jobs:
             // The Saudi and MLS tables went blank the moment the cache key
             // was bumped and they had to be fetched again. Either ESPN has
             // no table for them or it sends one this reader cannot see.
+            // 200 with an empty body from every league, this host and the
+            // site one alike. ESPN files standings under /apis/v2/, not
+            // under /apis/site/v2/ where the scoreboard lives, so try the
+            // paths rather than the leagues first.
+            const WEB = "https://site.web.api.espn.com";
+            for (const url of [
+              `${SITE}/eng.1/standings`,
+              `${WEB}/apis/v2/sports/soccer/eng.1/standings`,
+              `${WEB}/apis/v2/sports/soccer/eng.1/standings?level=1`,
+              `${WEB}/apis/v2/sports/soccer/eng.1/standings?season=2026`,
+              `https://cdn.espn.com/core/soccer/table?xhr=1&league=eng.1`,
+            ]) {
+              const r = await get(url);
+              const keys = Object.keys(r.json ?? {}).slice(0, 10).join(",");
+              console.log(`  ${url.replace(WEB, "web").replace(SITE, "site")}: HTTP ${r.status}, keys ${keys || "(none)"}`);
+            }
             for (const s of ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1", "ksa.1", "usa.1"]) {
-              const r = await get(`${SITE}/${s}/standings`);
+              const r = await get(`${WEB}/apis/v2/sports/soccer/${s}/standings`);
               const flat = r.json?.standings?.entries?.length ?? 0;
               const grouped = (r.json?.children ?? []).reduce((n, c) => n + (c?.standings?.entries?.length ?? 0), 0);
               console.log(`  ${s}: HTTP ${r.status}, ${flat} flat entries, ${grouped} in ${(r.json?.children ?? []).length} group(s), top keys ${Object.keys(r.json ?? {}).slice(0, 8).join(",")}`);
