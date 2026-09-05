@@ -458,19 +458,77 @@ jobs:
             say(`  Premier League standings: HTTP ${pl.status}${pl.ok ? `, entries ${pl.json?.children?.[0]?.standings?.entries?.length ?? 0}` : ""}`);
           }
 
+          // The three questions that decide whether the match centre can
+          // move: does a football-data.org match carry more than a score,
+          // is the Europa League on the free tier, and is there any free
+          // source at all for the Armenian Premier League.
           say("");
-          say("=== TheSportsDB (the free key its own docs hand out) ===");
+          say("=== football-data.org: what ONE match actually contains ===");
           {
-            const r = await get("https://www.thesportsdb.com/api/v1/json/3/latestsoccer.php");
-            if (!r.ok) say(`  livescore: HTTP ${r.status} ${r.text.slice(0, 120)}`);
+            const token = process.env.FOOTBALL_DATA_TOKEN ?? "";
+            const today = new Date().toISOString().slice(0, 10);
+            const list = await get(`https://api.football-data.org/v4/matches?date=${today}`, { "X-Auth-Token": token });
+            const all = list.json?.matches ?? [];
+            const pick = all.find((m) => ["IN_PLAY", "PAUSED"].includes(m.status)) ?? all.find((m) => m.status === "FINISHED") ?? all[0];
+            if (!pick) say("  no match to inspect");
             else {
-              const payload = r.json ?? {};
-              say(`  livescore answered; keys: ${Object.keys(payload).join(", ").slice(0, 140)}`);
+              const r = await get(`https://api.football-data.org/v4/matches/${pick.id}`, { "X-Auth-Token": token });
+              if (!r.ok) say(`  HTTP ${r.status} ${r.text.slice(0, 160)}`);
+              else {
+                const m = r.json ?? {};
+                const has = (label, value) => say(`  ${value ? "yes" : "NO "}  ${label}`);
+                say(`  inspected: ${m.homeTeam?.name} v ${m.awayTeam?.name} (${m.status})`);
+                has("score", Boolean(m.score));
+                has("minute while in play", m.minute !== undefined && m.minute !== null);
+                has("goals with scorer and minute", Array.isArray(m.goals) && m.goals.length > 0);
+                has("bookings", Array.isArray(m.bookings) && m.bookings.length > 0);
+                has("substitutions", Array.isArray(m.substitutions) && m.substitutions.length > 0);
+                has("lineups (homeTeam.lineup)", Array.isArray(m.homeTeam?.lineup) && m.homeTeam.lineup.length > 0);
+                has("formation", Boolean(m.homeTeam?.formation));
+                has("coach", Boolean(m.homeTeam?.coach?.name));
+                has("team statistics (possession, shots)", Boolean(m.homeTeam?.statistics));
+                has("head to head", Boolean(m.head2head));
+                has("referees", Array.isArray(m.referees) && m.referees.length > 0);
+                say(`  every key returned: ${Object.keys(m).join(", ").slice(0, 300)}`);
+                say(`  homeTeam keys: ${Object.keys(m.homeTeam ?? {}).join(", ").slice(0, 240)}`);
+              }
             }
-            const arm = await get("https://www.thesportsdb.com/api/v1/json/3/search_all_leagues.php?c=Armenia&s=Soccer");
+            // And whether the Europa League is merely absent from the list
+            // or actually forbidden on this tier - a 403 and a 404 mean
+            // different things for a possible upgrade.
+            for (const code of ["EL", "ELC", "CL"]) {
+              const c = await get(`https://api.football-data.org/v4/competitions/${code}`, { "X-Auth-Token": token });
+              say(`  competition ${code}: HTTP ${c.status}${c.ok ? ` (${c.json?.name})` : ` ${String(c.json?.message ?? c.text).slice(0, 90)}`}`);
+            }
+          }
+
+          say("");
+          say("=== Any free source at all for the Armenian Premier League ===");
+          {
+            const db = "https://www.thesportsdb.com/api/v1/json/3";
+            const arm = await get(`${db}/search_all_leagues.php?c=Armenia&s=Soccer`);
             const leagues = arm.json?.countries;
-            say(`  Armenian leagues listed: ${Array.isArray(leagues) ? leagues.length : 0}`);
-            if (Array.isArray(leagues)) for (const l of leagues.slice(0, 5)) say(`      ${l.strLeague}`);
+            say(`  TheSportsDB lists ${Array.isArray(leagues) ? leagues.length : 0} Armenian leagues`);
+            const top = Array.isArray(leagues) ? leagues.find((l) => /premier/i.test(l.strLeague ?? "")) : null;
+            if (!top) say("  no Armenian Premier League entry found");
+            else {
+              say(`  id ${top.idLeague} - ${top.strLeague}`);
+              const season = "2026-2027";
+              const table = await get(`${db}/lookuptable.php?l=${top.idLeague}&s=${season}`);
+              const rows = table.json?.table;
+              say(`  standings (${season}): HTTP ${table.status}, ${Array.isArray(rows) ? rows.length : 0} rows`);
+              if (Array.isArray(rows)) for (const r of rows.slice(0, 4)) say(`      ${r.intRank}. ${r.strTeam} ${r.intPoints} pts (${r.intPlayed} played)`);
+              const next = await get(`${db}/eventsnextleague.php?id=${top.idLeague}`);
+              const events = next.json?.events;
+              say(`  upcoming fixtures: HTTP ${next.status}, ${Array.isArray(events) ? events.length : 0}`);
+              if (Array.isArray(events)) for (const e of events.slice(0, 3)) say(`      ${e.dateEvent} ${e.strEvent}`);
+              const past = await get(`${db}/eventspastleague.php?id=${top.idLeague}`);
+              const done = past.json?.events;
+              say(`  recent results: HTTP ${past.status}, ${Array.isArray(done) ? done.length : 0}`);
+              if (Array.isArray(done)) for (const e of done.slice(0, 3)) say(`      ${e.dateEvent} ${e.strEvent} ${e.intHomeScore}:${e.intAwayScore}`);
+            }
+            const live = await get(`${db}/latestsoccer.php`);
+            say(`  livescore endpoint on the free key: HTTP ${live.status}, keys ${Object.keys(live.json ?? {}).join(",").slice(0, 80)}`);
           }
 
           console.log(out.join("\n"));
