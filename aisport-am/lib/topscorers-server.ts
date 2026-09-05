@@ -40,6 +40,17 @@ function currentSeasonYear() {
 }
 
 
+// One cold index at a time.
+//
+// /topscorers asks for all eight leagues at once. An index costs a club
+// list plus twenty rosters, so eight cold ones is a hundred and sixty-eight
+// subrequests inside a single render - past what a Worker allows and slow
+// enough to time out even where it is allowed. The first league to find its
+// index missing builds it; the rest return nothing this time and fill on
+// later requests, a league per visit, until every one is warm. A chart that
+// appears a minute later is better than a page that does not render.
+let buildingIndex: Promise<unknown> | null = null;
+
 // The league's footballers by ESPN id, built from its clubs' rosters and
 // kept for a day. Twenty requests, behind a cache, so a chart costs one.
 async function leagueAthletes(slug: string, db: D1Database | undefined) {
@@ -54,8 +65,16 @@ async function leagueAthletes(slug: string, db: D1Database | undefined) {
       } catch { /* rebuild */ }
     }
   }
+  if (buildingIndex) return {};
   const { espnLeagueAthletes } = await import("./espn");
-  const index = await espnLeagueAthletes(slug);
+  const build = espnLeagueAthletes(slug);
+  buildingIndex = build;
+  let index: import("./espn").EspnAthleteIndex = {};
+  try {
+    index = await build;
+  } finally {
+    buildingIndex = null;
+  }
   if (db && Object.keys(index).length) {
     await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey, JSON.stringify(index), Date.now()).run();
   }
