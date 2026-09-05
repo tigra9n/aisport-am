@@ -49,25 +49,63 @@ function extractTag(block: string, tag: string): string | null {
   return null;
 }
 
+// Exported under a test-only name: the picker is internal to the parser,
+// but choosing the wrong candidate is invisible until a reader sees a soft
+// photograph on the front page, which is too late to find out.
+export const __testExtractImage = (block: string) => extractImage(block);
+
 function extractImage(block: string): string | null {
   // Attribute order varies between feeds (url before type, or vice versa),
   // so match each attribute independently rather than requiring a fixed
   // order - this was silently failing to extract images from some feeds
   // (e.g. ESPN), causing articles to fall back to a generic per-category
   // stock photo instead of a real per-article image.
+  //
+  // And take the biggest, not the first. A feed usually carries the same
+  // photograph several times over - an enclosure, two or three
+  // media:content entries and a media:thumbnail - and the thumbnail is the
+  // small one. Taking whichever came first put a three-hundred-pixel
+  // thumbnail behind a headline that is drawn four hundred and seventy
+  // wide, and no amount of resizing makes that sharp: the pixels are not
+  // there. Where a feed declares a width, the widest wins; where none does,
+  // the old order decides, because an enclosure is a fuller image than an
+  // <img> lifted out of the description.
+  const candidates: { url: string; width: number; rank: number }[] = [];
+  const declared = (attrs: string) => {
+    const width = attrs.match(/\bwidth=["']?(\d+)/i);
+    if (width) return Number(width[1]);
+    // Some CDNs put the size in the address instead: .../800x450/photo.jpg
+    // or ?w=800. Read it rather than treat the image as unmeasured.
+    const inUrl = attrs.match(/[?&](?:w|width)=(\d{2,4})/i) ?? attrs.match(/\b(\d{3,4})x\d{3,4}\b/);
+    return inUrl ? Number(inUrl[1]) : 0;
+  };
+
   const enclosureMatch = block.match(/<enclosure\b([^>]*)\/?>/i);
   if (enclosureMatch) {
     const attrs = enclosureMatch[1];
     const typeMatch = attrs.match(/type=["']([^"']+)["']/i);
     const urlMatch = attrs.match(/url=["']([^"']+)["']/i);
-    if (urlMatch && (!typeMatch || /^image/i.test(typeMatch[1]))) return urlMatch[1];
+    if (urlMatch && (!typeMatch || /^image/i.test(typeMatch[1]))) {
+      candidates.push({ url: urlMatch[1], width: declared(attrs), rank: 0 });
+    }
   }
-  const mediaContent = block.match(/<media:content\b[^>]*url=["']([^"']+)["']/i);
-  if (mediaContent) return mediaContent[1];
-  const thumbnail = block.match(/<media:thumbnail\b[^>]*url=["']([^"']+)["']/i);
-  if (thumbnail) return thumbnail[1];
-  const imgTag = block.match(/<img\b[^>]*src=["']([^"']+)["']/i);
-  return imgTag ? imgTag[1] : null;
+  for (const found of block.matchAll(/<media:content\b([^>]*)>/gi)) {
+    const url = found[1].match(/url=["']([^"']+)["']/i);
+    const type = found[1].match(/type=["']([^"']+)["']/i);
+    const medium = found[1].match(/medium=["']([^"']+)["']/i);
+    const isImage = (!type || /^image/i.test(type[1])) && (!medium || /image/i.test(medium[1]));
+    if (url && isImage) candidates.push({ url: url[1], width: declared(found[1]), rank: 1 });
+  }
+  for (const found of block.matchAll(/<media:thumbnail\b([^>]*)>/gi)) {
+    const url = found[1].match(/url=["']([^"']+)["']/i);
+    if (url) candidates.push({ url: url[1], width: declared(found[1]), rank: 2 });
+  }
+  const imgTag = block.match(/<img\b([^>]*)src=["']([^"']+)["']/i);
+  if (imgTag) candidates.push({ url: imgTag[2], width: declared(imgTag[1]), rank: 3 });
+
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => b.width - a.width || a.rank - b.rank);
+  return candidates[0].url;
 }
 
 // A feed is not necessarily a feed of news. Probing twenty-two football

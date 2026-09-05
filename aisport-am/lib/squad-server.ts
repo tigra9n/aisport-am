@@ -58,14 +58,14 @@ async function ensureCacheTable(db: D1Database) {
 // addressed by league and club together and a link only carries the club,
 // so the index is built from ESPN's team lists - seventeen requests - and
 // kept for a day, because clubs change competition twice a year.
-async function teamIndex(db: D1Database | undefined): Promise<Record<string, { slug: string }>> {
+async function teamIndex(db: D1Database | undefined): Promise<Record<string, { slug: string; name: string }>> {
   const cacheKey = "espn:teamindex:v1";
   if (db) {
     await ensureCacheTable(db);
     const row = await db.prepare("SELECT payload,saved_at AS savedAt FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{ payload: string; savedAt: number }>();
     if (row?.savedAt && Date.now() - row.savedAt < 24 * 60 * 60 * 1000) {
       try {
-        const parsed = JSON.parse(row.payload) as Record<string, { slug: string }>;
+        const parsed = JSON.parse(row.payload) as Record<string, { slug: string; name: string }>;
         if (Object.keys(parsed).length) return parsed;
       } catch { /* rebuild */ }
     }
@@ -76,6 +76,35 @@ async function teamIndex(db: D1Database | undefined): Promise<Record<string, { s
     await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey, JSON.stringify(index), Date.now()).run();
   }
   return index;
+}
+
+
+// A club's faces, from TheSportsDB, kept for a month: a squad photograph
+// does not change on a Tuesday, and that source rate-limits Cloudflare's
+// addresses hard enough that asking it per page view is how it starts
+// answering 429 to everything.
+const photoKeyOf = (name: string) =>
+  name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z]/g, "");
+
+async function clubPhotos(db: D1Database | undefined, espnId: string, clubName: string): Promise<Record<string, string>> {
+  const cacheKey = `sportsdb:photos:${espnId}`;
+  if (db) {
+    await ensureCacheTable(db);
+    const row = await db.prepare("SELECT payload,saved_at AS savedAt FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{ payload: string; savedAt: number }>();
+    if (row?.savedAt && Date.now() - row.savedAt < 30 * 24 * 60 * 60 * 1000) {
+      try { return JSON.parse(row.payload) as Record<string, string>; } catch { /* refetch */ }
+    }
+  }
+  try {
+    const { sportsDbSquadPhotos } = await import("./espn");
+    const photos = await sportsDbSquadPhotos(clubName);
+    if (db && Object.keys(photos).length) {
+      await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey, JSON.stringify(photos), Date.now()).run();
+    }
+    return photos;
+  } catch {
+    return {};
+  }
 }
 
 export function positionLabel(position: string) {
@@ -251,6 +280,13 @@ export async function getSquad(teamId: number | string): Promise<Squad | null> {
       if (team) {
         const fetched = await espnSquad(team.slug, espnId);
         if (fetched?.players.length) {
+          // ESPN names a headshot for two of Arsenal's twenty-four, and the
+          // rest do not exist - the file 404s. So where it has none, ask
+          // TheSportsDB, which answers per club rather than per player: one
+          // request, a whole squad, free. Only when it is actually needed,
+          // and cached with the squad for the day.
+          const missing = fetched.players.filter((p) => !p.photo).length;
+          const photos = missing > fetched.players.length / 3 ? await clubPhotos(db, espnId, team.name) : {};
           const squad: Squad = {
             teamName: fetched.teamName,
             teamLogo: fetched.teamLogo,
@@ -261,7 +297,7 @@ export async function getSquad(teamId: number | string): Promise<Squad | null> {
               number: p.number,
               position: p.position,
               age: p.age,
-              photo: p.photo,
+              photo: p.photo ?? photos[photoKeyOf(p.name)] ?? null,
             })),
           };
           if (db) {

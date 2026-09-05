@@ -1002,11 +1002,38 @@ const readNumber = (text: string, pattern: RegExp) => {
   return found ? Number(found[1]) : 0;
 };
 
+// Four doors to the same list, tried in order.
+//
+// MEASURED from inside the Worker on 6 September: every other ESPN call the
+// site makes answers - the tables, the clubs, a squad, a player - and
+// /apis/site/v2/.../leaders alone comes back empty in under thirty
+// milliseconds, while the identical URL answers a GitHub runner with fifty
+// names. So it is not the reader and not the host: Akamai refuses that one
+// path from Cloudflare's addresses. cdn.espn.com and the core API are
+// different doors to the same data, and cdn.espn.com already answers this
+// Worker.
+//
+// findLeaders searches by what a thing holds rather than where it sits, so
+// it copes with all four shapes without a parser each.
+export function leaderUrls(slug: string): string[] {
+  const year = new Date().getUTCMonth() + 1 >= 7 ? new Date().getUTCFullYear() : new Date().getUTCFullYear() - 1;
+  return [
+    `${HOST}/${slug}/leaders`,
+    `${STANDINGS_HOST}/${slug}/leaders`,
+    `https://cdn.espn.com/core/soccer/stats/_/league/${slug}?xhr=1`,
+    `https://sports.core.api.espn.com/v2/sports/soccer/leagues/${slug}/seasons/${year}/types/1/leaders?limit=50`,
+  ];
+}
+
 export async function espnTopScorers(code: string): Promise<import("./topscorers-server").TopScorer[] | null> {
   const slug = ESPN_SLUG_BY_CODE[code];
   if (!slug) return null;
-  const data = await espnJson<unknown>(`/${slug}/leaders`);
-  const leaders = data ? findLeaders(data, /goal/i) : null;
+  let leaders: EspnLeaderEntry[] | null = null;
+  for (const url of leaderUrls(slug)) {
+    const data = await espnUrl<unknown>(url);
+    leaders = data ? findLeaders(data, /goal/i) : null;
+    if (leaders?.length) break;
+  }
   if (!leaders?.length) return null;
   return leaders.slice(0, 20).map((entry, index) => {
     const long = entry.displayValue ?? "";
@@ -1047,6 +1074,71 @@ export async function espnTopScorers(code: string): Promise<import("./topscorers
 // because ESPN nests these differently between competitions, and reading it
 // by an assumed path is what this file has already got wrong twice.
 
+
+// ESPN's own column names, in Armenian. The player page prints one table
+// per season with whatever columns the provider sends, which is what lets a
+// goalkeeper's saves and a striker's shots both survive - but it printed
+// them in English on an Armenian site: STARTS, FOULS COMMITTED, OFFSIDES.
+// Keyed on the displayName ESPN sends, lower-cased, because that is the
+// string the table actually renders.
+const COLUMN_HY: Record<string, string> = {
+  starts: "Մեկնարկային",
+  appearances: "Խաղ",
+  "sub ins": "Փոխարինմամբ",
+  minutes: "Րոպե",
+  "total goals": "Գոլ",
+  goals: "Գոլ",
+  assists: "Ասիստ",
+  shots: "Հարված",
+  "shots on goal": "Դարպասի ուղղությամբ",
+  "shots on target": "Դարպասի ուղղությամբ",
+  "fouls committed": "Խախտում",
+  "fouls suffered": "Իր վրա խախտում",
+  offsides: "Խաղից դուրս",
+  "yellow cards": "Դեղին քարտ",
+  "red cards": "Կարմիր քարտ",
+  "own goals": "Ինքնագոլ",
+  saves: "Փրկում",
+  "goals conceded": "Բաց թողած գոլ",
+  "clean sheets": "Չոր խաղ",
+  "shots faced": "Դիմացի հարված",
+  "penalty kick goals": "Պենալտիից գոլ",
+  "penalty kick shots": "Պենալտի",
+  "penalty kicks saved": "Փրկած պենալտի",
+  "goal assists": "Ասիստ",
+  "total shots": "Հարված",
+  "effective clearance": "Մաքրում",
+  tackles: "Խլում",
+  interceptions: "Ընդհատում",
+  "won corners": "Անկյունային",
+  "game winning goals": "Հաղթական գոլ",
+  "total passes": "Փոխանցում",
+  "accurate passes": "Ճշգրիտ փոխանցում",
+  "pass pct": "Փոխանցման ճշգրտություն",
+  "shot pct": "Հարվածի ճշգրտություն",
+};
+
+// ESPN reports a footballer's position in English and in its own words.
+const POSITION_ESPN_HY: Record<string, string> = {
+  goalkeeper: "Դարպասապահ",
+  defender: "Պաշտպան",
+  midfielder: "Կիսապաշտպան",
+  forward: "Հարձակվող",
+  attacker: "Հարձակվող",
+  striker: "Հարձակվող",
+  "center back": "Կենտրոնական պաշտպան",
+  "full back": "Եզրային պաշտպան",
+  winger: "Եզրային հարձակվող",
+};
+
+// Inches and pounds mean nothing to an Armenian reader; ESPN sends both the
+// raw numbers and its own "6' 4\"" rendering of them, so the raw ones are
+// converted rather than the string reformatted.
+const centimetres = (inches: number | undefined) =>
+  typeof inches === "number" && inches > 0 ? `${Math.round(inches * 2.54)} սմ` : null;
+const kilograms = (pounds: number | undefined) =>
+  typeof pounds === "number" && pounds > 0 ? `${Math.round(pounds * 0.45359237)} կգ` : null;
+
 const ATHLETE_HOST = "https://site.web.api.espn.com/apis/common/v3/sports/soccer";
 
 type EspnStatCategory = {
@@ -1072,6 +1164,8 @@ type EspnAthleteResponse = {
     fullName?: string;
     age?: number;
     dateOfBirth?: string;
+    height?: number;
+    weight?: number;
     displayHeight?: string;
     displayWeight?: string;
     citizenship?: string;
@@ -1143,7 +1237,10 @@ export async function espnPlayer(athleteId: string): Promise<EspnPlayer | null> 
       const team = block.teamId ? teamsById[String(block.teamId)] : undefined;
       const league = block.leagueSlug ? leaguesBySlug[block.leagueSlug] : undefined;
       const columns = (block.stats ?? [])
-        .map((value, index) => ({ label: labels[index] ?? "", value: String(value ?? ""), note: notes[index] ?? null }))
+        .map((value, index) => {
+          const english = labels[index] ?? "";
+          return { label: COLUMN_HY[english.toLowerCase()] ?? english, value: String(value ?? ""), note: notes[index] ?? null };
+        })
         .filter((column) => column.label && column.value !== "" && column.value !== "0");
       if (!columns.length) continue;
       const key = `${block.season?.displayName ?? block.season?.year ?? ""}|${block.leagueSlug ?? ""}|${block.teamId ?? ""}`;
@@ -1152,7 +1249,11 @@ export async function espnPlayer(athleteId: string): Promise<EspnPlayer | null> 
       // the second one adds its columns rather than a second row.
       if (existing) { existing.columns.push(...columns); continue; }
       seasons.push({
-        season: String(block.season?.displayName ?? block.season?.year ?? ""),
+        // ESPN writes the season as "2026-27 English Premier League", so
+        // printing it whole put the competition's English name beside its
+        // Armenian one on every heading. Keep the years.
+        season: (block.season?.displayName ?? "").match(/^\d{4}(?:-\d{2,4})?/)?.[0]
+          ?? String(block.season?.year ?? ""),
         league: league?.displayName ? armenianCompetition(league.displayName) : "",
         leagueLogo: league?.logos?.[0]?.href ?? null,
         team: team?.name ? armenianTeamName(team.name) : "",
@@ -1172,10 +1273,13 @@ export async function espnPlayer(athleteId: string): Promise<EspnPlayer | null> 
     nationality: athlete.citizenship ? armenianCountry(athlete.citizenship) : null,
     birthDate: athlete.dateOfBirth ? athlete.dateOfBirth.slice(0, 10) : null,
     birthPlace: birthPlace || null,
-    height: athlete.displayHeight ?? null,
-    weight: athlete.displayWeight ?? null,
+    height: centimetres(athlete.height) ?? athlete.displayHeight ?? null,
+    weight: kilograms(athlete.weight) ?? athlete.displayWeight ?? null,
     age: typeof athlete.age === "number" ? athlete.age : null,
-    position: athlete.position?.displayName ?? athlete.position?.name ?? null,
+    position: (() => {
+      const raw = athlete.position?.displayName ?? athlete.position?.name ?? "";
+      return POSITION_ESPN_HY[raw.toLowerCase()] ?? (raw || null);
+    })(),
     currentTeam: athlete.team?.displayName ? armenianTeamName(athlete.team.displayName) : null,
     currentTeamKey: athlete.team?.id ? espnKey(athlete.team.id) : null,
     currentTeamLogo: athlete.team?.logos?.[0]?.href ?? null,
@@ -1186,4 +1290,119 @@ export async function espnPlayer(athleteId: string): Promise<EspnPlayer | null> 
     clubs: (clubFilter?.options ?? []).map((option) => armenianTeamName(option.displayValue ?? "")).filter(Boolean),
     seasons: seasons.filter((season) => season.season),
   };
+}
+
+// ---------------------------------------------------------------------
+// The faces
+// ---------------------------------------------------------------------
+//
+// MEASURED on 6 September: ESPN names a headshot for two of Arsenal's
+// twenty-four players, and for the other twenty-two the file does not exist
+// - the direct address and the combiner both answer 404. So a squad page
+// drawn from ESPN alone is a grid of letters. API-Football had a photo for
+// almost everyone, and that is the one thing being given up by leaving it.
+//
+// TheSportsDB fills it, for nothing, and per club rather than per player:
+// one request returns a whole squad with a cutout each. Twenty clubs in
+// seven leagues is a hundred and forty requests in total, not four thousand,
+// and only for a club somebody actually opens. The caller caches the answer
+// for a month, because a squad photograph does not change on a Tuesday.
+
+type SportsDbTeamSearch = { teams?: { idTeam?: string; strTeam?: string }[] };
+type SportsDbPlayers = {
+  player?: { strPlayer?: string; strCutout?: string | null; strThumb?: string | null; strRender?: string | null }[];
+};
+
+// Compared on letters alone: the two providers punctuate differently
+// ("Gabriel Magalhães" against "Gabriel Magalhaes") and one of them will
+// write a middle name the other leaves out.
+const photoKey = (name: string) =>
+  name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z]/g, "");
+
+export async function sportsDbSquadPhotos(clubName: string): Promise<Record<string, string>> {
+  const found = await sportsDb<SportsDbTeamSearch>(`/searchteams.php?t=${encodeURIComponent(clubName)}`);
+  const teamId = found?.teams?.[0]?.idTeam;
+  if (!teamId) return {};
+  const squad = await sportsDb<SportsDbPlayers>(`/lookup_all_players.php?id=${teamId}`);
+  const photos: Record<string, string> = {};
+  for (const player of squad?.player ?? []) {
+    // The cutout is a transparent head-and-shoulders and is what the card
+    // wants; the thumbnail is a match photograph and is the fallback.
+    const url = player.strCutout || player.strThumb || player.strRender;
+    if (player.strPlayer && url) photos[photoKey(player.strPlayer)] = url;
+  }
+  return photos;
+}
+
+export const squadPhotoKey = photoKey;
+
+// ---------------------------------------------------------------------
+// The scoring chart, after ESPN took the named list away
+// ---------------------------------------------------------------------
+//
+// MEASURED on 6 September, from a GitHub runner, eight addresses:
+//
+//   /apis/site/v2/.../leaders          404   (200 with fifty names an hour earlier)
+//   /apis/site/v2/.../leaders?season   404
+//   /apis/v2/.../leaders               404
+//   /apis/common/v3/.../leaders        404
+//   /apis/common/v3/.../statistics     404
+//   cdn.espn.com/core/soccer/stats     404
+//   cdn.espn.com/core/soccer/scoreboard 200, no leaders in it
+//   sports.core.api.../leaders         200, fifty entries - athlete is a $ref
+//
+// So the only list left names nobody: each entry points at an athlete
+// document, and reading fifty of them is fifty requests inside one page
+// render, for one league, of seven.
+//
+// The names are already somewhere cheaper. A league's clubs are one
+// request and each club's roster is one more - twenty for a league, once a
+// day - and between them they name every footballer who can appear in that
+// league's chart. So the chart is one request plus a lookup, and the index
+// is what the caller caches.
+
+export type EspnAthleteIndex = Record<string, { name: string; team: string; teamKey: string | null; teamLogo: string | null; photo: string | null }>;
+
+export async function espnLeagueAthletes(slug: string): Promise<EspnAthleteIndex> {
+  const clubs = await espnTeams(slug);
+  const index: EspnAthleteIndex = {};
+  // Sequential in batches rather than twenty at once: a Worker has a ceiling
+  // on subrequests in flight, and this runs once a day behind a cache.
+  for (let start = 0; start < clubs.length; start += 5) {
+    const batch = clubs.slice(start, start + 5);
+    const rosters = await Promise.all(batch.map((club) => espnSquad(slug, club.id).catch(() => null)));
+    rosters.forEach((roster, offset) => {
+      const club = batch[offset];
+      for (const player of roster?.players ?? []) {
+        index[player.id] ??= {
+          name: player.name,
+          team: armenianTeamName(club.name),
+          teamKey: espnKey(club.id),
+          teamLogo: club.logo,
+          photo: player.photo,
+        };
+      }
+    });
+  }
+  return index;
+}
+
+// The core API writes the footballer as a link ending in their id.
+const athleteIdFromRef = (ref: string | undefined) => ref?.match(/athletes\/(\d+)/)?.[1] ?? null;
+
+export async function espnCoreLeaders(slug: string): Promise<{ id: string; long: string; short: string; value: number }[] | null> {
+  const year = new Date().getUTCMonth() + 1 >= 7 ? new Date().getUTCFullYear() : new Date().getUTCFullYear() - 1;
+  const data = await espnUrl<unknown>(
+    `https://sports.core.api.espn.com/v2/sports/soccer/leagues/${slug}/seasons/${year}/types/1/leaders?limit=50`,
+  );
+  const leaders = data ? findLeaders(data, /goal/i) : null;
+  if (!leaders?.length) return null;
+  return leaders
+    .map((entry) => ({
+      id: athleteIdFromRef((entry.athlete as { $ref?: string } | undefined)?.$ref) ?? "",
+      long: entry.displayValue ?? "",
+      short: entry.shortDisplayValue ?? "",
+      value: Number(entry.value ?? 0),
+    }))
+    .filter((entry) => entry.id);
 }

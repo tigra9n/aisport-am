@@ -6,6 +6,7 @@ import { SiteFooter } from "../../../components/site-footer";
 import { SiteHeader } from "../../../components/site-header";
 import { formatDateHy } from "../../../lib/format-date";
 import { getPlayerProfile, getPlayerTransfers } from "../../../lib/player-server";
+import { getSquad } from "../../../lib/squad-server";
 import { knownPlayer } from "../../../lib/entity-cache";
 
 export const dynamic = "force-dynamic";
@@ -50,10 +51,23 @@ async function EspnPlayerPage({ id }: { id: string }) {
   const { espnPlayer } = await import("../../../lib/espn");
   const player = await espnPlayer(id.slice(5));
   if (!player) notFound();
+  // ESPN has a headshot for about one footballer in twelve. Their club's
+  // squad already carries the faces - filled from TheSportsDB, one request
+  // for the whole squad, cached for a month - so ask that rather than a
+  // second photo source per player.
+  const photo = player.photo ?? await (async () => {
+    if (!player.currentTeamKey) return null;
+    try {
+      const squad = await getSquad(player.currentTeamKey);
+      return squad?.players.find((p) => String(p.id) === player.id)?.photo ?? null;
+    } catch {
+      return null;
+    }
+  })();
   return <main><SiteHeader /><div className="site-shell inner-page">
     <span className="page-kicker">Խաղացողի պրոֆիլ</span>
     <div className="player-header">
-      {player.photo ? <img src={sizedImage(player.photo, 128)} alt="" className="player-header-photo" loading="lazy" /> : <div className="player-header-photo squad-photo-placeholder">{player.name.slice(0, 1)}</div>}
+      {photo ? <img src={sizedImage(photo, 128)} alt="" className="player-header-photo" loading="lazy" /> : <div className="player-header-photo squad-photo-placeholder">{player.name.slice(0, 1)}</div>}
       <div>
         <h1 className="page-title">{player.name}</h1>
         <div className="player-facts">
