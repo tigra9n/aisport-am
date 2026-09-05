@@ -1006,7 +1006,16 @@ jobs:
           // lines below. The question is whether the hand-written table
           // answered, and the way to ask it is to read the table.
           const table = await import("node:fs").then((fs) => fs.readFileSync("aisport-am/lib/team-names-hy.ts", "utf8"));
-          const known = new Set([...table.matchAll(/^\s*"([^"]+)":/gm)].map((m) => m[1].toLowerCase()));
+          // Second time this check lied. Reading only quoted keys missed every
+          // bare one - the table writes "juventus:" without quotes when the key
+          // is a single word - so Juventus and Como were reported as unknown
+          // while the table answered them perfectly. Keys are also several to a
+          // line, so nothing can be anchored to ^. Read the object's own body
+          // and take both spellings of a key wherever they appear.
+          const body = table.slice(table.indexOf("const teamNames"), table.indexOf("\n};"));
+          const known = new Set(
+            [...body.matchAll(/(?:"([^"]+)"|([A-Za-z][\w-]*))\s*:\s*"/g)].map((m) => (m[1] ?? m[2]).toLowerCase()),
+          );
           const names = new Set<string>();
           for (const slug of LEAGUES) {
             try {
@@ -1057,17 +1066,21 @@ jobs:
 
           const live = await get("https://aifootball.am/live");
           say(`=== /live -> HTTP ${live.status}, ${live.html.length} bytes ===`);
-          const espnIds = [...new Set([...live.html.matchAll(/\/live\/match\/(espn-[a-z0-9.]+-\d+)/g)].map((m) => m[1]))];
-          const sdbIds = [...new Set([...live.html.matchAll(/\/live\/match\/(sdb-\d+)/g)].map((m) => m[1]))];
-          const afIds = [...new Set([...live.html.matchAll(/\/live\/match\/(af-\d+)/g)].map((m) => m[1]))];
-          say(`  matches linked: ${espnIds.length} from ESPN, ${sdbIds.length} Armenian, ${afIds.length} still on the old provider`);
+          // The board has never linked to /live/match/. A row is a div that
+          // pushes /live?match=<id> and opens the modal; the match page is
+          // reached by sharing a link, not by clicking a row. Counting anchors
+          // reported "0 matches" for a board that was rendering nine
+          // competitions at the time. So count the rows, and read the ids
+          // wherever they sit in the payload.
+          const idsOf = (re) => [...new Set([...live.html.matchAll(re)].map((m) => m[0]))];
+          const espnIds = idsOf(/espn-[a-z0-9.]+-\d+/g);
+          const sdbIds = idsOf(/sdb-\d+/g);
+          const afIds = idsOf(/\baf-\d+/g);
+          say(`  match rows drawn: ${count(live.html, /class="[^"]*match-row[^"]*"/g)}`);
+          say(`  match ids present: ${espnIds.length} from ESPN, ${sdbIds.length} Armenian, ${afIds.length} still on the old provider`);
           say(`  competitions named: ${[...new Set([...live.html.matchAll(/(Չեմպիոնների լիգա|Եվրոպա լիգա|Անգլիայի Պրեմիեր լիգա|Իսպանիայի Լա Լիգա|Իտալիայի Սերիա Ա|Գերմանիայի Բունդեսլիգա|Ֆրանսիայի Լիգա 1|MLS|Հայաստանի Պրեմիեր լիգա)/g)].map((m) => m[1]))].join(", ") || "none"}`);
-          if (/տվյալները հասանելի չեն|unavailable/i.test(live.html)) say("  !! the page is showing its unavailable state");
-          // Counting links assumed a shape. Print what is actually there.
-          const rows = [...live.html.matchAll(/<a[^>]*href="(\/live\/match\/[^"]+)"[^>]*>([\s\S]{0,220}?)<\/a>/g)].slice(0, 6);
-          say(`  match links of any shape: ${rows.length}`);
-          for (const [, href, inner] of rows) say(`      ${href}  ${inner.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 90)}`);
-          const noMatches = live.html.match(/[^<>]{0,80}(խաղ չկա|այսօր խաղ|Խաղեր չեն)[^<>]{0,80}/);
+          if (/Տվյալները հասանելի չեն/i.test(live.html)) say("  !! the page is showing its unavailable state");
+          const noMatches = live.html.match(/[^<>]{0,90}հանդիպումներ չկան[^<>]{0,20}/);
           if (noMatches) say(`  the page says: ${noMatches[0].trim()}`);
 
           if (espnIds.length) {
