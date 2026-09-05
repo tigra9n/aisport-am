@@ -1548,6 +1548,11 @@ jobs:
                 for (const c of j.armenianClubsInEspn ?? []) {
                   console.log('    espn knows '+String(c.name).padEnd(16)+' -> '+(Array.isArray(c.found)&&c.found.length?c.found.join(' | '):'nothing'));
                 }
+                // What the pages actually call, added the night the scoring
+                // charts went blank while every host below returned 200.
+                for (const [name, result] of Object.entries(j.library ?? {})) {
+                  console.log('    lib '+String(name).padEnd(24)+' '+result);
+                }
                 for (const r of j.results ?? []) {
                   console.log('    '+String(r.label).padEnd(24)+' HTTP '+r.status+'  '+r.ms+'ms'+(r.events!==null?('  '+r.events+' fixtures'):'')+(r.body?('  '+r.body.replace(/\\s+/g,' ').slice(0,70)):''));
                 }
