@@ -45,7 +45,14 @@ export type KnownTeam = { name: string; logo: string | null };
 export async function knownTeam(teamId: number): Promise<KnownTeam | null> {
   const season = currentSeasonYear();
   const tables = await readCached<StandingRow[]>(
-    LEAGUE_IDS.map((id) => `apifootball:v3:standings:${id}:${season}`),
+    // Both versions: v4 is what the writer fills now, v3 is what is still in
+    // the table until it expires. This lookup only answers "does this club
+    // exist and what is its badge", and an older row is a better answer than
+    // a 404 - which is the whole reason this file exists.
+    [
+      ...LEAGUE_IDS.map((id) => `apifootball:v4:standings:${id}:${season}`),
+      ...LEAGUE_IDS.map((id) => `apifootball:v3:standings:${id}:${season}`),
+    ],
   );
   for (const rows of tables) {
     for (const row of rows ?? []) {
@@ -60,6 +67,7 @@ export type KnownPlayer = { name: string; photo: string | null; team: string | n
 export async function knownPlayer(playerId: number): Promise<KnownPlayer | null> {
   const season = currentSeasonYear();
   const tables = await readCached<TopScorer[]>([
+    ...LEAGUE_IDS.map((id) => `apifootball:v6:topscorers:${id}:${season}`),
     ...LEAGUE_IDS.map((id) => `apifootball:v5:topscorers:${id}:${season}`),
     // Previous keys, still worth reading while the new one fills up. This
     // lookup only answers "does this player exist, and what is their
