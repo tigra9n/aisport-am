@@ -105,7 +105,7 @@ function crest(team: EspnCompetitor["team"]): string | null {
 // The ids are prefixed "espn-" because the site already prefixes
 // API-Football's with "af-", and a match page has to know which provider a
 // number belongs to before it can ask anyone about it.
-function toMatch(event: EspnEvent, league: { priority: number; label: string }): (LiveMatch & { priority: number; timestamp: number }) | null {
+function toMatch(event: EspnEvent, league: { slug: string; priority: number; label: string }): (LiveMatch & { priority: number; timestamp: number }) | null {
   const competitors = event.competitions?.[0]?.competitors ?? [];
   const home = competitors.find((c) => c.homeAway === "home") ?? competitors[0];
   const away = competitors.find((c) => c.homeAway === "away") ?? competitors[1];
@@ -113,7 +113,9 @@ function toMatch(event: EspnEvent, league: { priority: number; label: string }):
   const { label, isLive } = statusLabel(event);
   const score = (c: EspnCompetitor) => (c.score === undefined || c.score === "" ? null : Number(c.score));
   return {
-    id: `espn-${event.id}`,
+    // The slug travels in the id because /summary needs it and the match
+    // page is handed nothing but an id.
+    id: `espn-${league.slug}-${event.id}`,
     status: label,
     competition: league.label,
     home: armenianTeamName(home.team.displayName),
@@ -422,4 +424,220 @@ export async function espnMatchDetail(eventId: string, leagueSlug: string): Prom
       .filter((c) => c.text),
     commentarySource: (data.commentary ?? []).some((c) => (c.text ?? c.play?.text ?? "").trim()) ? "ESPN" : null,
   };
+}
+
+// ---------------------------------------------------------------------
+// Armenia
+// ---------------------------------------------------------------------
+//
+// ESPN does not have the Armenian league. Its own list returns 218 soccer
+// competitions and the Armenian Premier League is not one of them; five
+// spellings of the slug all answer 400, and it knows Pyunik, Ararat-Armenia
+// and Alashkert only through the European ties they qualified for.
+//
+// TheSportsDB does have it, on the free key its documentation hands out:
+// league 4619, with the table, the coming fixtures and the recent results,
+// all current when measured. Its livescore endpoint is paid, so the minute
+// of an Armenian match still costs a paid request - but the table does not.
+//
+// It rate-limits hard from Cloudflare's addresses: asked twice in a minute
+// from the Worker it answered 429 with Cloudflare's own error 1015. So this
+// is called through the same api_cache the rest of the site uses, on a long
+// window, and never per page view.
+const SPORTSDB = "https://www.thesportsdb.com/api/v1/json/3";
+const ARMENIAN_LEAGUE_ID = "4619";
+
+type SportsDbRow = { intRank?: string; strTeam?: string; strBadge?: string; intPoints?: string; intPlayed?: string; intWin?: string; intDraw?: string; intLoss?: string; intGoalDifference?: string };
+
+function armenianSeasonLabel(now = new Date()): string {
+  // The Armenian league runs across two calendar years, and TheSportsDB
+  // labels a season "2026-2027". July is the turn.
+  const year = now.getUTCFullYear();
+  return now.getUTCMonth() + 1 >= 7 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+}
+
+export async function armenianStandings(): Promise<import("./football").StandingRow[] | null> {
+  try {
+    const res = await fetch(`${SPORTSDB}/lookuptable.php?l=${ARMENIAN_LEAGUE_ID}&s=${armenianSeasonLabel()}`, {
+      headers: { "User-Agent": BROWSER_UA, Accept: "application/json" },
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { table?: SportsDbRow[] };
+    const rows = (data.table ?? [])
+      .map((r, index) => ({
+        position: Number(r.intRank ?? 0) || index + 1,
+        team: armenianTeamName(r.strTeam ?? ""),
+        // TheSportsDB's ids are its own; the site's team pages run on
+        // API-Football's numbering and linking one to the other would open
+        // a page about a different club.
+        teamId: null,
+        teamLogo: r.strBadge ?? null,
+        played: Number(r.intPlayed ?? 0),
+        won: Number(r.intWin ?? 0),
+        draw: Number(r.intDraw ?? 0),
+        lost: Number(r.intLoss ?? 0),
+        goalDifference: Number(r.intGoalDifference ?? 0),
+        points: Number(r.intPoints ?? 0),
+      }))
+      .filter((r) => r.team);
+    return rows.length ? rows : null;
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------
+// The match page, in the shape the site already renders
+// ---------------------------------------------------------------------
+//
+// The page's own type is fixed by the components that draw it, so this
+// fills that shape rather than changing it: the richer material ESPN sends
+// - twenty-eight team numbers, fourteen per player, the commentary - is
+// read above and waits on the layout work to show it. What matters tonight
+// is that a match page costs nothing instead of ten paid requests.
+export async function espnLiveMatchDetail(id: string): Promise<import("./live-football-server").LiveMatchDetail | null> {
+  const match = /^espn-(.+)-(\d+)$/.exec(id);
+  if (!match) return null;
+  const [, slug, eventId] = match;
+
+  const data = await espnJson<EspnSummary & {
+    header?: {
+      competitions?: {
+        id?: string;
+        date?: string;
+        status?: { type?: { state?: string; detail?: string; shortDetail?: string }; displayClock?: string };
+        competitors?: (EspnCompetitor & { team?: { displayName?: string; logo?: string; logos?: { href?: string }[] } })[];
+      }[];
+      league?: { name?: string };
+    };
+  }>(`/${slug}/summary?event=${encodeURIComponent(eventId)}`);
+  if (!data) return null;
+
+  const competition = data.header?.competitions?.[0];
+  const competitors = competition?.competitors ?? [];
+  const home = competitors.find((c) => c.homeAway === "home") ?? competitors[0];
+  const away = competitors.find((c) => c.homeAway === "away") ?? competitors[1];
+  if (!home?.team?.displayName || !away?.team?.displayName) return null;
+
+  const league = ESPN_LEAGUES.find((l) => l.slug === slug);
+  const status = statusLabel({ date: competition?.date, status: competition?.status });
+  const score = (c?: EspnCompetitor) => (c?.score === undefined || c.score === "" ? null : Number(c.score));
+
+  const detail = await espnMatchDetail(eventId, slug);
+
+  return {
+    match: {
+      id,
+      status: status.label,
+      competition: league?.label ?? data.header?.league?.name ?? "",
+      home: armenianTeamName(home.team.displayName),
+      away: armenianTeamName(away.team.displayName),
+      homeId: null,
+      awayId: null,
+      homeLogo: crest(home.team),
+      awayLogo: crest(away.team),
+      homeScore: score(home),
+      awayScore: score(away),
+      isLive: status.isLive,
+    },
+    venue: detail?.venue ?? "",
+    referee: detail?.referee ?? "",
+    events: detail?.events ?? [],
+    lineups: (detail?.lineups ?? []).map((l) => ({
+      team: l.team,
+      formation: l.formation,
+      starters: l.starters.map((p) => ({ id: null, name: p.name, number: p.number, grid: p.grid, rating: p.rating })),
+      substitutes: l.substitutes.map((p) => ({ id: null, name: p.name, number: p.number, grid: p.grid, rating: p.rating })),
+    })),
+    // The page's statistics block has four fixed slots. ESPN sends
+    // twenty-eight numbers; three of them go here and the rest wait for the
+    // layout to be widened. Expected goals is not among what ESPN sends at
+    // all, so it stays empty rather than being filled with something else.
+    statistics: (detail?.statistics ?? []).map((s) => ({
+      team: s.team,
+      possession: s.rows.find((r) => r.label === "Տիրապետում")?.value ?? "",
+      shotsOnGoal: s.rows.find((r) => r.label === "Դարպասի ուղղությամբ")?.value ?? "",
+      totalShots: s.rows.find((r) => r.label === "Հարվածներ")?.value ?? "",
+      xg: "",
+    })),
+    h2h: detail?.h2h ?? [],
+    // No free equivalent, and inventing either would be worse than an
+    // empty section: a prediction is somebody's opinion and an injury list
+    // is a claim about a person's health.
+    prediction: null,
+    injuries: [],
+    standings: null,
+    topScorers: null,
+    formGuide: [],
+  };
+}
+
+// Armenian fixtures and results, free.
+//
+// TheSportsDB's free key gives the coming games and the finished ones with
+// their scores, which is everything the board shows about an Armenian match
+// except the minute while it is being played. It has no livescore on the
+// free tier - that endpoint is paid - so a match in progress reads as
+// scheduled until it finishes and then appears with its result.
+//
+// That is the honest cost of cancelling the subscription, and it is the
+// only thing lost.
+type SportsDbEvent = {
+  idEvent?: string;
+  strEvent?: string;
+  strHomeTeam?: string;
+  strAwayTeam?: string;
+  intHomeScore?: string | null;
+  intAwayScore?: string | null;
+  dateEvent?: string;
+  strTimestamp?: string;
+  strStatus?: string;
+  strHomeTeamBadge?: string;
+  strAwayTeamBadge?: string;
+};
+
+async function sportsDb<T>(path: string): Promise<T | null> {
+  try {
+    const res = await fetch(`${SPORTSDB}${path}`, {
+      headers: { "User-Agent": BROWSER_UA, Accept: "application/json" },
+      signal: AbortSignal.timeout(12_000),
+    });
+    if (!res.ok) return null;
+    return await res.json() as T;
+  } catch {
+    return null;
+  }
+}
+
+export async function armenianMatchesForDate(date: string): Promise<LiveMatch[]> {
+  const [next, past] = await Promise.all([
+    sportsDb<{ events?: SportsDbEvent[] }>(`/eventsnextleague.php?id=${ARMENIAN_LEAGUE_ID}`),
+    sportsDb<{ events?: SportsDbEvent[] }>(`/eventspastleague.php?id=${ARMENIAN_LEAGUE_ID}`),
+  ]);
+  const all = [...(past?.events ?? []), ...(next?.events ?? [])];
+  return all
+    .filter((e) => (e.dateEvent ?? "") === date)
+    .map((e) => {
+      const played = e.intHomeScore !== null && e.intHomeScore !== undefined && e.intHomeScore !== "";
+      const kickoff = e.strTimestamp ? new Date(e.strTimestamp.replace(" ", "T") + "Z") : null;
+      return {
+        id: `sdb-${e.idEvent}`,
+        status: played ? "Ավարտված" : kickoff ? formatTimeYerevan(kickoff.toISOString()) : "",
+        competition: "Հայաստանի Պրեմիեր լիգա",
+        home: armenianTeamName(e.strHomeTeam ?? ""),
+        away: armenianTeamName(e.strAwayTeam ?? ""),
+        homeId: null,
+        awayId: null,
+        homeLogo: e.strHomeTeamBadge ?? null,
+        awayLogo: e.strAwayTeamBadge ?? null,
+        homeScore: played ? Number(e.intHomeScore) : null,
+        awayScore: played ? Number(e.intAwayScore) : null,
+        // The free tier has no live feed, so nothing here is ever marked
+        // live. Claiming otherwise would put a "LIVE" badge on a score that
+        // is not moving.
+        isLive: false,
+      } satisfies LiveMatch;
+    })
+    .filter((m) => m.home && m.away);
 }

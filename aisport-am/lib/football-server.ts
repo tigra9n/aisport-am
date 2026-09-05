@@ -74,8 +74,9 @@ export async function getStandings(code: string): Promise<{ rows: StandingRow[];
   // On failure it also falls through rather than showing an empty table.
   // A free source is worth having; it is not worth a blank league page.
   try {
-    const { espnStandings } = await import("./espn");
-    const rows = await espnStandings(code);
+    const { espnStandings, armenianStandings } = await import("./espn");
+    // Armenia has no ESPN league; TheSportsDB carries it on a free key.
+    const rows = code === "ARM" ? await armenianStandings() : await espnStandings(code);
     if (rows && rows.length) {
       if (db) {
         await db.prepare("INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0")
