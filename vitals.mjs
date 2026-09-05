@@ -13,6 +13,7 @@
 // produced.
 
 import { chromium } from "playwright";
+import { measureAsAReader } from "./measure-as-a-reader.mjs";
 
 const BASE = process.env.VITALS_BASE_URL ?? "https://aifootball.am";
 
@@ -39,6 +40,7 @@ for (const [name, path] of PAGES) {
     userAgent:
       "Mozilla/5.0 (Linux; Android 12; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36",
   });
+  await measureAsAReader(context);
   const page = await context.newPage();
 
   // A mid-range phone is roughly four times slower than this runner. Without

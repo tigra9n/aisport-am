@@ -89,7 +89,20 @@ jobs:
           curl -s --max-time 20 "https://graph.facebook.com/v26.0/me/feed?fields=created_time,message,permalink_url&limit=5&access_token=$TOKEN" \
             | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{
                 let j; try { j = JSON.parse(d) } catch { console.log("  unreadable answer"); process.exit(0) }
-                if (j.error) { console.log("  ERROR: " + j.error.message); process.exit(0) }
+                if (j.error) {
+                  const m = j.error.message ?? "";
+                  if (j.error.code === 10 || /Page Public Content Access/i.test(m)) {
+                    console.log("  cannot read the posts on this page from here, and that is expected.");
+                    console.log("  Since the app went Live on 4 September, reading a Page feed needs the");
+                    console.log("  Page Public Content Access feature. Publishing does not, so posting is");
+                    console.log("  unaffected - pages_manage_posts is in the scopes above.");
+                    console.log("  For evidence that posts are landing, run the workflow");
+                    console.log("  \"What happened to the social posts\": it reads our own publication_logs,");
+                    console.log("  which stores the post id Facebook returned for every attempt.");
+                    process.exit(0);
+                  }
+                  console.log("  ERROR: " + m); process.exit(0);
+                }
                 const posts = j.data ?? [];
                 if (!posts.length) { console.log("  nothing has been posted to this page yet"); process.exit(0) }
                 for (const p of posts) {
