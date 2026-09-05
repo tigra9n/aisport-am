@@ -81,6 +81,15 @@ function extractImage(block: string): string | null {
 // Items carrying no date at all are kept: Sky Sports' feed has no pubDate
 // and is refreshed constantly, and throwing it away would cost a good
 // source to guard against a bad one.
+// Defence in depth, not a category filter. Every row in the sources table
+// is a football desk, so this should never fire - but an NFL story has been
+// published here once already, through the APITube path, and a general
+// sports desk syndicating one story into a football feed is exactly the
+// kind of thing nobody notices until it is on the front page in Armenian.
+function isNotAmericanFootball(item: FeedItem): boolean {
+  return !isAmericanFootball(`${item.title} ${item.snippet}`);
+}
+
 const MAX_ITEM_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 
 function isRecent(item: FeedItem): boolean {
@@ -114,7 +123,7 @@ export async function fetchFeed(feedUrl: string, limit = 10): Promise<FeedItem[]
       snippet: (extractTag(block, "description") ?? extractTag(block, "summary") ?? "").slice(0, 500),
       imageUrl: extractImage(block),
       pubDate: extractTag(block, "pubDate"),
-    })).filter((item) => item.title && item.link).filter(isRecent);
+    })).filter((item) => item.title && item.link).filter(isRecent).filter(isNotAmericanFootball);
   } catch (err) {
     console.error(`[feeds] fetch failed for ${feedUrl}: ${String(err)}`);
     return [];

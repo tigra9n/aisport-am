@@ -13,6 +13,10 @@ on:
         type: choice
         options: ['leave', 'off', 'on']
         default: 'leave'
+      disable:
+        description: 'Source names to switch off, comma separated (exact names from the listing)'
+        required: false
+        default: ''
 
 jobs:
   add:
@@ -110,20 +114,6 @@ jobs:
             ["Madrid Universal", "https://madriduniversal.com/feed/"],
           ];
 
-          // Informational only - never inserted. Armenian football is the
-          // one thing an English feed list cannot cover, and it is worth
-          // knowing which of these are even readable before deciding.
-          const ARMENIAN_CANDIDATES = [
-            ["FFA (Football Federation of Armenia)", "https://ffa.am/hy/rss/"],
-            ["News.am Sport", "https://news.am/arm/rss/sport.xml"],
-            ["Sport News.am", "https://sport.news.am/arm/rss/"],
-            ["Armenpress Sport", "https://armenpress.am/arm/rss/sport/"],
-            ["Panorama.am Sport", "https://www.panorama.am/am/rss/category/sport"],
-            ["Tert.am Sport", "https://www.tert.am/am/rss/sport"],
-            ["Shant News Sport", "https://shantnews.am/rss/sport"],
-            ["Aravot Sport", "https://www.aravot.am/feed/"],
-            ["168.am", "https://168.am/feed/"],
-          ];
 
           function decodeEntities(t) {
             return t.replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">")
@@ -207,11 +197,6 @@ jobs:
           const passing = results.filter((r) => r.ok);
           out.push(`  --- ${passing.length} of ${results.length} usable ---`);
 
-          out.push("");
-          out.push("=== Armenian feeds (reported only, never inserted) ===");
-          for (const r of await Promise.all(ARMENIAN_CANDIDATES.map(([n, u]) => probe(n, u)))) {
-            out.push(`  ${r.ok ? "PASS" : "fail"}  ${r.name.padEnd(38)} ${r.ok ? `${r.items} items, newest ${r.ageH ?? "?"}h old` : r.why}`);
-          }
 
           console.log(out.join("\n"));
           fs.writeFileSync("probe.txt", out.join("\n"));
@@ -258,6 +243,29 @@ jobs:
           npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
           npx wrangler d1 execute aisport-db --remote --command \
             "UPDATE sources SET enabled=${{ github.event.inputs.apitube == 'on' && '1' || '0' }} WHERE feed_url LIKE '%apitube%'" 2>&1 | tail -8
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # A feed can pass every mechanical test and still be the wrong feed.
+      # HITC's football address returns Taylor Swift and Michael Irvin; The42
+      # and the Irish Mirror's soccer path both led with Katie Taylor's
+      # boxing. The probe cannot see that - it counts items, it does not read
+      # them - so switching a row off by name has to be possible without a
+      # deploy.
+      - name: Switch named sources off
+        if: ${{ github.event.inputs.disable != '' }}
+        run: |
+          npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
+          node -e "
+            const fs=require('fs');
+            const names=process.argv[1].split(',').map(s=>s.trim()).filter(Boolean);
+            const q=(s)=>\"'\"+s.replace(/'/g,\"''\")+\"'\";
+            const sql='UPDATE sources SET enabled=0 WHERE name IN ('+names.map(q).join(',')+');';
+            fs.writeFileSync('disable.sql', sql+'\n');
+            console.log('  '+sql);
+          " "${{ github.event.inputs.disable }}"
+          npx wrangler d1 execute aisport-db --remote --file=disable.sql 2>&1 | tail -6
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
