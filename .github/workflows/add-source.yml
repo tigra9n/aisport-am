@@ -294,6 +294,50 @@ jobs:
             ["The Athletic Football", "https://theathletic.com/football/rss/"],
             ["BBC Premier League", "https://feeds.bbci.co.uk/sport/football/premier-league/rss.xml"],
             ["Premier League Official", "https://www.premierleague.com/rss/news"],
+
+            // --- MLS, second round ---------------------------------------
+            // Four of twelve answered. The national American desks cover
+            // soccer as one sport among many; the club blogs cover a single
+            // MLS side every day, which is the volume this needs. SB Nation
+            // runs a network of them and they share one feed shape.
+            ["Hudson River Blue", "https://www.hudsonriverblue.com/rss/current"],
+            ["Black And Red United", "https://www.blackandredunited.com/rss/current"],
+            ["Dirty South Soccer", "https://www.dirtysouthsoccer.com/rss/current"],
+            ["Massive Report", "https://www.massivereport.com/rss/current"],
+            ["Brotherly Game", "https://www.brotherlygame.com/rss/current"],
+            ["Angels On Parade", "https://www.angelsonparade.com/rss/current"],
+            ["Stumptown Footy", "https://www.stumptownfooty.com/rss/current"],
+            ["RSL Soapbox", "https://www.rslsoapbox.com/rss/current"],
+            ["Sounder At Heart (current)", "https://www.sounderatheart.com/rss/current"],
+            ["E Pluribus Loonum", "https://www.epluribusloonum.com/rss/current"],
+            ["Dynamo Theory", "https://www.dynamotheory.com/rss/current"],
+            ["MLS Soccer (xml)", "https://www.mlssoccer.com/rss.xml"],
+            ["NBC Sports Soccer", "https://soccer.nbcsports.com/feed/"],
+            ["Sports Illustrated Soccer", "https://www.si.com/rss/si_soccer.rss"],
+            ["Goal USA (news)", "https://www.goal.com/en-us/feeds/news"],
+            ["Pro Soccer Wire (alt)", "https://prosoccerwire.usatoday.com/rss"],
+
+            // --- Saudi, second round -------------------------------------
+            // Three of twelve. The Gulf's English press is thin on the
+            // league itself; the Saudi papers are not, and they publish in
+            // Arabic. The model already writes from four languages and the
+            // parser already sniffs the charset, so the language is not the
+            // obstacle - finding a feed that answers is.
+            ["Al Riyadh", "https://www.alriyadh.com/rss.xml"],
+            ["Al Jazirah Sport", "https://www.al-jazirah.com/rss/sport.xml"],
+            ["Al Watan Sport", "https://www.alwatan.com.sa/rss"],
+            ["Okaz", "https://www.okaz.com.sa/rss.xml"],
+            ["Sabq", "https://sabq.org/rss"],
+            ["Al Marsd", "https://al-marsd.com/feed"],
+            ["Saudi Pro League (ar)", "https://www.spl.com.sa/ar/rss"],
+            ["FilGoal (slash)", "https://www.filgoal.com/rss/"],
+            ["Al Arabiya Sport (mrss)", "https://english.alarabiya.net/.mrss/en/sport.xml"],
+            ["Sport360 (slash)", "https://sport360.com/feed/"],
+            ["The National Sport (alt)", "https://www.thenationalnews.com/rss/sport"],
+            ["Gulf News Sport (alt)", "https://gulfnews.com/rss/sport"],
+            ["Arab News Sport (alt)", "https://www.arabnews.com/taxonomy/term/6/feed"],
+            ["Al Yaum Sport", "https://www.alyaum.com/rss/sport"],
+            ["Ahdath", "https://ahdath.info/feed"],
           ];
 
 
@@ -385,6 +429,32 @@ jobs:
           fs.writeFileSync("passing.json", JSON.stringify(passing.map((r) => ({ name: r.name, url: r.url })), null, 2));
           JS
           node probe.mjs
+
+      # Which league each passing desk belongs to, counted with the site's
+      # own beatOf rather than a copy of it: the whole point of the split is
+      # that the ranking and this summary agree on what a desk covers, and a
+      # second table would drift the first time one of them was edited.
+      - name: How many desks each league ended up with
+        if: ${{ github.event.inputs.livescore == 'no' && github.event.inputs.espn == 'no' }}
+        run: |
+          npm --prefix aisport-am ci --no-audit --no-fund >/dev/null 2>&1 || npm --prefix aisport-am install --no-audit --no-fund >/dev/null 2>&1
+          cat > beats.mts <<'TS'
+          import fs from "node:fs";
+          import { beatOf } from "./aisport-am/lib/story-ranking.ts";
+          const passing = JSON.parse(fs.readFileSync("passing.json", "utf8")) as { name: string; url: string }[];
+          const byBeat = new Map<string, string[]>();
+          for (const feed of passing) {
+            const beat = beatOf(feed.url);
+            byBeat.set(beat, [...(byBeat.get(beat) ?? []), feed.name]);
+          }
+          const order = ["England", "Spain", "Italy", "Germany", "France", "MLS", "Saudi", "Turkey", "Portugal"];
+          for (const beat of [...order, ...[...byBeat.keys()].filter((b) => !order.includes(b))]) {
+            const desks = byBeat.get(beat);
+            if (!desks) { console.log(`  ${beat.padEnd(9)} 0`); continue; }
+            console.log(`  ${beat.padEnd(9)} ${String(desks.length).padStart(2)}  ${desks.join(", ")}`);
+          }
+          TS
+          npx --prefix aisport-am tsx beats.mts || node --experimental-strip-types beats.mts
 
       - name: Write the passing feeds into D1
         if: ${{ github.event.inputs.apply == 'yes' && github.event.inputs.livescore != 'yes' && github.event.inputs.espn == 'no' }}
@@ -1229,6 +1299,19 @@ jobs:
           } else {
             say("  !! ESPN reported no finished match in the last day and a half");
           }
+
+          say("");
+          // The smoke test cannot find a /player/ link on the scoring
+          // charts, which means the chart the page opens on is empty rather
+          // than that the link is shaped wrong - the club links beside it
+          // were found. So read what the page says.
+          const ts = await get("https://aifootball.am/topscorers");
+          say(`=== /topscorers -> HTTP ${ts.status}, ${ts.html.length} bytes ===`);
+          say(`  player links: ${count(ts.html, /\/player\/(?:espn-)?\d+/g)}`);
+          say(`  rows: ${count(ts.html, /position-marker/g)}`);
+          if (ts.html.includes("Տվյալ չկա")) say("  !! the chart says Տվյալ չկա");
+          const names = [...ts.html.matchAll(/\/player\/((?:espn-)?\d+)/g)].slice(0, 3).map((m) => m[1]);
+          if (names.length) say(`  first ids: ${names.join(", ")}`);
 
           say("");
           // /standings takes no league query: it renders all eight leagues as
