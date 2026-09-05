@@ -324,6 +324,35 @@ const PLAYER_STAT_LABEL: Record<string, string> = {
   ownGoals: "Ինքնագոլ",
 };
 
+// What ESPN calls each thing that happens in a match. It sends these in
+// English - "Goal", "Yellow Card", "Substitution" - and the page printed
+// them as they came, so an Armenian match centre listed its goals in
+// English. Keyed loosely, because ESPN writes the same event several ways
+// ("Penalty - Scored", "Goal - Penalty") depending on the competition.
+const EVENT_LABEL: [RegExp, string][] = [
+  [/own\s*goal/i, "Ինքնագոլ"],
+  [/penalty.*(scored|goal)|goal.*penalty/i, "Գոլ պենալտիից"],
+  [/penalty.*(missed|saved)/i, "Չխփած պենալտի"],
+  [/penalty/i, "Պենալտի"],
+  [/goal/i, "Գոլ"],
+  [/second\s*yellow|yellow\s*red/i, "Երկրորդ դեղին քարտ"],
+  [/yellow/i, "Դեղին քարտ"],
+  [/red\s*card/i, "Կարմիր քարտ"],
+  [/substitut/i, "Փոխարինում"],
+  [/var/i, "VAR"],
+  [/half\s*time|halftime/i, "Ընդմիջում"],
+  [/full\s*time|end\s*(of)?\s*(regular|match|game)?/i, "Խաղի ավարտ"],
+  [/kick\s*off|start/i, "Խաղի սկիզբ"],
+  [/corner/i, "Անկյունային"],
+  [/offside/i, "Խաղից դուրս"],
+  [/foul/i, "Խախտում"],
+];
+
+function eventLabel(text: string) {
+  for (const [pattern, hy] of EVENT_LABEL) if (pattern.test(text)) return hy;
+  return text;
+}
+
 export type EspnPlayerLine = {
   id: null;
   name: string;
@@ -387,7 +416,7 @@ export async function espnMatchDetail(eventId: string, leagueSlug: string): Prom
       team: armenianTeamName(e.team?.displayName ?? ""),
       player: e.athletesInvolved?.[0]?.displayName ?? "",
       assist: e.athletesInvolved?.[1]?.displayName ?? "",
-      label: e.type?.text ?? e.text ?? "",
+      label: eventLabel(e.type?.text ?? e.text ?? ""),
     })).filter((e) => e.label),
     lineups: (data.rosters ?? []).map((r) => ({
       team: armenianTeamName(r.team?.displayName ?? ""),
@@ -458,12 +487,8 @@ function armenianSeasonLabel(now = new Date()): string {
 
 export async function armenianStandings(): Promise<import("./football").StandingRow[] | null> {
   try {
-    const res = await fetch(`${SPORTSDB}/lookuptable.php?l=${ARMENIAN_LEAGUE_ID}&s=${armenianSeasonLabel()}`, {
-      headers: { "User-Agent": BROWSER_UA, Accept: "application/json" },
-      signal: AbortSignal.timeout(12_000),
-    });
-    if (!res.ok) return null;
-    const data = await res.json() as { table?: SportsDbRow[] };
+    const data = await sportsDb<{ table?: SportsDbRow[] }>(`/lookuptable.php?l=${ARMENIAN_LEAGUE_ID}&s=${armenianSeasonLabel()}`);
+    if (!data) return null;
     const rows = (data.table ?? [])
       .map((r, index) => ({
         position: Number(r.intRank ?? 0) || index + 1,
@@ -562,15 +587,54 @@ export async function espnLiveMatchDetail(id: string): Promise<import("./live-fo
       xg: "",
     })),
     h2h: detail?.h2h ?? [],
-    // No free equivalent, and inventing either would be worse than an
-    // empty section: a prediction is somebody's opinion and an injury list
-    // is a claim about a person's health.
+    // No free equivalent, and inventing either would be worse than an empty
+    // section: a prediction is somebody's opinion and an injury list is a
+    // claim about a person's health.
     prediction: null,
     injuries: [],
-    standings: null,
+    // The table belongs on a match page and ESPN has it, so the section
+    // that would otherwise have gone missing comes back.
+    standings: league ? await espnStandings(codeForSlug(slug)) : null,
     topScorers: null,
     formGuide: [],
+    // What the old layout had no room for.
+    statRows: statRowsFrom(detail),
+    playerLines: playerLinesFrom(detail),
+    commentary: detail?.commentary ?? [],
+    commentarySource: detail?.commentarySource ?? null,
   };
+}
+
+// The site's league codes are keyed the other way round; this is the only
+// place that needs the reverse.
+function codeForSlug(slug: string): string {
+  const found = Object.entries(ESPN_SLUG_BY_CODE).find(([, s]) => s === slug);
+  return found?.[0] ?? "";
+}
+
+// Home against away, in the order a reader looks for them rather than the
+// order ESPN sends them.
+function statRowsFrom(detail: EspnMatchDetail | null): { label: string; home: string; away: string }[] {
+  if (!detail || detail.statistics.length !== 2) return [];
+  const [home, away] = detail.statistics;
+  const labels = home.rows.map((r) => r.label);
+  return labels
+    .map((label) => ({
+      label,
+      home: home.rows.find((r) => r.label === label)?.value ?? "",
+      away: away.rows.find((r) => r.label === label)?.value ?? "",
+    }))
+    .filter((row) => row.home || row.away);
+}
+
+function playerLinesFrom(detail: EspnMatchDetail | null): Record<string, { label: string; value: number }[]> {
+  const lines: Record<string, { label: string; value: number }[]> = {};
+  for (const lineup of detail?.lineups ?? []) {
+    for (const player of [...lineup.starters, ...lineup.substitutes]) {
+      if (player.did.length) lines[player.name] = player.did;
+    }
+  }
+  return lines;
 }
 
 // Armenian fixtures and results, free.
@@ -597,12 +661,30 @@ type SportsDbEvent = {
   strAwayTeamBadge?: string;
 };
 
+// TheSportsDB refuses Cloudflare's addresses when asked too often - HTTP
+// 429 with Cloudflare's own error 1015, seen from this Worker on a second
+// call inside a minute. Its callers already cache, but a cold cache during
+// a refusal would ask again on the very next page view and keep the
+// refusal alive, which is exactly the failure this codebase spent an
+// evening on in September when API-Football's daily allowance ran out.
+//
+// So a refusal is remembered in memory for five minutes. It is only the
+// Worker's memory, which is recycled often, and that is fine: the point is
+// not to remember for long, it is to stop a burst of page views turning
+// one 429 into a hundred.
+let sportsDbSilentUntil = 0;
+
 async function sportsDb<T>(path: string): Promise<T | null> {
+  if (Date.now() < sportsDbSilentUntil) return null;
   try {
     const res = await fetch(`${SPORTSDB}${path}`, {
       headers: { "User-Agent": BROWSER_UA, Accept: "application/json" },
       signal: AbortSignal.timeout(12_000),
     });
+    if (res.status === 429) {
+      sportsDbSilentUntil = Date.now() + 5 * 60_000;
+      return null;
+    }
     if (!res.ok) return null;
     return await res.json() as T;
   } catch {

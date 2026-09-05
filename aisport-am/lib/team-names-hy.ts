@@ -179,6 +179,67 @@ Object.assign(teamNames, {
   "troyes": "Տրուա", "le mans": "Լը Ման",
 });
 
+// ESPN's own spellings (added 2026-09), exact displayName strings as keys.
+//
+// The tables above were built against API-Football, which wrote the short
+// name a reader uses. ESPN writes the registered one: Tottenham Hotspur,
+// Newcastle United, Red Bull New York. Most of those now resolve through
+// the generic suffixes and the letter rules, and what is left is here -
+// the names no rule can reach, because the Armenian is a different word
+// rather than a different spelling. Ցրվենա Զվեզդա is not "Red Star", and
+// Զալցբուրգ is not "RB Salzburg".
+Object.assign(teamNames, {
+  // England
+  "brighton & hove albion": "Բրայթոն", "brighton and hove albion": "Բրայթոն",
+
+  // Italy — ESPN uses the registered name where the table had the short one
+  internazionale: "Ինտեր", "inter milan": "Ինտեր",
+
+  // Germany — ESPN anglicises Köln
+  cologne: "Քյոլն", "fc cologne": "Քյոլն", "1. fc cologne": "Քյոլն",
+
+  // France
+  "paris saint-germain": "ՊՍԺ", psg: "ՊՍԺ", "paris sg": "ՊՍԺ",
+  "stade rennais": "Ռեն", rennes: "Ռեն", rennais: "Ռեն",
+
+  // The Low Countries
+  "ajax amsterdam": "Այաքս", ajax: "Այաքս",
+  "feyenoord rotterdam": "Ֆեյենորդ", feyenoord: "Ֆեյենորդ",
+  "union st.-gilloise": "Յունիոն Սեն-Ժիլուազ", "union saint-gilloise": "Յունիոն Սեն-Ժիլուազ",
+  "sint-truidense": "Սինտ-Տրյուիդեն",
+
+  // Central and eastern Europe, where the Armenian name is its own word
+  "red star belgrade": "Ցրվենա Զվեզդա", "crvena zvezda": "Ցրվենա Զվեզդա",
+  "rb salzburg": "Զալցբուրգ", salzburg: "Զալցբուրգ",
+  ferencvaros: "Ֆերենցվարոշ", jablonec: "Յաբլոնեց",
+  "jagiellonia bialystok": "Յագելոնիա Բյալիստոկ", jagiellonia: "Յագելոնիա",
+  "csu craiova": "Կրայովա", "universitatea craiova": "Կրայովա",
+
+  // Scandinavia
+  "f.c. københavn": "Կոպենհագեն", "fc copenhagen": "Կոպենհագեն", kobenhavn: "Կոպենհագեն",
+
+  // Israel
+  "hapoel be'er": "Հապոել Բեեր Շևա", "hapoel be'er sheva": "Հապոել Բեեր Շևա",
+
+  // MLS, under the names ESPN gives them
+  "la galaxy": "Լոս Անջելես Գալաքսի", lafc: "Լոս Անջելես ՖԿ",
+  "los angeles fc": "Լոս Անջելես ՖԿ",
+  "d.c. united": "Դի Սի Յունայթեդ", "dc united": "Դի Սի Յունայթեդ",
+  "red bull new york": "Նյու Յորք Ռեդ Բուլզ",
+  "st. louis city sc": "Սենտ Լուիս Սիթի", "sporting kansas city": "Սփորթինգ Կանզաս Սիթի",
+  "minnesota united fc": "Մինեսոտա Յունայթեդ", "houston dynamo fc": "Հյուսթոն Դայնամո",
+  "seattle sounders fc": "Սիեթլ Սաունդերս", "chicago fire fc": "Չիկագո Ֆայր",
+  "fc cincinnati": "Ցինցինատի", "san diego fc": "Սան Դիեգո", "charlotte fc": "Շառլոթ",
+  "cf montreal": "Մոնրեալ", "inter miami cf": "Ինտեր Մայամի",
+
+  // Saudi Arabia, under ESPN's spacing rather than API-Football's hyphens
+  "al hilal": "Ալ-Հիլալ", "al nassr": "Ալ-Նասր", "al ittihad": "Ալ-Իթթիհադ",
+  "al ahli": "Ալ-Ահլի", "al ettifaq": "Ալ-Իթթիֆակ", "al fateh": "Ալ-Ֆաթեհ",
+  "al fayha": "Ալ-Ֆայհա", "al taawoun": "Ալ-Թաավուն", "al khaleej": "Ալ-Խալիջ",
+  "al qadsiah": "Ալ-Կադիսիյա", "al faisaly": "Ալ-Ֆայսալի", "al hazem": "Ալ-Հազմ",
+  "neom sc": "ՆԵՈՄ",
+});
+
 // Saudi Pro League (added 2026-08) — exact API-Football team.name strings as keys.
 Object.assign(teamNames, {
   "al khaleej saihat": "Ալ-Խալիջ", "al-ahli jeddah": "Ալ-Ահլի", "al-faisaly fc": "Ալ-Ֆայսալի",
@@ -235,8 +296,36 @@ const letters: Record<string, string> = {
   s: "ս", t: "տ", u: "ու", v: "վ", w: "վ", x: "քս", y: "յ", z: "զ",
 };
 
+// Words that turn up inside club names again and again and that the
+// letter rules get wrong every time. ESPN writes the full registered name
+// where the old provider wrote the short one, so these went from rare to
+// constant overnight: "Newcastle United" came out "Նեվկաստլե Ունիտեդ",
+// "Red Star Belgrade" as "Րեդ Ստար Բելգրադե".
+const words: Record<string, string> = {
+  united: "Յունայթեդ", utd: "Յունայթեդ", city: "Սիթի", town: "Թաուն",
+  rovers: "Ռովերս", wanderers: "Ուոնդերերս", albion: "Ալբիոն",
+  athletic: "Աթլետիկ", county: "Քաունթի", forest: "Ֆորեսթ",
+  new: "Նյու", york: "Յորք", red: "Ռեդ", bull: "Բուլ", bulls: "Բուլս",
+  star: "Ստար", union: "Յունիոն", real: "Ռեալ", club: "Ակումբ",
+  north: "Նորթ", south: "Սաութ", east: "Իսթ", west: "Վեսթ",
+  los: "Լոս", angeles: "Անջելես", san: "Սան", saint: "Սեն", st: "Սեն",
+};
+
 function transliterate(name: string) {
-  const plain = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const plain = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    // Letters that survive the accent fold because they are letters, not
+    // accented ones. Without this "F.C. København" kept its ø and came out
+    // as "Կøբենհավն" on the board.
+    .replace(/[øØ]/g, "o").replace(/[đĐðÐ]/g, "d").replace(/[þÞ]/g, "th")
+    .replace(/[æÆ]/g, "ae").replace(/[œŒ]/g, "oe").replace(/ß/g, "ss")
+    .replace(/[łŁ]/g, "l")
+    // A doubled consonant is a Latin spelling convention and carries nothing
+    // into Armenian: Tottenham is Տոտենհեմ, not Տոտտենհամ, and Rennais is
+    // Ռենե, not Րեննաիս. Vowels are left alone because "ee" and "oo" are
+    // rules of their own below.
+    .replace(/([bcdfgklmnprstvz])\1/gi, "$1");
   let result = "";
   for (let index = 0; index < plain.length;) {
     const remaining = plain.slice(index).toLowerCase();
@@ -247,7 +336,13 @@ function transliterate(name: string) {
       continue;
     }
     const character = plain[index];
-    result += letters[character.toLowerCase()] ?? character;
+    const lower = character.toLowerCase();
+    // Armenian spells three of these differently at the start of a word:
+    // Ռ against ր, Օ against ո, Է against ե. Ignoring that gave Րեդ Բուլ
+    // and Ոֆի where every Armenian outlet writes Ռեդ Բուլ and ՕՖԻ.
+    const atWordStart = index === 0 || /[\s.'-]/.test(plain[index - 1]);
+    const initial: Record<string, string> = { r: "ռ", o: "օ", e: "է" };
+    result += (atWordStart ? initial[lower] : undefined) ?? letters[lower] ?? character;
     index += 1;
   }
   return result
@@ -255,13 +350,44 @@ function transliterate(name: string) {
     .trim()
     .split(" ")
     .map((word) => (word ? word[0].toLocaleUpperCase("hy-AM") + word.slice(1) : word))
+    .join(" ")
+    // "Sint-Truidense" is two names joined, not one word: the second half
+    // needs its capital too, or the board reads "Սինտ-տրուիդենսե".
+    .replace(/([-'])(\p{Ll})/gu, (_, mark: string, letter: string) => `${mark}${letter.toLocaleUpperCase("hy-AM")}`);
+}
+
+// Transliterate a name a word at a time, so that the words above keep their
+// accepted Armenian spelling and only the club's own name is spelled out.
+function transliterateName(name: string) {
+  // The affixes are stripped for the lookup already; strip them for the
+  // display too, or a club the table happens not to carry keeps them and
+  // the board reads "1. Ֆկ Մագդեբուրգ".
+  const bare = name.replace(LEADING_NUMBER, "").replace(CLUB_PREFIX, "").replace(CLUB_SUFFIX, "").trim() || name;
+  return bare
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => {
+      const plain = word.replace(/[.]/g, "");
+      const known = words[plain.toLowerCase()];
+      if (known) return known;
+      // An acronym is read out as an acronym. "AGF" is ԱԳՖ to an Armenian
+      // reader, not "Ագֆ", which is a word nobody can pronounce.
+      if (/^[A-Z]{2,4}$/.test(plain)) return transliterate(plain).toLocaleUpperCase("hy-AM");
+      return transliterate(word);
+    })
     .join(" ");
 }
 
 // Club affixes that carry no identifying information (FC Barcelona == Barcelona).
 // Ordered longest-first so that e.g. "SSC" is preferred over "SS".
-const CLUB_PREFIX = /^(?:\d+\s*\.?\s*)?(?:a\.e\.k\.|f\.c\.|f\.k\.|spvgg|stade|cska|aek|afc|acf|asd|bsc|fbc|fsv|gnk|hnk|ifk|kaa|msv|ogc|rcd|rsc|ssc|ssd|tsg|tsv|vfb|vfl|vfr|ac|as|bk|ca|cd|cf|cs|fc|ff|fk|if|kv|nk|rc|sc|sd|sk|ss|sv|ud|us)\s+/i;
+const CLUB_PREFIX = /^(?:\d+\s*\.?\s*)?(?:a\.e\.k\.|f\.c\.|f\.k\.|spvgg|stade|cska|aek|afc|acf|asd|bsc|fbc|fsv|gnk|hnk|ifk|kaa|msv|ogc|rcd|rsc|ssc|ssd|tsg|tsv|vfb|vfl|vfr|ac|aj|as|bk|ca|cd|cf|cs|fc|ff|fk|if|kv|nk|rc|sc|sd|sk|ss|sv|ud|us)\s+/i;
 const CLUB_SUFFIX = /\s+(?:afc|acf|ac|bk|cf|fc|ff|fk|if|sc|sk|sv)$/i;
+// Words that name a club's category rather than the club. ESPN writes the
+// registered name in full - "Newcastle United", "Tottenham Hotspur",
+// "Wolverhampton Wanderers" - where the old provider wrote what the table
+// was built against. Stripped only after the full name has been tried, so
+// "Hull City" and "Manchester City" still answer from their own entries.
+const GENERIC_SUFFIX = /\s+(?:united|utd|hotspur|wanderers|rovers|town|city|calcio|football club|futbol club)$/i;
 const LEADING_NUMBER = /^\d+\s*\.?\s+/;
 const TRAILING_YEAR = /\s+\d{2,4}$/;
 
@@ -273,7 +399,7 @@ export function armenianTeamName(name: string) {
   const variants = new Set<string>([key]);
   let stripped = key;
   for (let pass = 0; pass < 3; pass += 1) {
-    const next = stripped.replace(LEADING_NUMBER, "").replace(CLUB_PREFIX, "").replace(CLUB_SUFFIX, "").trim();
+    const next = stripped.replace(LEADING_NUMBER, "").replace(CLUB_PREFIX, "").replace(CLUB_SUFFIX, "").replace(GENERIC_SUFFIX, "").trim();
     if (next === stripped || !next) break;
     stripped = next;
     variants.add(next);
@@ -296,5 +422,5 @@ export function armenianTeamName(name: string) {
     if (withoutYear && withoutYear !== variant && teamNames[withoutYear]) return teamNames[withoutYear];
   }
 
-  return transliterate(name);
+  return transliterateName(name);
 }

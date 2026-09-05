@@ -773,7 +773,10 @@ jobs:
               const table = await get(`${db}/lookuptable.php?l=${top.idLeague}&s=${season}`);
               const rows = table.json?.table;
               say(`  standings (${season}): HTTP ${table.status}, ${Array.isArray(rows) ? rows.length : 0} rows`);
-              if (Array.isArray(rows)) for (const r of rows.slice(0, 4)) say(`      ${r.intRank}. ${r.strTeam} ${r.intPoints} pts (${r.intPlayed} played)`);
+              // Every row, not the first four: the site's Armenian table came
+              // back missing Ուրարտու and Շիրակ, and four rows cannot tell a
+              // short table from a naming mismatch.
+              if (Array.isArray(rows)) for (const r of rows) say(`      ${r.intRank}. ${r.strTeam}  ${r.intPoints} pts (${r.intPlayed} played)`);
               const next = await get(`${db}/eventsnextleague.php?id=${top.idLeague}`);
               const events = next.json?.events;
               say(`  upcoming fixtures: HTTP ${next.status}, ${Array.isArray(events) ? events.length : 0}`);
@@ -981,6 +984,175 @@ jobs:
                   console.log('    '+String(r.label).padEnd(24)+' HTTP '+r.status+'  '+r.ms+'ms'+(r.events!==null?('  '+r.events+' fixtures'):'')+(r.body?('  '+r.body.replace(/\\s+/g,' ').slice(0,70)):''));
                 }
               })"
+
+      # ESPN names clubs differently from the provider the Armenian table
+      # was built against - "Tottenham Hotspur" where it said "Tottenham",
+      # "Wolverhampton Wanderers" where it said "Wolves" - and a name the
+      # table misses falls through to the transliterator, which spells it
+      # out letter by letter. That is the most visible thing on the board,
+      # so count the misses rather than wait for a reader to find them.
+      - name: Which ESPN club names the Armenian table does not know
+        if: ${{ github.event.inputs.livescore != 'no' }}
+        run: |
+          npm --prefix aisport-am ci --no-audit --no-fund >/dev/null 2>&1 || npm --prefix aisport-am install --no-audit --no-fund >/dev/null 2>&1
+          cat > names.mts <<'TS'
+          import { armenianTeamName } from "./aisport-am/lib/team-names-hy.ts";
+          const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+          // The seven leagues and three European competitions the board
+          // leads with. The domestic cups bring another four hundred clubs
+          // from the fourth tier down, which were never on this site under
+          // the old provider either and are not what a reader sees first.
+          const LEAGUES = ["eng.1","esp.1","ita.1","ger.1","fra.1","usa.1","ksa.1","uefa.champions","uefa.europa","uefa.europa.conf"];
+          // The first version of this asked "is the answer in Armenian
+          // letters", which the transliterator's output also is, so it
+          // reported nothing missing while printing "AGF -> Ագֆ" three
+          // lines below. The question is whether the hand-written table
+          // answered, and the way to ask it is to read the table.
+          const table = await import("node:fs").then((fs) => fs.readFileSync("aisport-am/lib/team-names-hy.ts", "utf8"));
+          // Second time this check lied. Reading only quoted keys missed every
+          // bare one - the table writes "juventus:" without quotes when the key
+          // is a single word - so Juventus and Como were reported as unknown
+          // while the table answered them perfectly. Keys are also several to a
+          // line, so nothing can be anchored to ^. Read the object's own body
+          // and take both spellings of a key wherever they appear.
+          const body = table.slice(table.indexOf("const teamNames"), table.indexOf("\n};"));
+          const known = new Set(
+            [...body.matchAll(/(?:"([^"]+)"|([A-Za-z][\w-]*))\s*:\s*"/g)].map((m) => (m[1] ?? m[2]).toLowerCase()),
+          );
+          const names = new Set<string>();
+          for (const slug of LEAGUES) {
+            try {
+              const res = await fetch(`https://site.web.api.espn.com/apis/site/v2/sports/soccer/${slug}/teams?limit=100`, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20000) });
+              if (!res.ok) { console.log(`  ${slug}: HTTP ${res.status}`); continue; }
+              const data = await res.json() as { sports?: { leagues?: { teams?: { team?: { displayName?: string } }[] }[] }[] };
+              const teams = data.sports?.[0]?.leagues?.[0]?.teams ?? [];
+              for (const t of teams) if (t.team?.displayName) names.add(t.team.displayName);
+              console.log(`  ${slug}: ${teams.length} clubs`);
+            } catch (e) { console.log(`  ${slug}: ${String(e).slice(0, 60)}`); }
+          }
+          console.log(`\n  ${names.size} distinct club names from ESPN`);
+          const missing: string[] = [];
+          const found: string[] = [];
+          for (const name of [...names].sort()) {
+            const hy = armenianTeamName(name);
+            // Same stripping the resolver does, so "AFC Bournemouth" counts
+            // as known through its "bournemouth" entry.
+            const key = name.toLowerCase().replace(/^(?:\d+\s*\.?\s*)?(?:a\.e\.k\.|f\.c\.|f\.k\.|spvgg|stade|cska|aek|afc|acf|asd|bsc|fbc|fsv|gnk|hnk|ifk|kaa|msv|ogc|rcd|rsc|ssc|ssd|tsg|tsv|vfb|vfl|vfr|ac|as|bk|ca|cd|cf|cs|fc|ff|fk|if|kv|nk|rc|sc|sd|sk|ss|sv|ud|us)\s+/, "").replace(/\s+(?:afc|acf|ac|bk|cf|fc|ff|fk|if|sc|sk|sv)$/, "").trim();
+            (known.has(name.toLowerCase()) || known.has(key) ? found : missing).push(`${name} -> ${hy}`);
+          }
+          console.log(`\n  === untranslated (${missing.length}) ===`);
+          for (const m of missing) console.log(`      ${m}`);
+          console.log(`\n  === a sample of what the table does answer ===`);
+          for (const f of found.slice(0, 12)) console.log(`      ${f}`);
+          TS
+          npx --prefix aisport-am tsx names.mts || node --experimental-strip-types names.mts
+
+      # Types passing is not the same as a page working. The live board,
+      # the match page and the tables were all pointed at new providers in
+      # one change; this opens each of them on the deployed site and reports
+      # what a reader would actually see, because an empty block renders
+      # perfectly and compiles perfectly.
+      - name: Do the pages actually render
+        if: ${{ github.event.inputs.livescore != 'no' }}
+        run: |
+          cat > pages.mjs <<'JS'
+          const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+          const out = [];
+          const say = (l) => out.push(l);
+          const get = async (u) => {
+            try {
+              const r = await fetch(u, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(30000) });
+              return { status: r.status, html: await r.text() };
+            } catch (e) { return { status: 0, html: String(e) }; }
+          };
+          const count = (html, re) => (html.match(re) ?? []).length;
+
+          const live = await get("https://aifootball.am/live");
+          say(`=== /live -> HTTP ${live.status}, ${live.html.length} bytes ===`);
+          // The board has never linked to /live/match/. A row is a div that
+          // pushes /live?match=<id> and opens the modal; the match page is
+          // reached by sharing a link, not by clicking a row. Counting anchors
+          // reported "0 matches" for a board that was rendering nine
+          // competitions at the time. So count the rows, and read the ids
+          // wherever they sit in the payload.
+          const idsOf = (re) => [...new Set([...live.html.matchAll(re)].map((m) => m[0]))];
+          const espnIds = idsOf(/espn-[a-z0-9.]+-\d+/g);
+          const sdbIds = idsOf(/sdb-\d+/g);
+          const afIds = idsOf(/\baf-\d+/g);
+          say(`  match rows drawn: ${count(live.html, /class="[^"]*match-row[^"]*"/g)}`);
+          say(`  match ids present: ${espnIds.length} from ESPN, ${sdbIds.length} Armenian, ${afIds.length} still on the old provider`);
+          say(`  competitions named: ${[...new Set([...live.html.matchAll(/(Չեմպիոնների լիգա|Եվրոպա լիգա|Անգլիայի Պրեմիեր լիգա|Իսպանիայի Լա Լիգա|Իտալիայի Սերիա Ա|Գերմանիայի Բունդեսլիգա|Ֆրանսիայի Լիգա 1|MLS|Հայաստանի Պրեմիեր լիգա)/g)].map((m) => m[1]))].join(", ") || "none"}`);
+          if (/Տվյալները հասանելի չեն/i.test(live.html)) say("  !! the page is showing its unavailable state");
+          const noMatches = live.html.match(/[^<>]{0,90}հանդիպումներ չկան[^<>]{0,20}/);
+          if (noMatches) say(`  the page says: ${noMatches[0].trim()}`);
+
+          // The first id on the board is the first fixture of the day, which
+          // has not kicked off: no lineups, no statistics, no events, because
+          // none exist yet. Reading that as an empty page said nothing. Ask
+          // ESPN for a match that has finished, then open ours.
+          let played = null;
+          for (const slug of ["eng.1", "esp.1", "ita.1", "ger.1", "usa.1"]) {
+            const d = new Date(Date.now() - 36 * 3600 * 1000).toISOString().slice(0, 10).replace(/-/g, "");
+            const r = await get(`https://site.web.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard?dates=${d}`);
+            let events = [];
+            try { events = JSON.parse(r.html).events ?? []; } catch { /* an Akamai denial is HTML */ }
+            const done = events.find((e) => e && e.status && e.status.type && e.status.type.completed);
+            if (done) { played = `espn-${slug}-${done.id}`; break; }
+          }
+          if (played) {
+            const m = await get(`https://aifootball.am/live/match/${played}`);
+            say("");
+            say(`=== /live/match/${played} (a finished match) -> HTTP ${m.status}, ${m.html.length} bytes ===`);
+            say(`  lineup blocks: ${count(m.html, /Կազմ|Մեկնարկային/g)}`);
+            say(`  named players: ${count(m.html, /class="[^"]*lineup[^"]*"/g)}`);
+            say(`  statistics rows: ${count(m.html, /stat-bar-row|Տիրապետում|Հարվածներ/g)}`);
+            say(`  events: ${count(m.html, /Գոլ|Դեղին|Կարմիր|Փոխարինում/g)}`);
+            say(`  commentary lines: ${count(m.html, /commentary-item|commentary-list/g)}`);
+            for (const empty of ["Կազմերը հասանելի չեն", "Վիճակագրություն չկա", "տվյալ չկա", "չի գտնվել"]) {
+              if (m.html.includes(empty)) say(`  !! page says: ${empty}`);
+            }
+          } else {
+            say("  !! ESPN reported no finished match in the last day and a half");
+          }
+
+          say("");
+          // /standings takes no league query: it renders all eight leagues as
+          // tabs and only the active one - the Premier League - reaches the
+          // HTML. So ?league=ARM and ?league=PL both answered with twenty-one
+          // rows because both answered with the Premier League, and I read
+          // that as the Armenian league having twenty clubs. The rest travel
+          // in the payload beside it, so read that instead.
+          const st = await get("https://aifootball.am/standings");
+          say(`=== /standings -> HTTP ${st.status}, ${st.html.length} bytes ===`);
+          say(`  rendered rows (the active tab): ${count(st.html, /<tr/g)}`);
+          for (const pair of [
+            ["ARM", ["Փյունիկ", "Նոա", "Ուրարտու", "Արարատ-Արմենիա", "Ալաշկերտ", "Շիրակ"]],
+            ["PL", ["Արսենալ", "Լիվերպուլ", "Տոտենհեմ", "Նյուքասլ"]],
+            ["SPL", ["Ալ-Հիլալ", "Ալ-Նասր"]],
+            ["MLS", ["Ինտեր Մայամի", "Լոս Անջելես Գալաքսի"]],
+          ]) {
+            const present = pair[1].filter((c) => st.html.includes(c));
+            say(`  ${pair[0]}: ${present.length}/${pair[1].length} of its clubs present${present.length ? ` (${present.join(", ")})` : ""}`);
+          }
+          // The spellings the name rules were written to remove. Any of these
+          // still on the site means an entry did not take.
+          const wrong = ["Տոտտենհամ", "Նեվկաստլե", "Ունիտեդ", "Րեդ", "Ագֆ", "Ոֆի", "Ֆկ Կոլոգնե"];
+          const stillWrong = wrong.filter((w) => st.html.includes(w) || live.html.includes(w));
+          say(`  old misspellings still on the site: ${stillWrong.join(", ") || "none"}`);
+
+          // The Armenian table is the reason this site exists, and it came
+          // back holding four of its clubs. Read the source directly, last in
+          // the log so it is not buried under two hundred club names.
+          say("");
+          const sdb = await get("https://www.thesportsdb.com/api/v1/json/3/lookuptable.php?l=4619&s=2026-2027");
+          let table = null;
+          try { table = JSON.parse(sdb.html).table; } catch { /* 429 is HTML */ }
+          say(`=== TheSportsDB Armenian table -> HTTP ${sdb.status}, ${Array.isArray(table) ? table.length : 0} rows ===`);
+          if (Array.isArray(table)) for (const r of table) say(`      ${r.intRank}. ${r.strTeam}  ${r.intPoints} pts (${r.intPlayed} played)`);
+          else say(`      ${sdb.html.slice(0, 120).replace(/\s+/g, " ")}`);
+          console.log(out.join("\n"));
+          JS
+          node pages.mjs
 
       - name: What the sources table holds now
         if: ${{ github.event.inputs.livescore == 'no' }}
