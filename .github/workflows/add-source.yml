@@ -1,383 +1,199 @@
 name: Add RSS Source
 
 on:
-  workflow_dispatch: {}
-  push:
-    branches: [main]
-    paths: ['.github/workflows/add-source.yml']
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: 'Write the passing feeds into D1 (no = probe only)'
+        type: choice
+        options: ['no', 'yes']
+        default: 'no'
 
 jobs:
   add:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: How many articles has the site published per hour since the parallel search went in
+
+      # The sources table has carried exactly one row for months - APITube -
+      # which is why 92% of published articles come from it and why the
+      # month costs money. The RSS half of the pipeline was never broken;
+      # it simply had nothing to read. This step probes candidate feeds
+      # with the SAME parser lib/feeds.ts uses, so a feed that passes here
+      # is a feed the worker can actually read, and only those are written.
+      - name: Probe the candidate feeds
         run: |
-          npm install --no-save wrangler@4.92.0
-          npx wrangler d1 execute aisport-db --remote --json --command \
-            "SELECT strftime('%Y-%m-%d %H:00', published_at) AS hour, COUNT(*) AS articles FROM articles WHERE published_at > datetime('now','-30 hours') GROUP BY hour ORDER BY hour DESC" \
-            > rate.json 2>&1 || true
+          cat > probe.mjs <<'JS'
+          import fs from "node:fs";
+
+          // Candidates. A feed only reaches D1 if it answers, parses as RSS
+          // <item>s, and yields at least five items carrying both a title
+          // and a link - the exact test fetchFeed() applies at runtime.
+          const CANDIDATES = [
+            ["BBC Sport Football", "https://feeds.bbci.co.uk/sport/football/rss.xml"],
+            ["Sky Sports Football", "https://www.skysports.com/rss/12040"],
+            ["The Guardian Football", "https://www.theguardian.com/football/rss"],
+            ["ESPN Soccer", "https://www.espn.com/espn/rss/soccer/news"],
+            ["Goal.com", "https://www.goal.com/feeds/en/news"],
+            ["90min", "https://www.90min.com/posts.rss"],
+            ["Football365", "https://www.football365.com/feed"],
+            ["talkSPORT Football", "https://talksport.com/football/feed/"],
+            ["Football Italia", "https://football-italia.net/feed/"],
+            ["Get French Football News", "https://www.getfootballnewsfrance.com/feed/"],
+            ["Marca English", "https://e00-marca.uecdn.es/rss/en/football.xml"],
+            ["Football.London", "https://www.football.london/?service=rss"],
+            ["Mirror Football", "https://www.mirror.co.uk/sport/football/?service=rss"],
+            ["Independent Football", "https://www.independent.co.uk/sport/football/rss"],
+            ["Metro Football", "https://metro.co.uk/sport/football/feed/"],
+            ["Sports Mole Football", "https://www.sportsmole.co.uk/rss/football.xml"],
+            ["CaughtOffside", "https://www.caughtoffside.com/feed/"],
+            ["TEAMtalk", "https://www.teamtalk.com/feed"],
+            ["Planet Football", "https://www.planetfootball.com/feed"],
+            ["Football Espana", "https://football-espana.net/feed/"],
+            ["Sports Illustrated Soccer", "https://www.si.com/rss/si_soccer.rss"],
+            ["Bleacher Report World Football", "https://bleacherreport.com/articles/feed?tag_id=87"],
+          ];
+
+          // Informational only - never inserted. Armenian football is the
+          // one thing an English feed list cannot cover, and it is worth
+          // knowing which of these are even readable before deciding.
+          const ARMENIAN_CANDIDATES = [
+            ["FFA (Football Federation of Armenia)", "https://ffa.am/hy/rss/"],
+            ["News.am Sport", "https://news.am/arm/rss/sport.xml"],
+            ["Armenpress Sport", "https://armenpress.am/arm/rss/sport/"],
+          ];
+
+          function decodeEntities(t) {
+            return t.replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">")
+                    .replace(/&quot;/g,'"').replace(/&#0?39;/g,"'").replace(/&nbsp;/g," ");
+          }
+          function extractTag(block, tag) {
+            const c = block.match(new RegExp(`<${tag}[^>]*>\\s*<!\\[CDATA\\[([\\s\\S]*?)\\]\\]>\\s*</${tag}>`, "i"));
+            if (c) return decodeEntities(c[1].trim());
+            const p = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "i"));
+            if (p) return decodeEntities(p[1].replace(/<[^>]+>/g, "").trim());
+            return null;
+          }
+          function extractImage(block) {
+            const enc = block.match(/<enclosure\b([^>]*)\/?>/i);
+            if (enc) {
+              const type = enc[1].match(/type=["']([^"']+)["']/i);
+              const url = enc[1].match(/url=["']([^"']+)["']/i);
+              if (url && (!type || /^image/i.test(type[1]))) return url[1];
+            }
+            const mc = block.match(/<media:content\b[^>]*url=["']([^"']+)["']/i); if (mc) return mc[1];
+            const th = block.match(/<media:thumbnail\b[^>]*url=["']([^"']+)["']/i); if (th) return th[1];
+            const img = block.match(/<img\b[^>]*src=["']([^"']+)["']/i);
+            return img ? img[1] : null;
+          }
+
+          async function probe(name, url) {
+            const started = Date.now();
+            try {
+              const res = await fetch(url, {
+                headers: { "User-Agent": "AIFootballBot/1.0 (+https://aifootball.am)" },
+                signal: AbortSignal.timeout(20000),
+              });
+              const ms = Date.now() - started;
+              if (!res.ok) return { name, url, ok: false, why: `HTTP ${res.status}`, ms };
+              const xml = await res.text();
+              const blocks = xml.match(/<item\b[\s\S]*?<\/item>/gi) ?? [];
+              if (!blocks.length) {
+                const atom = (xml.match(/<entry\b/gi) ?? []).length;
+                // fetchFeed only understands RSS <item>. An Atom feed reads
+                // as zero items at runtime, silently, so reject it here
+                // rather than let it occupy a row that never produces.
+                return { name, url, ok: false, why: atom ? `Atom (${atom} entries) - the parser reads <item> only` : "no <item> elements", ms };
+              }
+              const items = blocks.map((b) => ({
+                title: extractTag(b, "title") ?? "",
+                link: (extractTag(b, "link") ?? extractTag(b, "guid") ?? "").trim(),
+                image: extractImage(b),
+                pubDate: extractTag(b, "pubDate"),
+              })).filter((i) => i.title && i.link);
+              // How fresh is the feed? A feed whose newest item is days old
+              // cannot feed seventeen articles a day.
+              const newest = items.map((i) => Date.parse(i.pubDate ?? "")).filter((n) => !Number.isNaN(n)).sort((a, b) => b - a)[0];
+              const ageH = newest ? ((Date.now() - newest) / 3600000).toFixed(1) : null;
+              const withImage = items.filter((i) => i.image).length;
+              return {
+                name, url, ok: items.length >= 5, ms,
+                why: items.length >= 5 ? "" : `only ${items.length} usable item(s)`,
+                items: items.length, withImage, ageH,
+                sample: items.slice(0, 2).map((i) => i.title.slice(0, 70)),
+              };
+            } catch (err) {
+              return { name, url, ok: false, why: String(err).slice(0, 90), ms: Date.now() - started };
+            }
+          }
+
+          const out = [];
+          const results = await Promise.all(CANDIDATES.map(([n, u]) => probe(n, u)));
+          out.push("=== candidate football feeds ===");
+          for (const r of results) {
+            out.push(`  ${r.ok ? "PASS" : "fail"}  ${r.name.padEnd(30)} ${r.ok ? `${r.items} items, ${r.withImage} with a picture, newest ${r.ageH ?? "?"}h old, ${r.ms}ms` : r.why}`);
+            if (r.ok) for (const s of r.sample) out.push(`          ${s}`);
+          }
+          const passing = results.filter((r) => r.ok);
+          out.push(`  --- ${passing.length} of ${results.length} usable ---`);
+
+          out.push("");
+          out.push("=== Armenian feeds (reported only, never inserted) ===");
+          for (const r of await Promise.all(ARMENIAN_CANDIDATES.map(([n, u]) => probe(n, u)))) {
+            out.push(`  ${r.ok ? "PASS" : "fail"}  ${r.name.padEnd(38)} ${r.ok ? `${r.items} items, newest ${r.ageH ?? "?"}h old` : r.why}`);
+          }
+
+          console.log(out.join("\n"));
+          fs.writeFileSync("probe.txt", out.join("\n"));
+          fs.writeFileSync("passing.json", JSON.stringify(passing.map((r) => ({ name: r.name, url: r.url })), null, 2));
+          JS
+          node probe.mjs
+
+      - name: Write the passing feeds into D1
+        if: ${{ github.event.inputs.apply == 'yes' }}
+        run: |
+          npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
+          # INSERT OR IGNORE against the unique index on feed_url, so
+          # running this twice adds nothing and removes nothing. APITube is
+          # deliberately left enabled: it still writes most of the site
+          # today, and the rotation in the cron route picks one source per
+          # tick, so adding twenty rows already drops its share to about a
+          # twentieth without turning anything off.
           node -e "
             const fs=require('fs');
-            let raw=fs.readFileSync('rate.json','utf8');
-            const start=raw.indexOf('[');
+            const rows=JSON.parse(fs.readFileSync('passing.json','utf8'));
+            const q=(s)=>\"'\"+String(s).replace(/'/g,\"''\")+\"'\";
+            const sql=rows.map(r=>'INSERT OR IGNORE INTO sources(name,feed_url,language,enabled) VALUES('+q(r.name)+','+q(r.url)+\",'en',1);\").join('\n');
+            fs.writeFileSync('sources.sql', sql+'\n');
+            console.log(sql.replace(/^/gm,'  '));
+          "
+          npx wrangler d1 execute aisport-db --remote --file=sources.sql 2>&1 | tail -20
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: What the sources table holds now
+        run: |
+          npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT s.id, s.name, s.enabled, s.feed_url, (SELECT COUNT(*) FROM articles a WHERE a.source_name = s.name AND a.published_at > datetime('now','-7 days')) AS week FROM sources s ORDER BY s.id" \
+            > srcnow.json 2>&1 || true
+          node -e "
+            const fs=require('fs');
+            const raw=fs.readFileSync('srcnow.json','utf8');
             let rows=[];
-            try{rows=JSON.parse(raw.slice(start))[0].results;}catch(e){console.log(raw.slice(0,900));}
-            const lines=['=== articles published per hour (UTC), last 30 hours ==='];
-            for(const r of rows) lines.push('  '+r.hour+'  '+'#'.repeat(r.articles)+' '+r.articles);
-            const total=rows.reduce((n,r)=>n+r.articles,0);
-            lines.push('  total '+total+' over '+rows.length+' hours with output, average '+(total/Math.max(rows.length,1)).toFixed(2)+' per active hour');
-            console.log(lines.join('\n'));
-            fs.writeFileSync('rate.txt',lines.join('\n'));
-          "
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Why has nothing been published for two hours
-        run: |
-          npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
-          echo "=== now, and the last ten articles ===" > halt.txt
-          npx wrangler d1 execute aisport-db --remote --json --command \
-            "SELECT datetime('now') AS utc_now, (SELECT COUNT(*) FROM articles WHERE published_at > datetime('now','-2 hours')) AS last_2h" > q1.json 2>&1 || true
-          npx wrangler d1 execute aisport-db --remote --json --command \
-            "SELECT published_at, substr(title,1,52) AS title FROM articles ORDER BY published_at DESC LIMIT 10" > q2.json 2>&1 || true
-          npx wrangler d1 execute aisport-db --remote --json --command \
-            "SELECT id, ts, mode, generated, substr(reason,1,90) AS reason FROM cron_invocations ORDER BY id DESC LIMIT 10" > q3.json 2>&1 || true
-          # What the searches actually spent their time on, and how the rate
-          # compares before and after the Armenians-first change (deployed
-          # around 11:00 UTC).
-          npx wrangler d1 execute aisport-db --remote --json --command \
-            "SELECT ts, substr(log,1,600) AS log FROM cron_invocations WHERE mode='rss' ORDER BY id DESC LIMIT 4" > q4.json 2>&1 || true
-          npx wrangler d1 execute aisport-db --remote --json --command \
-            "SELECT 'before 11:00' AS window, COUNT(*) AS n FROM articles WHERE published_at BETWEEN datetime('now','-12 hours') AND '2026-09-03 11:00:00' UNION ALL SELECT 'after 11:00', COUNT(*) FROM articles WHERE published_at > '2026-09-03 11:00:00'" > q5.json 2>&1 || true
-          node -e "
-            const fs=require('fs');
-            const rows=(f)=>{try{const r=fs.readFileSync(f,'utf8');return JSON.parse(r.slice(r.indexOf('[')))[0].results||[]}catch(e){return []}};
-            const out=[];
-            for(const r of rows('q1.json')) out.push('  now (UTC): '+r.utc_now+' | articles in the last 2 hours: '+r.last_2h);
-            out.push('  --- last ten articles ---');
-            for(const r of rows('q2.json')) out.push('    '+r.published_at+'  '+r.title);
-            out.push('  --- last ten cron runs ---');
-            for(const r of rows('q3.json')) out.push('    '+r.ts+'  '+r.mode+' gen='+r.generated+'  '+(r.reason||''));
-            out.push('  --- what the searches spent their time on ---');
-            for(const r of rows('q4.json')) out.push('    '+r.ts+'\n      '+String(r.log||'').replace(/\\n/g,'\n      '));
-            out.push('  --- rate before and after the change ---');
-            for(const r of rows('q5.json')) out.push('    '+r.window+': '+r.n+' articles');
-            console.log(out.join('\n'));
-            fs.appendFileSync('halt.txt', out.join('\n')+'\n');
-          "
-          echo "" >> halt.txt
-          echo "=== does the stored APITube key still work? ===" >> halt.txt
-          npx wrangler d1 execute aisport-db --remote --json --command \
-            "SELECT feed_url FROM sources LIMIT 5" > src2.json 2>&1 || true
-          KEY=$(node -e "
-            const fs=require('fs');let raw='';try{raw=fs.readFileSync('src2.json','utf8')}catch(e){}
-            const i=raw.indexOf('[');let key='';
-            if(i>=0){try{for(const r of (JSON.parse(raw.slice(i))[0].results||[])){
-              for(const v of Object.values(r)){if(typeof v==='string'){const m=v.match(/api_key=([^&\\s\"]+)/);if(m){key=m[1];break}}}
-              if(key)break}}catch(e){}}
-            console.log(key);
-          ")
-          if [ -z "$KEY" ]; then echo "  no key found in D1" >> halt.txt; else
-            echo "  key ends with ...${KEY: -6}" >> halt.txt
-            curl -s -G "https://api.apitube.io/v1/news/everything" --data-urlencode "api_key=$KEY" \
-              --data-urlencode "title=Arsenal" --data-urlencode "per_page=1" \
-              | head -c 400 >> halt.txt
-          fi
-          cat halt.txt
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: What is the API-Football plan and how much of it is spent
-        run: |
-          # I have been asserting "100 requests a day" from general
-          # knowledge. The API reports its own plan and the day's usage, so
-          # ask it rather than designing around a number nobody checked.
-          curl -s "https://v3.football.api-sports.io/status" \
-            -H "x-apisports-key: ${API_FOOTBALL_KEY}" -H "Accept: application/json" > apistatus.json || true
-          node -e "
-            const fs=require('fs');
-            let j={};
-            try{j=JSON.parse(fs.readFileSync('apistatus.json','utf8'));}catch(e){}
-            const r=j.response||{};
-            const lines=['=== API-Football account ==='];
-            lines.push('  plan: '+(r.subscription?.plan??'?')+' | active: '+(r.subscription?.active??'?')+' | ends: '+(r.subscription?.end??'?'));
-            lines.push('  today: '+(r.requests?.current??'?')+' of '+(r.requests?.limit_day??'?')+' requests used');
-            if(j.errors&&Object.keys(j.errors).length) lines.push('  errors: '+JSON.stringify(j.errors));
-            console.log(lines.join('\n'));
-            fs.writeFileSync('apistatus.txt',lines.join('\n'));
-          "
-          # The 404s are not a quota problem - the account is on Pro, 1645 of
-          # 7500 used. So ask the API directly about the exact ids whose
-          # pages 404, and see whether the data is there at all.
-          for T in 522 6286 490 1693 582 26738 504; do
-            echo "  team $T squad: $(curl -s -o /dev/null -w '%{http_code}' "https://v3.football.api-sports.io/players/squads?team=$T" -H "x-apisports-key: ${API_FOOTBALL_KEY}") results=$(curl -s "https://v3.football.api-sports.io/players/squads?team=$T" -H "x-apisports-key: ${API_FOOTBALL_KEY}" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);console.log(j.results+' errors='+JSON.stringify(j.errors))}catch(e){console.log('parse-fail')}})")" >> apistatus.txt
-          done
-          for P in 152982 10329 1100 1864 321648; do
-            echo "  player $P season2026: $(curl -s "https://v3.football.api-sports.io/players?id=$P&season=2026" -H "x-apisports-key: ${API_FOOTBALL_KEY}" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);console.log(j.results+' errors='+JSON.stringify(j.errors))}catch(e){console.log('parse-fail')}})") | profiles: $(curl -s "https://v3.football.api-sports.io/players/profiles?player=$P" -H "x-apisports-key: ${API_FOOTBALL_KEY}" | node -e "let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{try{const j=JSON.parse(d);console.log(j.results+' errors='+JSON.stringify(j.errors))}catch(e){console.log('parse-fail')}})")" >> apistatus.txt
-          done
-          cat apistatus.txt
-        env:
-          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
-
-      - name: Which player names does APITube not recognise
-        run: |
-          # The dashboard reports a 64% error rate. The code asks APITube's
-          # strict person.name registry first for every name, and only falls
-          # back to a plain title search when that errors - so every name the
-          # registry does not carry costs one failed request, on every single
-          # attempt, forever. Count how many of the names are like that.
-          npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
-          # Find where the key actually lives rather than assuming a column.
-          npx wrangler d1 execute aisport-db --remote --json --command \
-            "SELECT name FROM sqlite_master WHERE type='table'" > tables.json 2>&1 || true
-          echo "  tables: $(tr -d '\n' < tables.json | grep -o '\"name\":\"[a-z_]*\"' | tr '\n' ' ')" >> apitube.txt
-          npx wrangler d1 execute aisport-db --remote --json --command \
-            "SELECT * FROM sources LIMIT 5" > src.json 2>&1 || true
-          KEY=$(node -e "
-            const fs=require('fs');
-            let raw='';try{raw=fs.readFileSync('src.json','utf8');}catch(e){}
-            const i=raw.indexOf('[');
-            let key='';
-            if(i>=0){
-              try{
-                const rows=JSON.parse(raw.slice(i))[0].results||[];
-                for(const r of rows){
-                  for(const v of Object.values(r)){
-                    if(typeof v==='string'){
-                      const m=v.match(/api_key=([^&\\s\"]+)/)||v.match(/(api_live_[A-Za-z0-9]+)/);
-                      if(m){key=m[1];break;}
-                    }
-                  }
-                  if(key)break;
-                }
-              }catch(e){}
+            try{rows=JSON.parse(raw.slice(raw.indexOf('[')))[0].results||[]}catch(e){console.log(raw.slice(0,400))}
+            console.log(rows.length+' source(s) configured');
+            for(const r of rows){
+              // Never print feed_url: the APITube key lives inside one of
+              // them and this repository is public.
+              let host='?'; try{host=new URL(r.feed_url).hostname}catch(e){}
+              console.log('  '+(r.enabled?'on ':'OFF')+' '+String(r.week).padStart(4)+' this week  '+String(r.name).padEnd(30)+' '+host);
             }
-            console.error('columns seen: '+(()=>{try{const rows=JSON.parse(raw.slice(i))[0].results||[];return rows.length?Object.keys(rows[0]).join(','):'no rows';}catch(e){return 'unparsed'}})());
-            console.log(key);
-          " 2>>apitube.txt)
-          if [ -z "$KEY" ]; then echo "  (could not read the APITube key from D1)" >> apitube.txt; else
-          NAMES="Henrikh_Mkhitaryan Eduard_Spertsyan Grant-Leon_Ranos Tigran_Barseghyan Vahan_Bichakhchyan Kylian_Mbappe Lamine_Yamal Erling_Haaland Vinicius_Junior Jude_Bellingham Mohamed_Salah Harry_Kane Lionel_Messi Bukayo_Saka Rodri Federico_Valverde Alexander_Isak Florian_Wirtz Jamal_Musiala Victor_Osimhen"
-          OK=0; ERR=0
-          for RAW in $NAMES; do
-            N=$(echo "$RAW" | tr '_' ' ')
-            BODY=$(curl -s -G "https://api.apitube.io/v1/news/everything" \
-              --data-urlencode "api_key=$KEY" --data-urlencode "person.name=$N" \
-              --data-urlencode "per_page=1" --data-urlencode "language.code=en")
-            if echo "$BODY" | grep -q "ER0216\|ER0220\|ER0228\|ER0151"; then
-              CODE=$(echo "$BODY" | grep -o "ER0[0-9]*" | head -1)
-              echo "  NOT IN REGISTRY ($CODE): $N" >> apitube.txt; ERR=$((ERR+1))
-            else
-              echo "  ok: $N" >> apitube.txt; OK=$((OK+1))
-            fi
-          done
-          echo "  --- $ERR of $((OK+ERR)) names cost a failed request on every attempt ---" >> apitube.txt
-          fi
-          cat apitube.txt
+          "
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Can this account write to R2 at all
-        run: |
-          # Resizing images ourselves needs somewhere to put them. R2's free
-          # tier is large enough (10 GB; the site produces about 4 MB a day),
-          # but only if the deploy token is allowed to create a bucket. Find
-          # out before designing around it.
-          npx wrangler r2 bucket list > r2.txt 2>&1 || true
-          echo "=== r2 access ===" >> add-source-result.txt || true
-          head -20 r2.txt
-          head -20 r2.txt > r2-head.txt
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Withdraw the repeats and correct Alonso's club
-        run: |
-          # Printing wrangler's whole output finally gave the real reason:
-          # "LIKE or GLOB pattern too complex: SQLITE_ERROR". D1 caps how
-          # long a LIKE pattern may be, and Armenian costs two bytes a
-          # letter, so "Լաուտարո Մարտինես մեկնաբանել%" is 57 bytes and over
-          # the limit while the same length in Latin is not. Every query that
-          # failed today carried a long Armenian pattern; every one that
-          # worked carried a short one.
-          #
-          # So: match rows by their ASCII slug, and use instr() rather than
-          # LIKE where the text really must be Armenian - it takes a plain
-          # string and has no pattern limit. REPLACE has no limit either.
-          npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
-          echo "=== withdrawals and corrections ===" > withdraw.txt
-          printf '%s\n' \
-            "UPDATE articles SET status='withdrawn' WHERE status='published' AND (slug LIKE 'chempionnery-dzakhoghvetsin%' OR slug LIKE 'lautaro-martines-meknabanel%');" \
-            "UPDATE articles SET content = REPLACE(content, '«Ռեալ Մադրիդի» գլխավոր մարզիչ Խաբի Ալոնսոն', '«Չելսիի» գլխավոր մարզիչ Խաբի Ալոնսոն');" \
-            "UPDATE articles SET content = REPLACE(content, '«Ռեալի» գլխավոր մարզիչ Խաբի Ալոնսոն', '«Չելսիի» գլխավոր մարզիչ Խաբի Ալոնսոն');" \
-            > fix.sql
-          echo "--- the statements ---" >> withdraw.txt
-          cat fix.sql >> withdraw.txt
-          echo "--- applying ---" >> withdraw.txt
-          npx wrangler d1 execute aisport-db --remote --file=fix.sql >> withdraw.txt 2>&1 \
-            || echo "  (wrangler reported a failure - its output is above)" >> withdraw.txt
-          # --file returns only a summary ("3 queries, 614 rows written"),
-          # never the rows, so checking with it is checking nothing. --command
-          # prints the rows, and these patterns are short ASCII slugs, well
-          # inside the limit that broke the earlier attempts.
-          echo "--- after ---" >> withdraw.txt
-          npx wrangler d1 execute aisport-db --remote --json --command \
-            "SELECT status, substr(title,1,52) AS title FROM articles WHERE slug LIKE 'chempionnery-dzakhoghvetsin%' OR slug LIKE 'lautaro-martines%' ORDER BY published_at DESC" \
-            > wcheck.json 2>&1 || true
-          npx wrangler d1 execute aisport-db --remote --json --command \
-            "SELECT COUNT(*) AS n FROM articles WHERE instr(content, 'Մադրիդի» գլխավոր մարզիչ Խաբի Ալոնսո') > 0" \
-            > acheck.json 2>&1 || true
-          node -e "
-            const fs=require('fs');
-            const rows=(f)=>{try{const r=fs.readFileSync(f,'utf8');return JSON.parse(r.slice(r.indexOf('[')))[0].results||[]}catch(e){return null}};
-            const st=rows('wcheck.json');
-            if(st===null) console.log('  status check failed: '+fs.readFileSync('wcheck.json','utf8').slice(0,300));
-            else for(const r of st) console.log('  ['+r.status+']  '+r.title);
-            const al=rows('acheck.json');
-            if(al) console.log('  articles still calling Alonso a Real manager: '+al[0].n);
-          " >> withdraw.txt 2>&1
-          # And the only proof that matters to a reader: the withdrawn piece
-          # must answer 404 on the live site, not merely carry a flag in a
-          # table.
-          for SLUG in chempionnery-dzakhoghvetsin-konei-pokhadrutyan-hartsum-mbapei-49577827; do
-            echo "  https://aifootball.am/news/$SLUG -> $(curl -s -o /dev/null -w '%{http_code}' "https://aifootball.am/news/$SLUG")" >> withdraw.txt
-          done
-          cat withdraw.txt
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Does any article contradict itself between its title and its SEO title
-        run: |
-          npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
-          echo "=== the Kone article, in full ===" > titles.txt
-          npx wrangler d1 execute aisport-db --remote --json --command             "SELECT slug, title, seo_title, excerpt, substr(content,1,300) AS body FROM articles WHERE slug LIKE '%kone%' OR title LIKE '%Կոնե%' ORDER BY published_at DESC LIMIT 5"             > t1.json 2>&1 || true
-          # And whether any other article's SEO title says something the
-          # headline does not - the two are allowed to differ in wording,
-          # never in what they claim.
-          npx wrangler d1 execute aisport-db --remote --json --command             "SELECT slug, title FROM articles WHERE published_at > datetime('now','-3 days') AND title LIKE '%. %' LIMIT 25"             > t2.json 2>&1 || true
-          node -e "
-            const fs=require('fs');
-            const rows=(f)=>{try{const raw=fs.readFileSync(f,'utf8');const j=JSON.parse(raw.slice(raw.indexOf('[')));return j[0]?.results??[]}catch(e){return []}};
-            const kone=rows('t1.json');
-            console.log('  rows matching: '+kone.length);
-            if (!kone.length) console.log('  raw: '+fs.readFileSync('t1.json','utf8').slice(0,300).replace(/\n/g,' '));
-            for (const r of kone) {
-              console.log('  slug:      '+r.slug);
-              console.log('  title:     '+r.title);
-              console.log('  seo_title: '+(r.seo_title??'(none)'));
-              console.log('  excerpt:   '+(r.excerpt??'').slice(0,160));
-              console.log('  meta_desc: '+(r.meta_description??'(none)').slice(0,160));
-              console.log('  body:      '+(r.body??'').replace(/\n/g,' ').slice(0,300));
-            }
-            const twoSentence=rows('t2.json');
-            console.log('');
-            console.log('  titles of the last 3 days carrying a second sentence: '+twoSentence.length);
-            for (const r of twoSentence.slice(0,12)) console.log('    '+r.title);
-          " >> titles.txt 2>&1
-          cat titles.txt
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      - name: Who does API-Football say manages these clubs
-        env:
-          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
-        run: |
-          {
-            echo "=== current coach per club, as the API reports it ==="
-            for TEAM in 50 33 40 42 541 529 505 157; do
-              curl -s "https://v3.football.api-sports.io/coachs?team=$TEAM"                 -H "x-apisports-key: $API_FOOTBALL_KEY"                 | node -e '
-                  let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{
-                    const team=Number(process.argv[1]);
-                    let j; try{j=JSON.parse(d)}catch{console.log("  team "+team+": bad json");return}
-                    const rows=j.response||[];
-                    const open=rows.filter(c=>(c.career||[]).some(s=>s.team.id===team&&!s.end));
-                    console.log("  team "+team+": "+rows.length+" coaches returned, "+open.length+" with an open stint");
-                    for(const c of open) {
-                      const stint=(c.career||[]).find(s=>s.team.id===team&&!s.end);
-                      console.log("      OPEN  "+c.name+"  (from "+stint.start+")");
-                    }
-                    // What the site picks: among the open stints, the one that
-                    // started last. This mirrors getCoach - printing the old
-                    // first-match rule here would keep reporting a bug that
-                    // has been fixed.
-                    const byStart=[...open].sort((a,b)=>{
-                      const s=(c)=>((c.career||[]).find(x=>x.team.id===team&&!x.end)||{}).start||"";
-                      return s(b).localeCompare(s(a));
-                    });
-                    const picked=byStart[0]||rows[0];
-                    if(picked) console.log("      the rule picks: "+picked.name);
-                  })' "$TEAM"
-            done
-            echo "  --- what the site actually shows, overrides included ---"
-            for T in 50 40 529 33 42 541 505 157; do
-              NAME=$(curl -s "https://aifootball.am/team/$T" | grep -o 'Գլխավոր մարզիչ</span><strong>[^<]*' | head -1 | sed 's/.*<strong>//')
-              echo "      team $T: ${NAME:-NO MANAGER SHOWN}"
-            done
-          } > coaches.txt 2>&1
-          cat coaches.txt
-
-      - name: Verify the Armenian names, the lineup links and the image proxy
-        env:
-          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
-        run: |
-          npm install --no-save playwright@1.55.0
-          npx playwright install --with-deps chromium
-          echo "=== social image generation ===" > imagelog.txt
-          API_FOOTBALL_KEY="${API_FOOTBALL_KEY}" node make-social-images.mjs >> imagelog.txt 2>&1 || echo "  (the script exited non-zero)" >> imagelog.txt
-          cat imagelog.txt
-          node audit.mjs || true
-          {
-            echo ""
-            echo "=== page weight and 360px overflow ==="
-            node page-weight.mjs 2>&1 || echo "  (page-weight.mjs exited non-zero)"
-            echo ""
-            echo "=== core web vitals (360px, CPU throttled 4x) ==="
-            node vitals.mjs 2>&1 || echo "  (vitals.mjs exited non-zero)"
-          } > weight.txt
-          cat weight.txt
-          cat withdraw.txt >> add-source-result.txt 2>/dev/null || true
-          cat titles.txt >> add-source-result.txt 2>/dev/null || true
-          cat coaches.txt >> add-source-result.txt 2>/dev/null || true
-          cat weight.txt >> add-source-result.txt 2>/dev/null || true
-          cat imagelog.txt >> add-source-result.txt 2>/dev/null || true
-          cat rate.txt >> add-source-result.txt 2>/dev/null || echo "(rate query produced nothing)" >> add-source-result.txt
-          echo "" >> add-source-result.txt
-          echo "" >> add-source-result.txt
-          cat halt.txt >> add-source-result.txt 2>/dev/null || true
-          echo "" >> add-source-result.txt
-          cat apistatus.txt >> add-source-result.txt 2>/dev/null || true
-          echo "" >> add-source-result.txt
-          echo "=== APITube person.name registry ===" >> add-source-result.txt
-          cat apitube.txt >> add-source-result.txt 2>/dev/null || echo "(no output)" >> add-source-result.txt
-          echo "" >> add-source-result.txt
-          echo "=== can the deploy token use R2? ===" >> add-source-result.txt
-          cat r2-head.txt >> add-source-result.txt 2>/dev/null || echo "(no output)" >> add-source-result.txt
-          echo "" >> add-source-result.txt
-          echo "--- screenshots produced ---" >> add-source-result.txt
-          ls -la audit >> add-source-result.txt 2>&1 || true
-          cat add-source-result.txt
-      - run: |
-          git config user.email "actions@github.com"
-          git config user.name "GitHub Actions"
-          # Commit the results onto an orphan tree that holds nothing else.
-          # Pushing the whole branch fails the moment this workflow file
-          # itself has changed on it: GitHub refuses to let an Actions token
-          # create or update a workflow file, and the audit run is then
-          # marked failed even though every measurement succeeded.
-          git checkout -q --orphan audit-result
-          git reset -q
-          git add -f add-source-result.txt audit aisport-am/public/fb-profile.png aisport-am/public/fb-profile-alt.png aisport-am/public/fb-cover.png
-          git commit -q -m "audit result [skip ci]" || true
-          git push "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" HEAD:check-logs --force
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

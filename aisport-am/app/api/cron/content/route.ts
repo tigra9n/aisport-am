@@ -652,7 +652,7 @@ export async function GET(request: Request) {
         if (Number.isFinite(lastMs) && sinceMs >= 0 && sinceMs < MIN_PUBLISH_GAP_MS) {
           const sinceMin = Math.floor(sinceMs / 60000);
           await logInvocation({ forced: forcedMode, mode: "skipped", generated: 0, reason: `only ${sinceMin} min since the last article, need ${MIN_PUBLISH_GAP_MS / 60000}` });
-          return Response.json({ ok: true, mode: "skipped", reason: `last article was ${sinceMin} minutes ago, minimum gap is 18 minutes`, generated: 0, log: [] });
+          return Response.json({ ok: true, mode: "skipped", reason: `last article was ${sinceMin} minutes ago, minimum gap is ${MIN_PUBLISH_GAP_MS / 60000} minutes`, generated: 0, log: [] });
         }
       }
       // BUG FIXED: this used `db` (a Drizzle instance from getDb()),
