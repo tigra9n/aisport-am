@@ -458,12 +458,8 @@ function armenianSeasonLabel(now = new Date()): string {
 
 export async function armenianStandings(): Promise<import("./football").StandingRow[] | null> {
   try {
-    const res = await fetch(`${SPORTSDB}/lookuptable.php?l=${ARMENIAN_LEAGUE_ID}&s=${armenianSeasonLabel()}`, {
-      headers: { "User-Agent": BROWSER_UA, Accept: "application/json" },
-      signal: AbortSignal.timeout(12_000),
-    });
-    if (!res.ok) return null;
-    const data = await res.json() as { table?: SportsDbRow[] };
+    const data = await sportsDb<{ table?: SportsDbRow[] }>(`/lookuptable.php?l=${ARMENIAN_LEAGUE_ID}&s=${armenianSeasonLabel()}`);
+    if (!data) return null;
     const rows = (data.table ?? [])
       .map((r, index) => ({
         position: Number(r.intRank ?? 0) || index + 1,
@@ -597,12 +593,30 @@ type SportsDbEvent = {
   strAwayTeamBadge?: string;
 };
 
+// TheSportsDB refuses Cloudflare's addresses when asked too often - HTTP
+// 429 with Cloudflare's own error 1015, seen from this Worker on a second
+// call inside a minute. Its callers already cache, but a cold cache during
+// a refusal would ask again on the very next page view and keep the
+// refusal alive, which is exactly the failure this codebase spent an
+// evening on in September when API-Football's daily allowance ran out.
+//
+// So a refusal is remembered in memory for five minutes. It is only the
+// Worker's memory, which is recycled often, and that is fine: the point is
+// not to remember for long, it is to stop a burst of page views turning
+// one 429 into a hundred.
+let sportsDbSilentUntil = 0;
+
 async function sportsDb<T>(path: string): Promise<T | null> {
+  if (Date.now() < sportsDbSilentUntil) return null;
   try {
     const res = await fetch(`${SPORTSDB}${path}`, {
       headers: { "User-Agent": BROWSER_UA, Accept: "application/json" },
       signal: AbortSignal.timeout(12_000),
     });
+    if (res.status === 429) {
+      sportsDbSilentUntil = Date.now() + 5 * 60_000;
+      return null;
+    }
     if (!res.ok) return null;
     return await res.json() as T;
   } catch {

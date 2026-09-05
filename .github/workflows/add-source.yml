@@ -962,6 +962,26 @@ jobs:
           JS
           node ffa.mjs
 
+      - name: Does ESPN answer the Worker itself
+        if: ${{ github.event.inputs.livescore != 'no' }}
+        env:
+          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
+        run: |
+          echo "=== asking from inside the Cloudflare Worker ==="
+          curl -s --max-time 60 "https://aisport.am/api/diag/espn?token=${CRON_TOKEN}" \
+            | node -e "
+              let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
+                let j; try{ j=JSON.parse(d) }catch{ console.log('  not json: '+d.slice(0,200)); return }
+                if (j.error) { console.log('  '+j.error+' - is the route deployed?'); return }
+                console.log('  colo: '+(j.colo??'?')+'  VERDICT: '+j.verdict);
+                for (const c of j.armenianClubsInEspn ?? []) {
+                  console.log('    espn knows '+String(c.name).padEnd(16)+' -> '+(Array.isArray(c.found)&&c.found.length?c.found.join(' | '):'nothing'));
+                }
+                for (const r of j.results ?? []) {
+                  console.log('    '+String(r.label).padEnd(24)+' HTTP '+r.status+'  '+r.ms+'ms'+(r.events!==null?('  '+r.events+' fixtures'):'')+(r.body?('  '+r.body.replace(/\\s+/g,' ').slice(0,70)):''));
+                }
+              })"
+
       # Types passing is not the same as a page working. The live board,
       # the match page and the tables were all pointed at new providers in
       # one change; this opens each of them on the deployed site and reports
@@ -1016,26 +1036,6 @@ jobs:
           console.log(out.join("\n"));
           JS
           node pages.mjs
-
-      - name: Does ESPN answer the Worker itself
-        if: ${{ github.event.inputs.livescore != 'no' }}
-        env:
-          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
-        run: |
-          echo "=== asking from inside the Cloudflare Worker ==="
-          curl -s --max-time 60 "https://aisport.am/api/diag/espn?token=${CRON_TOKEN}" \
-            | node -e "
-              let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
-                let j; try{ j=JSON.parse(d) }catch{ console.log('  not json: '+d.slice(0,200)); return }
-                if (j.error) { console.log('  '+j.error+' - is the route deployed?'); return }
-                console.log('  colo: '+(j.colo??'?')+'  VERDICT: '+j.verdict);
-                for (const c of j.armenianClubsInEspn ?? []) {
-                  console.log('    espn knows '+String(c.name).padEnd(16)+' -> '+(Array.isArray(c.found)&&c.found.length?c.found.join(' | '):'nothing'));
-                }
-                for (const r of j.results ?? []) {
-                  console.log('    '+String(r.label).padEnd(24)+' HTTP '+r.status+'  '+r.ms+'ms'+(r.events!==null?('  '+r.events+' fixtures'):'')+(r.body?('  '+r.body.replace(/\\s+/g,' ').slice(0,70)):''));
-                }
-              })"
 
       - name: What the sources table holds now
         if: ${{ github.event.inputs.livescore == 'no' }}
