@@ -192,6 +192,108 @@ jobs:
             ["Sport.es", "https://www.sport.es/es/rss/futbol/rss.xml"],
             ["RMC Sport Football", "https://rmcsport.bfmtv.com/rss/football/"],
             ["A Bola", "https://www.abola.pt/rss"],
+
+            // ============================================================
+            // By league, ten desks each.
+            // ============================================================
+            //
+            // The thirty feeds above were gathered by language, and that is
+            // not the same thing as by competition. It left the site with
+            // twenty-five English desks and nothing at all that covers MLS
+            // or the Saudi league as a beat - those two reach the board only
+            // when an English paper happens to write about them, which on a
+            // normal evening it does not.
+            //
+            // Ten desks per league is the target because the ranking counts
+            // corroboration as a share of the desks covering that league: at
+            // ten each, four of ten means the same thing in Riyadh as it does
+            // in Manchester, and no league wins an hour by arithmetic.
+
+            // --- MLS -----------------------------------------------------
+            ["MLS Soccer", "https://www.mlssoccer.com/rss/news"],
+            ["MLS Soccer (feeds)", "https://www.mlssoccer.com/feeds/rss/news"],
+            ["Pro Soccer Wire", "https://prosoccerwire.usatoday.com/feed/"],
+            ["SBI Soccer", "https://sbisoccer.com/feed/"],
+            ["MLS Multiplex", "https://mlsmultiplex.com/feed/"],
+            ["CBS Sports Soccer", "https://www.cbssports.com/rss/headlines/soccer/"],
+            ["Goal USA", "https://www.goal.com/en-us/feeds/news?fmt=rss"],
+            ["Soccer America", "https://www.socceramerica.com/rss/"],
+            ["Front Row Soccer", "https://frontrowsoccer.com/feed/"],
+            ["Sounder At Heart", "https://www.sounderatheart.com/rss/index.xml"],
+            ["Last Word on Soccer MLS", "https://lastwordonsports.com/soccer/category/major-league-soccer/feed/"],
+            ["American Soccer Now", "https://www.americansoccernow.com/rss.xml"],
+
+            // --- Saudi Pro League ---------------------------------------
+            // The hardest of the seven: the league's own press writes in
+            // Arabic and the English coverage is Gulf-wide rather than
+            // league-deep. Both are worth probing - the pipeline already
+            // translates four languages, and fetchFeed sniffs the charset.
+            ["Arab News Sport", "https://www.arabnews.com/cat/6/rss.xml"],
+            ["Arab News", "https://www.arabnews.com/rss.xml"],
+            ["Saudi Gazette Sport", "https://saudigazette.com.sa/rssFeed/74"],
+            ["Sport360", "https://sport360.com/feed"],
+            ["The National Sport", "https://www.thenationalnews.com/sport/rss.xml"],
+            ["Gulf News Sport", "https://gulfnews.com/rss?generatorName=sport"],
+            ["Al Arabiya Sport", "https://english.alarabiya.net/tools/rss/sport"],
+            ["FilGoal", "https://www.filgoal.com/rss"],
+            ["Arriyadiyah", "https://www.arriyadiyah.com/rss"],
+            ["Okaz Sport", "https://www.okaz.com.sa/rss/sport"],
+            ["Saudi Pro League", "https://www.spl.com.sa/en/rss"],
+            ["Kooora", "https://www.kooora.com/rss.xml"],
+
+            // --- La Liga -------------------------------------------------
+            ["Relevo Futbol", "https://www.relevo.com/rss/futbol/"],
+            ["El Desmarque", "https://www.eldesmarque.com/rss"],
+            ["Estadio Deportivo", "https://www.estadiodeportivo.com/rss/"],
+            ["Cadena SER Deportes", "https://cadenaser.com/rss/deportes/"],
+            ["AS Primera", "https://as.com/rss/futbol/primera.xml"],
+            ["Marca Mas Futbol", "https://e00-marca.uecdn.es/rss/futbol/mas-futbol.xml"],
+            ["Fichajes", "https://www.fichajes.com/feed"],
+            ["Defensa Central", "https://www.defensacentral.com/rss/"],
+            ["Mundo Deportivo Barca", "https://www.mundodeportivo.com/feed/rss/fc-barcelona/"],
+            ["Sport.es Barca", "https://www.sport.es/es/rss/fc-barcelona/rss.xml"],
+
+            // --- Serie A -------------------------------------------------
+            ["Sky Sport Italia Calcio", "https://sport.sky.it/rss/calcio"],
+            ["ANSA Calcio", "https://www.ansa.it/sito/notizie/sport/calcio/calcio_rss.xml"],
+            ["Repubblica Sport", "https://www.repubblica.it/rss/sport/rss2.0.xml"],
+            ["Corriere Sport", "https://xml2.corriereobjects.it/rss/sport.xml"],
+            ["FCInterNews", "https://www.fcinternews.it/rss"],
+            ["Milan News", "https://www.milannews.it/rss"],
+            ["Tutto Juve", "https://www.tuttojuve.com/rss"],
+            ["Lega Serie A", "https://www.legaseriea.it/rss"],
+            ["Il Napolista", "https://www.ilnapolista.it/feed/"],
+            ["Calcio News 24", "https://www.calcionews24.com/feed/"],
+
+            // --- Bundesliga ----------------------------------------------
+            ["Kicker Bundesliga", "https://newsfeed.kicker.de/news/bundesliga"],
+            ["Sport1", "https://www.sport1.de/news.rss"],
+            ["Sportschau Bundesliga", "https://www.sportschau.de/fussball/bundesliga/index~rss2.xml"],
+            ["Bild Sport", "https://www.bild.de/rssfeeds/rss3-20620006,feed=sport.bild.html"],
+            ["Spox", "https://www.spox.com/pub/rss/sport-media.xml"],
+            ["Transfermarkt DE", "https://www.transfermarkt.de/rss/news"],
+            ["DFB", "https://www.dfb.de/news/rss/"],
+            ["90min DE", "https://www.90min.de/feed"],
+            ["WELT Sport", "https://www.welt.de/feeds/section/sport.rss"],
+            ["Fussballtransfers", "https://www.fussballtransfers.com/rss"],
+
+            // --- Ligue 1 -------------------------------------------------
+            ["Foot Mercato", "https://www.footmercato.net/rss"],
+            ["Le Parisien Sports", "https://feeds.leparisien.fr/leparisien/rss/sports"],
+            ["So Foot", "https://www.sofoot.com/rss.xml"],
+            ["Maxifoot", "https://www.maxifoot.fr/rss/news.xml"],
+            ["But Football Club", "https://www.butfootballclub.fr/feed"],
+            ["Eurosport FR Football", "https://www.eurosport.fr/football/rss.xml"],
+            ["L Equipe Ligue 1", "https://dwh.lequipe.fr/api/edito/rss?path=/Football/Ligue-1"],
+            ["Football.fr", "https://www.football.fr/rss"],
+            ["90min FR", "https://www.90min.com/fr/feed"],
+            ["Onze Mondial", "https://www.onzemondial.com/rss"],
+
+            // --- Premier League, the desks not already in D1 --------------
+            ["Sky Sports Transfer Centre", "https://www.skysports.com/rss/12040"],
+            ["The Athletic Football", "https://theathletic.com/football/rss/"],
+            ["BBC Premier League", "https://feeds.bbci.co.uk/sport/football/premier-league/rss.xml"],
+            ["Premier League Official", "https://www.premierleague.com/rss/news"],
           ];
 
 

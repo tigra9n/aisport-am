@@ -1014,6 +1014,8 @@ export async function espnTopScorers(code: string): Promise<import("./topscorers
     return {
       rank: index + 1,
       id: Number(entry.athlete?.id ?? 0),
+      key: entry.athlete?.id ? espnKey(entry.athlete.id) : null,
+      teamKey: entry.athlete?.team?.id ? espnKey(entry.athlete.team.id) : null,
       name: armenianPlayerName(entry.athlete?.displayName ?? ""),
       photo: entry.athlete?.headshot?.href ?? null,
       team: armenianTeamName(entry.athlete?.team?.displayName ?? ""),

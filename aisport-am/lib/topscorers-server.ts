@@ -1,7 +1,11 @@
 import { armenianPlayerName } from "./player-names-hy";
 import { armenianTeamName } from "./team-names-hy";
 
-export type TopScorer = { rank: number; id: number; name: string; team: string; teamId: number | null; teamLogo: string | null; photo: string | null; goals: number; assists: number; appearances: number };
+// key and teamKey are ESPN's numbers under an "espn-" prefix; id and teamId
+// are API-Football's. A row carries whichever provider filled it, and a link
+// prefers the prefixed one - a bare ESPN number in the old slot would open a
+// page about a different footballer.
+export type TopScorer = { rank: number; id: number; key?: string | null; teamKey?: string | null; name: string; team: string; teamId: number | null; teamLogo: string | null; photo: string | null; goals: number; assists: number; appearances: number };
 
 const LEAGUE_ID_BY_CODE: Record<string, number> = {
   PL: 39,

@@ -20,30 +20,49 @@ import { fetchFeed, type FeedItem } from "./feeds";
 import { storyStems } from "./story-signature";
 
 
-// Which country's press a desk belongs to.
+// Which league's press a desk belongs to.
 //
-// Twenty-five of the desks are English and six are Spanish, so counting
-// desks alone would hand every hour to the Premier League by arithmetic
-// rather than by news judgement: a La Liga story every Spanish paper is
-// leading with can be corroborated six times at most, while a mid-table
-// English story reaches eight without being the bigger story. The count is
-// therefore taken as a share of the desks that cover that country at all,
-// which is what makes "four of the six Spanish papers" beat "eight of the
-// twenty-five English ones".
+// This began as a language split, because the feeds were gathered by
+// language: twenty-five English desks against six Spanish ones meant
+// counting desks alone handed every hour to the Premier League by
+// arithmetic rather than by news judgement. A La Liga story every Spanish
+// paper leads with could be corroborated six times at most, while a
+// mid-table English story reached eight without being the bigger story.
+//
+// The site covers seven competitions, so the split is now by competition,
+// with about ten desks each. The count is taken as a share of the desks
+// that cover that league at all, which is what makes "four of the ten
+// Saudi desks" beat "eight of the twenty-five English ones" - and what
+// gives MLS and the Saudi league an hour of their own rather than the
+// scraps of whatever an English paper happened to write about them.
+//
+// Order matters: the specific patterns come first. sport.sky.it is Italian
+// and skysports.com is English; goal.com/en-us covers MLS and goal.com/en
+// covers England.
 const BEATS: [RegExp, string][] = [
-  [/marca|as\.com|mundodeportivo|sport\.es|football-espana|barcauniversal|madriduniversal|laliga/i, "Spain"],
-  [/gazzetta|corrieredellosport|tuttosport|football-italia|calciomercato|tuttomercatoweb/i, "Italy"],
-  [/lequipe|rmcsport|bfmtv|getfootballnewsfrance|sofoot|ligue1/i, "France"],
-  [/bundesliga\.com|bulinews|kicker|getgermanfootballnews/i, "Germany"],
+  // MLS. Matched before the general English desks because several of these
+  // are American editions of outlets that also publish for England.
+  [/mlssoccer|prosoccerwire|sbisoccer|mlsmultiplex|socceramerica|frontrowsoccer|sounderatheart|americansoccernow|goal\.com\/en-us|lastwordonsports.*major-league|cbssports/i, "MLS"],
+
+  // The Saudi Pro League, and the Gulf press that covers it as a beat.
+  [/arabnews|saudigazette|sport360|thenationalnews|gulfnews|alarabiya|filgoal|arriyadiyah|okaz|spl\.com\.sa|kooora/i, "Saudi"],
+
+  [/marca|as\.com|mundodeportivo|sport\.es|football-espana|barcauniversal|madriduniversal|laliga|relevo|eldesmarque|estadiodeportivo|cadenaser|fichajes|defensacentral/i, "Spain"],
+  [/gazzetta|corrieredellosport|tuttosport|football-italia|calciomercato|tuttomercatoweb|sport\.sky\.it|ansa\.it|repubblica|corriereobjects|fcinternews|milannews|tuttojuve|legaseriea|ilnapolista|calcionews24/i, "Italy"],
+  [/lequipe|rmcsport|bfmtv|getfootballnewsfrance|sofoot|ligue1|footmercato|leparisien|maxifoot|butfootballclub|eurosport\.fr|football\.fr|90min\.com\/fr|onzemondial/i, "France"],
+  [/bundesliga\.com|bulinews|kicker|getgermanfootballnews|sport1|sportschau|bild\.de|spox|transfermarkt\.de|dfb\.de|90min\.de|welt\.de|fussballtransfers/i, "Germany"],
+
+  // Two competitions the site does not lead with, kept separate so their
+  // desks do not inflate the English count.
   [/turkish-football/i, "Turkey"],
   [/record\.pt|abola|portugoal/i, "Portugal"],
 ];
 
 export function beatOf(feedUrl: string): string {
   for (const [pattern, beat] of BEATS) if (pattern.test(feedUrl)) return beat;
-  // Everything else is the English-language press. Not all of it is
-  // English - Ireland, the United States - but it reports the same beat
-  // and competes for the same slot.
+  // Everything else is the Premier League's press. Not all of it is
+  // English - Ireland, Scotland - but it reports that beat and competes
+  // for the same slot.
   return "England";
 }
 
@@ -147,7 +166,7 @@ export function rankGathered(gathered: GatheredStory[]): RankedStory[] {
     return entries.map((e) => ({ item: e.item, sourceName: e.sourceName, beat: e.beat, corroboration: 0, weight: 0, alsoIn: [] }));
   }
 
-  // How many desks each country has in tonight's gathering, so a count can
+  // How many desks each league has in tonight's gathering, so a count can
   // be read against the number of desks that could have carried it.
   const desksPerBeat = new Map<string, Set<string>>();
   const beatByDesk = new Map<string, string>();
@@ -190,8 +209,8 @@ export function rankGathered(gathered: GatheredStory[]): RankedStory[] {
         desks.add(entries[other].sourceName);
       }
     }
-    // The desk itself counts towards its own country's tally: one of the
-    // six Spanish papers carrying a story is one of six, not none of six.
+    // The desk itself counts towards its own league's tally: one of the
+    // ten Spanish papers carrying a story is one of ten, not none of ten.
     const own = Math.max(desksPerBeat.get(entry.beat)?.size ?? 1, 1);
     const withinBeat = [...desks].filter((name) => beatByDesk.get(name) === entry.beat).length + 1;
     return {
