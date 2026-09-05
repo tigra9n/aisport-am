@@ -107,7 +107,7 @@ jobs:
             for (const r of rows) {
               console.log(`${r.ts}  ${String(r.mode).padEnd(9)} generated=${r.generated}${r.reason ? "  " + r.reason : ""}`);
               const notable = (() => { try { return JSON.parse(r.log) } catch { return [] } })()
-                .filter((line) => /fail|error|balance|credit|quota|limit|skip|!!/i.test(line));
+                .filter((line) => /fail|error|balance|credit|quota|limit|skip|gemini|claude|!!/i.test(line));
               for (const line of notable.slice(0, 3)) console.log(`     ${line.slice(0, 150)}`);
             }
           '
