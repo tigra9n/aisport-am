@@ -3,7 +3,10 @@ import { armenianPlayerName } from "./player-names-hy";
 import { COACH_OVERRIDES } from "./coach-overrides";
 import { armenianTeamName } from "./team-names-hy";
 
-export type SquadPlayer = { id: number; name: string; number: number | null; position: string; age: number | null; photo: string | null };
+// key is ESPN's id under an "espn-" prefix; id stays API-Football's number
+// so the squads still in the cache from before the move keep working. The
+// card links to whichever it has.
+export type SquadPlayer = { id: number; key?: string | null; name: string; number: number | null; position: string; age: number | null; photo: string | null };
 export type Squad = { teamName: string; teamLogo: string | null; players: SquadPlayer[] };
 
 const POSITION_LABEL: Record<string, string> = {
@@ -48,6 +51,31 @@ let cacheTableReady: Promise<unknown> | null = null;
 async function ensureCacheTable(db: D1Database) {
   cacheTableReady ??= db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();
   await cacheTableReady;
+}
+
+
+// Which competition a club plays in, by ESPN's id. The roster endpoint is
+// addressed by league and club together and a link only carries the club,
+// so the index is built from ESPN's team lists - seventeen requests - and
+// kept for a day, because clubs change competition twice a year.
+async function teamIndex(db: D1Database | undefined): Promise<Record<string, { slug: string }>> {
+  const cacheKey = "espn:teamindex:v1";
+  if (db) {
+    await ensureCacheTable(db);
+    const row = await db.prepare("SELECT payload,saved_at AS savedAt FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{ payload: string; savedAt: number }>();
+    if (row?.savedAt && Date.now() - row.savedAt < 24 * 60 * 60 * 1000) {
+      try {
+        const parsed = JSON.parse(row.payload) as Record<string, { slug: string }>;
+        if (Object.keys(parsed).length) return parsed;
+      } catch { /* rebuild */ }
+    }
+  }
+  const { espnTeamIndex } = await import("./espn");
+  const index = await espnTeamIndex();
+  if (db && Object.keys(index).length) {
+    await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey, JSON.stringify(index), Date.now()).run();
+  }
+  return index;
 }
 
 export function positionLabel(position: string) {
@@ -189,11 +217,14 @@ export async function getCoachById(coachId: number): Promise<Coach | null> {
   }
 }
 
-export async function getSquad(teamId: number): Promise<Squad | null> {
+// The id is a string now because two providers number clubs differently and
+// a bare number cannot say which is meant. An "espn-" prefix is ESPN's;
+// anything else is API-Football's, which is what every indexed URL on this
+// site carries and what the team page redirects away from.
+export async function getSquad(teamId: number | string): Promise<Squad | null> {
   const { env } = await import("cloudflare:workers");
   const runtime = env as unknown as Record<string, string | undefined>;
   const key = runtime.API_FOOTBALL_KEY;
-  if (!key) return null;
 
   const db = (env as unknown as { DB?: D1Database }).DB;
   const cacheKey = `apifootball:v4:squad:${teamId}`;
@@ -209,7 +240,42 @@ export async function getSquad(teamId: number): Promise<Squad | null> {
     }
   }
 
+  // ESPN, when the link carries ESPN's number. One request returns the whole
+  // squad with the shirt number, the position, the age and a headshot each -
+  // the photos API-Football charged for - and it costs nothing.
+  const espnId = typeof teamId === "string" && teamId.startsWith("espn-") ? teamId.slice(5) : null;
+  if (espnId) {
+    try {
+      const { espnSquad } = await import("./espn");
+      const team = (await teamIndex(db))[espnId];
+      if (team) {
+        const fetched = await espnSquad(team.slug, espnId);
+        if (fetched?.players.length) {
+          const squad: Squad = {
+            teamName: fetched.teamName,
+            teamLogo: fetched.teamLogo,
+            players: fetched.players.map((p) => ({
+              id: Number(p.id),
+              key: `espn-${p.id}`,
+              name: armenianPlayerName(p.name),
+              number: p.number,
+              position: p.position,
+              age: p.age,
+              photo: p.photo,
+            })),
+          };
+          if (db) {
+            await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey, JSON.stringify(squad), Date.now()).run();
+          }
+          return squad;
+        }
+      }
+    } catch { /* fall through to the stale row below */ }
+    return null;
+  }
+
   try {
+    if (!key) throw new Error("no key");
     const response = await fetchApi(`https://v3.football.api-sports.io/players/squads?team=${teamId}`, key);
     if (!response) throw new Error("unreachable");
     const data = await response.json() as { response?: ApiFootballSquad[] };

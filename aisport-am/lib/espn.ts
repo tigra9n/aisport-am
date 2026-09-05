@@ -25,6 +25,7 @@
 import { formatTimeYerevan } from "./format-date";
 import { armenianTeamName } from "./team-names-hy";
 import { armenianPlayerName } from "./player-names-hy";
+import { armenianCountry, armenianCompetition } from "./names-hy";
 import type { LiveMatch } from "./live-football-server";
 
 const HOST = "https://site.web.api.espn.com/apis/site/v2/sports/soccer";
@@ -1023,4 +1024,164 @@ export async function espnTopScorers(code: string): Promise<import("./topscorers
       appearances: readNumber(long, /Matches:\s*(\d+)/i) || readNumber(short, /\bM:\s*(\d+)/),
     };
   }).filter((row) => row.name);
+}
+
+// ---------------------------------------------------------------------
+// The player page
+// ---------------------------------------------------------------------
+//
+// Measured rather than assumed, from Kepa Arrizabalaga on 6 September:
+//
+//   /athletes/<id>        the profile - name, date of birth, height and
+//                         weight, citizenship, position, shirt, headshot
+//   /athletes/<id>/stats  the numbers, and more than the season: a filter
+//                         listing every club the player has appeared for,
+//                         and a statistics block per club, competition and
+//                         season, with ten named columns and a written
+//                         description of each
+//
+// API-Football gave one season and charged for the photo. The shapes below
+// are read leniently - by what a field is called rather than where it sits -
+// because ESPN nests these differently between competitions, and reading it
+// by an assumed path is what this file has already got wrong twice.
+
+const ATHLETE_HOST = "https://site.web.api.espn.com/apis/common/v3/sports/soccer";
+
+type EspnStatCategory = {
+  name?: string;
+  displayName?: string;
+  names?: string[];
+  displayNames?: string[];
+  descriptions?: string[];
+  statistics?: {
+    teamId?: number;
+    teamSlug?: string;
+    leagueId?: number;
+    leagueSlug?: string;
+    season?: { year?: number; displayName?: string };
+    stats?: (string | number)[];
+  }[];
+};
+
+type EspnAthleteResponse = {
+  athlete?: {
+    id?: string;
+    displayName?: string;
+    fullName?: string;
+    age?: number;
+    dateOfBirth?: string;
+    displayHeight?: string;
+    displayWeight?: string;
+    citizenship?: string;
+    birthPlace?: { city?: string; country?: string };
+    jersey?: string;
+    headshot?: { href?: string };
+    position?: { displayName?: string; name?: string };
+    team?: { id?: string; displayName?: string; logos?: { href?: string }[] };
+  };
+};
+
+type EspnAthleteStatsResponse = {
+  filters?: { name?: string; options?: { value?: string; displayValue?: string }[] }[];
+  teams?: Record<string, { id?: string; displayName?: string; logos?: { href?: string }[] }>;
+  leagues?: Record<string, { displayName?: string; logos?: { href?: string }[] }>;
+  categories?: EspnStatCategory[];
+};
+
+export type EspnPlayerSeason = {
+  season: string;
+  league: string;
+  leagueLogo: string | null;
+  team: string;
+  teamLogo: string | null;
+  // Every column the provider names, in its own order, so a goalkeeper's
+  // saves and an attacker's shots both survive rather than being squeezed
+  // into one fixed set of six.
+  columns: { label: string; value: string; note: string | null }[];
+};
+
+export type EspnPlayer = {
+  id: string;
+  name: string;
+  photo: string | null;
+  nationality: string | null;
+  birthDate: string | null;
+  birthPlace: string | null;
+  height: string | null;
+  weight: string | null;
+  age: number | null;
+  position: string | null;
+  currentTeam: string | null;
+  currentTeamKey: string | null;
+  currentTeamLogo: string | null;
+  shirtNumber: number | null;
+  clubs: string[];
+  seasons: EspnPlayerSeason[];
+};
+
+export async function espnPlayer(athleteId: string): Promise<EspnPlayer | null> {
+  const [profile, stats] = await Promise.all([
+    espnUrl<EspnAthleteResponse>(`${ATHLETE_HOST}/athletes/${athleteId}`),
+    espnUrl<EspnAthleteStatsResponse>(`${ATHLETE_HOST}/athletes/${athleteId}/stats`),
+  ]);
+  const athlete = profile?.athlete;
+  if (!athlete?.displayName) return null;
+
+  const teamsById: Record<string, { name: string; logo: string | null }> = {};
+  for (const team of Object.values(stats?.teams ?? {})) {
+    if (team?.id) teamsById[String(team.id)] = { name: team.displayName ?? "", logo: team.logos?.[0]?.href ?? null };
+  }
+  const leaguesBySlug = stats?.leagues ?? {};
+
+  const seasons: EspnPlayerSeason[] = [];
+  for (const category of stats?.categories ?? []) {
+    const labels = category.displayNames ?? category.names ?? [];
+    const notes = category.descriptions ?? [];
+    for (const block of category.statistics ?? []) {
+      const team = block.teamId ? teamsById[String(block.teamId)] : undefined;
+      const league = block.leagueSlug ? leaguesBySlug[block.leagueSlug] : undefined;
+      const columns = (block.stats ?? [])
+        .map((value, index) => ({ label: labels[index] ?? "", value: String(value ?? ""), note: notes[index] ?? null }))
+        .filter((column) => column.label && column.value !== "" && column.value !== "0");
+      if (!columns.length) continue;
+      const key = `${block.season?.displayName ?? block.season?.year ?? ""}|${block.leagueSlug ?? ""}|${block.teamId ?? ""}`;
+      const existing = seasons.find((s) => `${s.season}|${block.leagueSlug ?? ""}|${block.teamId ?? ""}` === key);
+      // The offensive and defensive categories describe the same season, so
+      // the second one adds its columns rather than a second row.
+      if (existing) { existing.columns.push(...columns); continue; }
+      seasons.push({
+        season: String(block.season?.displayName ?? block.season?.year ?? ""),
+        league: league?.displayName ? armenianCompetition(league.displayName) : "",
+        leagueLogo: league?.logos?.[0]?.href ?? null,
+        team: team?.name ? armenianTeamName(team.name) : "",
+        teamLogo: team?.logo ?? null,
+        columns,
+      });
+    }
+  }
+
+  const clubFilter = (stats?.filters ?? []).find((filter) => filter.name === "team");
+  const birthPlace = [athlete.birthPlace?.city, athlete.birthPlace?.country].filter(Boolean).join(", ");
+
+  return {
+    id: String(athlete.id ?? athleteId),
+    name: armenianPlayerName(athlete.displayName),
+    photo: athlete.headshot?.href ?? null,
+    nationality: athlete.citizenship ? armenianCountry(athlete.citizenship) : null,
+    birthDate: athlete.dateOfBirth ? athlete.dateOfBirth.slice(0, 10) : null,
+    birthPlace: birthPlace || null,
+    height: athlete.displayHeight ?? null,
+    weight: athlete.displayWeight ?? null,
+    age: typeof athlete.age === "number" ? athlete.age : null,
+    position: athlete.position?.displayName ?? athlete.position?.name ?? null,
+    currentTeam: athlete.team?.displayName ? armenianTeamName(athlete.team.displayName) : null,
+    currentTeamKey: athlete.team?.id ? espnKey(athlete.team.id) : null,
+    currentTeamLogo: athlete.team?.logos?.[0]?.href ?? null,
+    shirtNumber: athlete.jersey ? Number(athlete.jersey) : null,
+    // Every club the provider has this player's numbers for, which is a
+    // career in the order it happened rather than a transfer list we would
+    // have to buy.
+    clubs: (clubFilter?.options ?? []).map((option) => armenianTeamName(option.displayValue ?? "")).filter(Boolean),
+    seasons: seasons.filter((season) => season.season),
+  };
 }

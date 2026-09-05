@@ -1,7 +1,7 @@
 import { sizedImage } from "../../../lib/image-proxy";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
 import { SiteHeader } from "../../../components/site-header";
 import { getCoach, getSquad, positionLabel, POSITION_ORDER } from "../../../lib/squad-server";
@@ -11,9 +11,8 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  const teamId = Number.parseInt(id, 10);
-  if (!Number.isFinite(teamId)) return {};
-  const squad = await getSquad(teamId);
+  if (!isTeamId(id)) return {};
+  const squad = await getSquad(teamId(id));
   if (!squad) return {};
   const description = `${squad.teamName}-ի կազմը, խաղացողները և մարզիչը։`;
   return {
@@ -23,11 +22,37 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
+// A club's number is now ESPN's, under an "espn-" prefix. Every URL Google
+// indexed carries API-Football's bare number instead, so those are not
+// broken and not kept: the old number is resolved to the club's name from
+// the standings rows already in this site's own cache, that name is found
+// among ESPN's clubs, and the reader is sent on with a 301. No table has to
+// be maintained against two providers, and a number that resolves to
+// nothing still renders the page it always did rather than a redirect to
+// nowhere.
+const isTeamId = (id: string) => id.startsWith("espn-") ? id.length > 5 : Number.isFinite(Number.parseInt(id, 10));
+const teamId = (id: string) => id.startsWith("espn-") ? id : Number.parseInt(id, 10);
+
+async function espnUrlFor(legacyId: number): Promise<string | null> {
+  try {
+    const known = await knownTeam(legacyId);
+    if (!known?.name) return null;
+    const { findEspnTeamByName, espnKey } = await import("../../../lib/espn");
+    const team = await findEspnTeamByName(known.name);
+    return team ? `/team/${espnKey(team.id)}` : null;
+  } catch {
+    return null;
+  }
+}
+
 export default async function TeamPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const teamId = Number.parseInt(id, 10);
-  if (!Number.isFinite(teamId)) notFound();
-  const [squad, coach] = await Promise.all([getSquad(teamId), getCoach(teamId)]);
+  if (!isTeamId(id)) notFound();
+  if (!id.startsWith("espn-")) {
+    const moved = await espnUrlFor(Number.parseInt(id, 10));
+    if (moved) permanentRedirect(moved);
+  }
+  const [squad, coach] = await Promise.all([getSquad(teamId(id)), typeof teamId(id) === "number" ? getCoach(teamId(id) as number) : null]);
 
   // No squad is not the same as no team. The standings table already knows
   // this club - its name and badge are what the reader clicked on - so the
@@ -35,7 +60,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
   // which is what it used to do whenever the API was slow or a club simply
   // has no squad published. Only a team nothing knows about is a 404.
   if (!squad) {
-    const known = await knownTeam(teamId);
+    const known = typeof teamId(id) === "number" ? await knownTeam(teamId(id) as number) : null;
     if (!known) notFound();
     return <main><SiteHeader /><div className="site-shell inner-page">
       <span className="page-kicker">Ակումբի կազմ</span>
@@ -77,7 +102,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
           <h2>{positionLabel(group.position)}</h2>
           <div className="squad-grid">
             {group.players.map((player) => (
-              <Link href={`/player/${player.id}`} className="squad-card" key={player.id}>
+              <Link href={`/player/${player.key ?? player.id}`} className="squad-card" key={player.key ?? player.id}>
                 {player.photo ? <img src={sizedImage(player.photo, 64)} alt="" className="squad-photo" loading="lazy" /> : <div className="squad-photo squad-photo-placeholder">{player.name.slice(0, 1)}</div>}
                 <div>
                   <strong>{player.name}</strong>
@@ -93,7 +118,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
           <h2>Այլ</h2>
           <div className="squad-grid">
             {other.map((player) => (
-              <Link href={`/player/${player.id}`} className="squad-card" key={player.id}>
+              <Link href={`/player/${player.key ?? player.id}`} className="squad-card" key={player.key ?? player.id}>
                 {player.photo ? <img src={sizedImage(player.photo, 64)} alt="" className="squad-photo" loading="lazy" /> : <div className="squad-photo squad-photo-placeholder">{player.name.slice(0, 1)}</div>}
                 <div>
                   <strong>{player.name}</strong>

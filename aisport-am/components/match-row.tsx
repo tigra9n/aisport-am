@@ -21,8 +21,8 @@ export function MatchRow({ match, date }: { match: LiveMatch; date: string }) {
       onClick={openPopup}
     >
       <span className={match.isLive ? "match-live-status live-beacon-status" : ""}>{match.status}</span>
-      {match.homeId ? (
-        <Link href={`/team/${match.homeId}`} className="team-with-logo team-cell-link" onClick={stopAndGo}>
+      {(match.homeKey ?? match.homeId) ? (
+        <Link href={`/team/${match.homeKey ?? match.homeId}`} className="team-with-logo team-cell-link" onClick={stopAndGo}>
           {match.homeLogo && <img src={sizedImage(match.homeLogo, 24)} alt="" className="team-logo" loading="lazy" />}
           {match.home}
         </Link>
@@ -40,8 +40,8 @@ export function MatchRow({ match, date }: { match: LiveMatch; date: string }) {
         onClick={(event) => { event.stopPropagation(); openPopup(); }}
         aria-label={`Բացել մանրամասները՝ ${match.home} ${match.homeScore ?? "–"} : ${match.awayScore ?? "–"} ${match.away}`}
       >{match.homeScore ?? "–"} : {match.awayScore ?? "–"}</button>
-      {match.awayId ? (
-        <Link href={`/team/${match.awayId}`} className="team-with-logo team-cell-link" onClick={stopAndGo}>
+      {(match.awayKey ?? match.awayId) ? (
+        <Link href={`/team/${match.awayKey ?? match.awayId}`} className="team-with-logo team-cell-link" onClick={stopAndGo}>
           {match.awayLogo && <img src={sizedImage(match.awayLogo, 24)} alt="" className="team-logo" loading="lazy" />}
           {match.away}
         </Link>
