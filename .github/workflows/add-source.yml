@@ -522,17 +522,31 @@ jobs:
             const leagues = await get("https://sports.core.api.espn.com/v2/sports/soccer/leagues?limit=400", H);
             const items = leagues.json?.items ?? [];
             say(`  ESPN lists ${items.length} soccer leagues (HTTP ${leagues.status})`);
-            // The list is references, so resolve only enough of them to
-            // find Armenia rather than fetching four hundred.
-            let armenian = [];
-            for (const ref of items.slice(0, 400)) {
-              const url = typeof ref === "string" ? ref : ref?.$ref;
-              if (!url) continue;
-              if (!/arm/i.test(url)) continue;
-              armenian.push(url.replace(/^https?:\/\/[^/]+/, "").split("?")[0]);
+            // Searching the slugs for "arm" was not a real search. The
+            // Armenian Premier League's title sponsor is Fastex and its
+            // official name is the Fastex Armenian Premier League, so a
+            // listing could carry it under Fastex, or under Bardzragujn,
+            // with nothing in the slug to match. Open every one of the two
+            // hundred-odd leagues and read its name.
+            const refs = items.map((ref) => (typeof ref === "string" ? ref : ref?.$ref)).filter(Boolean);
+            const named = [];
+            for (let i = 0; i < refs.length; i += 25) {
+              const batch = await Promise.all(refs.slice(i, i + 25).map((u) => get(u, H)));
+              for (const r of batch) {
+                const j = r.json;
+                if (j?.name || j?.slug) named.push({ name: j.name ?? "", slug: j.slug ?? "", abbr: j.abbreviation ?? "" });
+              }
             }
-            say(`  league paths containing "arm": ${armenian.length ? armenian.join(", ").slice(0, 300) : "none"}`);
-            for (const slug of ["arm.1", "arm.premier", "arm.premier_league", "armenia.1", "arm.bardzragujn"]) {
+            say(`  read ${named.length} league names`);
+            const HUNT = /armen|fastex|bardzr|hayastan|yerevan/i;
+            const hits = named.filter((l) => HUNT.test(`${l.name} ${l.slug} ${l.abbr}`));
+            say(`  matching armen|fastex|bardzr|hayastan|yerevan: ${hits.length}`);
+            for (const h of hits) say(`      ${h.slug} - ${h.name}`);
+            // And the neighbours, so the shape of ESPN's coverage of small
+            // European leagues is visible rather than guessed.
+            const small = named.filter((l) => /georgia|azerbaijan|kazakh|belarus|moldova|albania|cyprus|malta/i.test(l.name));
+            say(`  comparable small leagues it does carry: ${small.length ? small.map((l) => l.slug).join(", ").slice(0, 240) : "none"}`);
+            for (const slug of ["arm.1", "arm.premier", "arm.premier_league", "armenia.1", "arm.bardzragujn", "fastex.1", "arm.fastex"]) {
               const r = await get(`https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard`, H);
               say(`      ${slug.padEnd(22)} HTTP ${r.status}${r.ok ? `, ${(r.json?.events ?? []).length} fixtures` : ""}`);
             }
@@ -699,7 +713,15 @@ jobs:
           say("=== Any free source at all for the Armenian Premier League ===");
           {
             const db = "https://www.thesportsdb.com/api/v1/json/3";
-            const arm = await get(`${db}/search_all_leagues.php?c=Armenia&s=Soccer`);
+            // Under the sponsored name as well: a database that files the
+            // league as "Fastex Armenian Premier League" would still be
+            // found by country, but the id and the season strings can
+            // differ, and it is worth knowing which name it answers to.
+            const byName = await get(`${db}/search_all_leagues.php?c=Armenia&s=Soccer`);
+            const fastex = await get(`${db}/searchleagues.php?l=${encodeURIComponent("Fastex Armenian Premier League")}`);
+            say(`  searched by sponsored name: HTTP ${fastex.status}, ${Array.isArray(fastex.json?.leagues) ? fastex.json.leagues.length : 0} result(s)`);
+            if (Array.isArray(fastex.json?.leagues)) for (const l of fastex.json.leagues.slice(0, 3)) say(`      ${l.idLeague} ${l.strLeague} (${l.strLeagueAlternate ?? "no alternate name"})`);
+            const arm = byName;
             const leagues = arm.json?.countries;
             say(`  TheSportsDB lists ${Array.isArray(leagues) ? leagues.length : 0} Armenian leagues`);
             const top = Array.isArray(leagues) ? leagues.find((l) => /premier/i.test(l.strLeague ?? "")) : null;
