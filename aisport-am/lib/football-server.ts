@@ -58,6 +58,33 @@ export async function getStandings(code: string): Promise<{ rows: StandingRow[];
     }
   }
 
+  // ESPN first, for every league it has.
+  //
+  // It is free and it answers this Worker in about 140ms - measured from
+  // the deployed site, not from a runner, because site.api.espn.com refuses
+  // Cloudflare's addresses while site.web.api.espn.com does not. The table
+  // it returns is the same table: twenty teams, played, won, drawn, lost,
+  // goal difference, points.
+  //
+  // Armenia is the exception and stays on the paid provider: ESPN's own
+  // list has 218 soccer leagues and the Armenian Premier League is not one
+  // of them. So ESPN_SLUG_BY_CODE has no ARM entry, espnStandings returns
+  // null for it, and this falls through untouched.
+  //
+  // On failure it also falls through rather than showing an empty table.
+  // A free source is worth having; it is not worth a blank league page.
+  try {
+    const { espnStandings } = await import("./espn");
+    const rows = await espnStandings(code);
+    if (rows && rows.length) {
+      if (db) {
+        await db.prepare("INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0")
+          .bind(cacheKey, JSON.stringify(rows), Date.now()).run();
+      }
+      return { rows, demo: false };
+    }
+  } catch { /* the paid provider below is the fallback */ }
+
   try {
     const response = await fetch(`https://v3.football.api-sports.io/standings?league=${leagueId}&season=${season}`, {
       headers: { "x-apisports-key": key, Accept: "application/json" },

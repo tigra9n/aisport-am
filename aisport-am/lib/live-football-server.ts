@@ -142,25 +142,71 @@ function toSortable(fx:ApiFootballFixture):SortableMatch|null{
   };
 }
 
+// The Armenian competitions, which are the only ones ESPN does not carry.
+// Everything else on the board comes from ESPN now; these two still cost a
+// paid request, and they are the reason the subscription is not cancelled
+// outright.
+const ARMENIAN_LEAGUE_IDS=[342,709];
+
 export async function getLiveMatches(dayOffset=0,allowProviderRequest=true){
   const {env}=await import("cloudflare:workers");
   const runtime=env as unknown as Record<string,string|undefined>;
   const date=yerevanDate(Number.isInteger(dayOffset)?Math.max(-7,Math.min(7,dayOffset)):0);
   const updatedAt=formatTimeYerevan(new Date());
   const key=runtime.API_FOOTBALL_KEY;
-  if(!key)return{matches:[],demo:false,unavailable:true,limited:true,updatedAt};
   const ttl=dayOffset===0?480:1800;
-  const data=await cachedFetch<{response?:ApiFootballFixture[]}>(
-    `apifootball:v3:date:${date}`,
-    `https://v3.football.api-sports.io/fixtures?date=${date}`,
-    {"x-apisports-key":key},
-    ttl,
-    allowProviderRequest,
-  );
-  if(!data)return{matches:[],demo:false,unavailable:true,limited:true,updatedAt};
-  const matches=(data.response??[])
-    .map(toSortable)
-    .filter((x):x is SortableMatch=>Boolean(x))
-    .sort((a,b)=>a.priority-b.priority||Number(b.isLive)-Number(a.isLive)||a.timestamp-b.timestamp);
-  return{matches:matches.map(({priority,timestamp,...m})=>m),demo:false,unavailable:false,limited:false,updatedAt};
+
+  // ESPN carries every competition on this board except the Armenian ones,
+  // it is free, and it answers this Worker in about a tenth of a second.
+  // Measured from the deployed site rather than from a runner, because
+  // site.api.espn.com refuses Cloudflare's addresses outright while
+  // site.web.api.espn.com does not.
+  //
+  // The two sources are merged rather than one replacing the other: the
+  // Armenian league is why this site exists and ESPN's own list of 218
+  // soccer leagues does not contain it. Armenia keeps the paid provider and
+  // sorts to the top, as it always has.
+  const espnMatches=await (async()=>{
+    try{
+      const {espnMatchesForDate}=await import("./espn");
+      const cacheKey=`espn:date:${date}`;
+      const db=(env as unknown as {DB?:D1Database}).DB;
+      if(db){
+        await ensureCacheTable(db);
+        const row=await db.prepare("SELECT payload,saved_at AS savedAt FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{payload:string;savedAt:number}>();
+        if(row?.savedAt&&Date.now()-row.savedAt<ttl*1000){
+          try{return JSON.parse(row.payload) as LiveMatch[]}catch{/* refetch */}
+        }
+      }
+      if(!allowProviderRequest)return [];
+      const fresh=await espnMatchesForDate(date);
+      if(fresh.length&&db){
+        await db.prepare("INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0")
+          .bind(cacheKey,JSON.stringify(fresh),Date.now()).run();
+      }
+      return fresh;
+    }catch{return []}
+  })();
+
+  // Armenia, and nothing else, from the provider that has it.
+  let armenian:LiveMatch[]=[];
+  if(key){
+    const data=await cachedFetch<{response?:ApiFootballFixture[]}>(
+      `apifootball:v3:date:${date}`,
+      `https://v3.football.api-sports.io/fixtures?date=${date}`,
+      {"x-apisports-key":key},
+      ttl,
+      allowProviderRequest,
+    );
+    const sortable=(data?.response??[])
+      .filter(fx=>ARMENIAN_LEAGUE_IDS.includes(fx.league.id))
+      .map(toSortable)
+      .filter((x):x is SortableMatch=>Boolean(x))
+      .sort((a,b)=>a.priority-b.priority||Number(b.isLive)-Number(a.isLive)||a.timestamp-b.timestamp);
+    armenian=sortable.map(({priority,timestamp,...m})=>m);
+  }
+
+  const matches=[...armenian,...espnMatches];
+  if(!matches.length)return{matches:[],demo:false,unavailable:true,limited:true,updatedAt};
+  return{matches,demo:false,unavailable:false,limited:false,updatedAt};
 }

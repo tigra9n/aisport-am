@@ -273,7 +273,8 @@ type EspnSummary = {
     text?: string;
   }[];
   seasonseries?: { events?: { date?: string; competitors?: EspnCompetitor[] }[] }[];
-  gameInfo?: { venue?: { fullName?: string }; officials?: { displayName?: string }[] };
+  gameInfo?: { venue?: { fullName?: string }; officials?: { displayName?: string }[]; attendance?: number };
+  commentary?: { time?: { displayValue?: string }; text?: string; play?: { text?: string } }[];
 };
 
 const STAT_LABEL: Record<string, string> = {
@@ -339,6 +340,19 @@ export type EspnMatchDetail = {
   lineups: { team: string; formation: string; starters: EspnPlayerLine[]; substitutes: EspnPlayerLine[] }[];
   statistics: { team: string; rows: { label: string; value: string }[] }[];
   h2h: { date: string; competition: string; home: string; away: string; homeScore: number | null; awayScore: number | null }[];
+  attendance: number | null;
+  // Minute-by-minute text for the whole match, which API-Football never
+  // gave the page at any price.
+  //
+  // This is the one thing here that is ESPN's writing rather than ESPN's
+  // facts. A score, a scorer, a card and a substitution are facts and free
+  // to anyone; "Arsenal are pressing high and Chelsea look rattled" is a
+  // sentence somebody wrote. Tigran was told the difference and chose to
+  // carry it anyway - his call, his site. What is not optional is saying
+  // where it came from, so the page credits ESPN beside it. Publishing
+  // someone's writing unattributed is a different thing from publishing it.
+  commentary: { minute: string; text: string }[];
+  commentarySource: string | null;
 };
 
 export async function espnMatchDetail(eventId: string, leagueSlug: string): Promise<EspnMatchDetail | null> {
@@ -402,5 +416,10 @@ export async function espnMatchDetail(eventId: string, leagueSlug: string): Prom
         awayScore: away?.score === undefined ? null : Number(away.score),
       };
     }).filter((m) => m.home && m.away),
+    attendance: data.gameInfo?.attendance ?? null,
+    commentary: (data.commentary ?? [])
+      .map((c) => ({ minute: c.time?.displayValue ?? "", text: (c.text ?? c.play?.text ?? "").trim() }))
+      .filter((c) => c.text),
+    commentarySource: (data.commentary ?? []).some((c) => (c.text ?? c.play?.text ?? "").trim()) ? "ESPN" : null,
   };
 }
