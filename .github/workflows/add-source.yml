@@ -500,12 +500,18 @@ jobs:
             // A match that is actually being played, so the empty fields
             // are ESPN's answer rather than the fixture's.
             let live = null;
-            for (const slug of ["esp.1", "eng.1", "ita.1", "ger.1", "fra.1", "usa.1", "uefa.champions"]) {
+            for (const slug of ["usa.1", "mex.1", "bra.1", "arg.1", "esp.1", "eng.1", "ita.1", "ger.1", "fra.1", "uefa.champions", "conmebol.libertadores", "concacaf.league"]) {
               const r = await get(`https://site.api.espn.com/apis/site/v2/sports/soccer/${slug}/scoreboard`, H);
               const running = (r.json?.events ?? []).find((e) => e.status?.type?.state === "in")
                 ?? (r.json?.events ?? []).find((e) => e.status?.type?.completed);
               if (running) { live = { slug, id: running.id, name: running.name, state: running.status?.type?.state }; break; }
             }
+            // Player statistics were reported missing after looking in
+            // boxscore.players, which is ESPN's shape for the American
+            // sports. In soccer the per-player numbers hang off the roster
+            // entries instead, so "not there" may only have meant "wrong
+            // drawer". Print the real shape rather than testing guesses,
+            // and do it on a match that is actually being played.
             if (!live) say("  no match in play or completed to inspect");
             else {
               const r = await get(`https://site.api.espn.com/apis/site/v2/sports/soccer/${live.slug}/summary?event=${live.id}`, H);
@@ -517,12 +523,31 @@ jobs:
               has("named starters in a roster", Array.isArray(j.rosters?.[0]?.roster) && j.rosters[0].roster.length > 0);
               has("formation", Boolean(j.rosters?.[0]?.formation));
               has("team statistics", Array.isArray(j.boxscore?.teams) && j.boxscore.teams.length > 0);
-              has("player statistics", Array.isArray(j.boxscore?.players) && j.boxscore.players.length > 0);
               has("commentary", Array.isArray(j.commentary) && j.commentary.length > 0);
               has("previous meetings (seasonseries)", Array.isArray(j.seasonseries) && j.seasonseries.length > 0);
               has("last five games", Boolean(j.lastFiveGames));
-              const stat = j.boxscore?.teams?.[0]?.statistics?.slice(0, 6) ?? [];
-              say(`  team statistics offered: ${stat.map((x) => x.name ?? x.label).join(", ").slice(0, 200)}`);
+              const stat = j.boxscore?.teams?.[0]?.statistics ?? [];
+              say(`  ALL team statistics (${stat.length}): ${stat.map((x) => x.name ?? x.label).join(", ").slice(0, 500)}`);
+
+              say("  --- where the player numbers really live ---");
+              say(`  boxscore keys: ${Object.keys(j.boxscore ?? {}).join(", ")}`);
+              say(`  boxscore.players: ${Array.isArray(j.boxscore?.players) ? `${j.boxscore.players.length} entries` : "absent"}`);
+              const roster = j.rosters?.[0];
+              say(`  rosters[0] keys: ${Object.keys(roster ?? {}).join(", ")}`);
+              const player = roster?.roster?.[0];
+              say(`  rosters[0].roster[0] keys: ${Object.keys(player ?? {}).join(", ")}`);
+              const stats = player?.stats ?? player?.statistics;
+              if (Array.isArray(stats) && stats.length) {
+                say(`  a named player: ${player?.athlete?.displayName ?? "?"} - ${stats.length} numbers`);
+                say(`      ${stats.slice(0, 14).map((x) => `${x.name ?? x.abbreviation}=${x.value ?? x.displayValue}`).join(", ").slice(0, 400)}`);
+              } else {
+                say(`  no stats array on a roster entry (keys seen: ${Object.keys(player ?? {}).join(", ")})`);
+              }
+              // The leaders block is ESPN's other home for per-player
+              // numbers, and the key events name the scorers outright.
+              say(`  leaders: ${Array.isArray(j.leaders) ? `${j.leaders.length} groups` : "absent"}`);
+              const ev = j.keyEvents?.[0];
+              if (ev) say(`  a key event: ${ev.clock?.displayValue ?? "?"} ${ev.type?.text ?? ""} - ${(ev.athletesInvolved ?? []).map((a) => a.displayName).join(", ") || ev.text?.slice(0, 60)}`);
             }
           }
 
