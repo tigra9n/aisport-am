@@ -1149,37 +1149,6 @@ jobs:
           console.log(out.join("\n"));
           JS
           node ffa.mjs
-
-      - name: Does ESPN answer the Worker itself
-        if: ${{ github.event.inputs.livescore != 'no' && github.event.inputs.espn == 'no' }}
-        env:
-          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
-        run: |
-          echo "=== asking from inside the Cloudflare Worker ==="
-          curl -s --max-time 60 "https://aisport.am/api/diag/espn?token=${CRON_TOKEN}" \
-            | node -e "
-              let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
-                let j; try{ j=JSON.parse(d) }catch{ console.log('  not json: '+d.slice(0,200)); return }
-                if (j.error) { console.log('  '+j.error+' - is the route deployed?'); return }
-                console.log('  colo: '+(j.colo??'?')+'  VERDICT: '+j.verdict);
-                for (const c of j.armenianClubsInEspn ?? []) {
-                  console.log('    espn knows '+String(c.name).padEnd(16)+' -> '+(Array.isArray(c.found)&&c.found.length?c.found.join(' | '):'nothing'));
-                }
-                for (const r of j.results ?? []) {
-                  console.log('    '+String(r.label).padEnd(24)+' HTTP '+r.status+'  '+r.ms+'ms'+(r.events!==null?('  '+r.events+' fixtures'):'')+(r.body?('  '+r.body.replace(/\\s+/g,' ').slice(0,70)):''));
-                }
-              })"
-
-      # ESPN names clubs differently from the provider the Armenian table
-      # was built against - "Tottenham Hotspur" where it said "Tottenham",
-      # "Wolverhampton Wanderers" where it said "Wolves" - and a name the
-      # table misses falls through to the transliterator, which spells it
-      # out letter by letter. That is the most visible thing on the board,
-      # so count the misses rather than wait for a reader to find them.
-      # Settled: all 214 club names across the ten competitions read
-      # correctly, and eighteen tests hold them there. Two hundred lines of
-      # log for a question already answered buried the answers below it, so
-      # it moves behind 'all' with the other settled probes.
       - name: Which ESPN club names the Armenian table does not know
         if: ${{ github.event.inputs.livescore == 'all' && github.event.inputs.espn == 'no' }}
         run: |
@@ -1563,6 +1532,37 @@ jobs:
           JS
           node espn-probe.mjs
 
+
+      - name: Does ESPN answer the Worker itself
+        if: ${{ github.event.inputs.livescore != 'no' && github.event.inputs.espn == 'no' }}
+        env:
+          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
+        run: |
+          echo "=== asking from inside the Cloudflare Worker ==="
+          curl -s --max-time 60 "https://aisport.am/api/diag/espn?token=${CRON_TOKEN}" \
+            | node -e "
+              let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>{
+                let j; try{ j=JSON.parse(d) }catch{ console.log('  not json: '+d.slice(0,200)); return }
+                if (j.error) { console.log('  '+j.error+' - is the route deployed?'); return }
+                console.log('  colo: '+(j.colo??'?')+'  VERDICT: '+j.verdict);
+                for (const c of j.armenianClubsInEspn ?? []) {
+                  console.log('    espn knows '+String(c.name).padEnd(16)+' -> '+(Array.isArray(c.found)&&c.found.length?c.found.join(' | '):'nothing'));
+                }
+                for (const r of j.results ?? []) {
+                  console.log('    '+String(r.label).padEnd(24)+' HTTP '+r.status+'  '+r.ms+'ms'+(r.events!==null?('  '+r.events+' fixtures'):'')+(r.body?('  '+r.body.replace(/\\s+/g,' ').slice(0,70)):''));
+                }
+              })"
+
+      # ESPN names clubs differently from the provider the Armenian table
+      # was built against - "Tottenham Hotspur" where it said "Tottenham",
+      # "Wolverhampton Wanderers" where it said "Wolves" - and a name the
+      # table misses falls through to the transliterator, which spells it
+      # out letter by letter. That is the most visible thing on the board,
+      # so count the misses rather than wait for a reader to find them.
+      # Settled: all 214 club names across the ten competitions read
+      # correctly, and eighteen tests hold them there. Two hundred lines of
+      # log for a question already answered buried the answers below it, so
+      # it moves behind 'all' with the other settled probes.
       - name: What the sources table holds now
         if: ${{ github.event.inputs.livescore == 'no' && github.event.inputs.espn == 'no' }}
         run: |
