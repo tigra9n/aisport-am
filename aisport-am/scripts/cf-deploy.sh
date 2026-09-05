@@ -105,13 +105,26 @@ if [ -n "${GEMINI_API_KEY:-}" ]; then
 fi
 
 # Pinned explicitly rather than left unset. A worker secret survives being
-# removed from this script, so if CONTENT_MODEL_PROVIDER is ever set to
-# "gemini" to move generation off Claude wholesale, deleting that line
-# later would NOT undo it - the stored secret would keep saying "gemini".
-# Writing "claude" on every deploy makes the primary provider a property
-# of this file, so reverting really is a one-line change here.
-echo "== Pinning CONTENT_MODEL_PROVIDER=claude on the worker =="
-echo "claude" | npx wrangler secret put CONTENT_MODEL_PROVIDER --name "$WORKER_NAME"
+# removed from this script, so whichever provider is named here has to be
+# named on every deploy; deleting the line would leave the stored secret
+# saying whatever it last said. Writing it each time makes the primary
+# provider a property of this file, so switching is a one-line change.
+#
+# 5 September: switched to gemini. The Anthropic balance is down to ten
+# cents and Tigran is deciding whether to keep paying for the site at all,
+# so generation runs on Gemini's free tier until that is settled. This is
+# the scenario lib/content-generation.ts was built for.
+#
+# It is a downgrade, not a like-for-like swap, and the cost is worth
+# writing down: Gemini is the cheaper model and carries the hazard Haiku
+# already demonstrated here - it once returned an opera review in place of
+# a footballer - while parseArticleJson only checks that the JSON is well
+# formed, never that the article is about the story it was given. Nothing
+# else catches it. Read the site.
+#
+# Change this word back to "claude" to revert; nothing else needs touching.
+echo "== Pinning CONTENT_MODEL_PROVIDER=gemini on the worker =="
+echo "gemini" | npx wrangler secret put CONTENT_MODEL_PROVIDER --name "$WORKER_NAME"
 
 echo "== Deploy complete =="
 
