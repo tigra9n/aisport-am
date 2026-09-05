@@ -1139,6 +1139,17 @@ jobs:
           const wrong = ["Տոտտենհամ", "Նեվկաստլե", "Ունիտեդ", "Րեդ", "Ագֆ", "Ոֆի", "Ֆկ Կոլոգնե"];
           const stillWrong = wrong.filter((w) => st.html.includes(w) || live.html.includes(w));
           say(`  old misspellings still on the site: ${stillWrong.join(", ") || "none"}`);
+
+          // The Armenian table is the reason this site exists, and it came
+          // back holding four of its clubs. Read the source directly, last in
+          // the log so it is not buried under two hundred club names.
+          say("");
+          const sdb = await get("https://www.thesportsdb.com/api/v1/json/3/lookuptable.php?l=4619&s=2026-2027");
+          let table = null;
+          try { table = JSON.parse(sdb.html).table; } catch { /* 429 is HTML */ }
+          say(`=== TheSportsDB Armenian table -> HTTP ${sdb.status}, ${Array.isArray(table) ? table.length : 0} rows ===`);
+          if (Array.isArray(table)) for (const r of table) say(`      ${r.intRank}. ${r.strTeam}  ${r.intPoints} pts (${r.intPlayed} played)`);
+          else say(`      ${sdb.html.slice(0, 120).replace(/\s+/g, " ")}`);
           console.log(out.join("\n"));
           JS
           node pages.mjs
