@@ -391,10 +391,8 @@ jobs:
       #
       # Nothing here decides anything. It replaces documentation with what
       # the endpoints actually return.
-      # Settled. Its answer is in the comment above; it only runs when
-      # asked for explicitly, because its output buries what is still open.
       - name: What the free livescore APIs really return
-        if: ${{ github.event.inputs.livescore == 'all' }}
+        if: ${{ github.event.inputs.livescore != 'no' }}
         env:
           FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
@@ -418,11 +416,32 @@ jobs:
             }
           }
 
-          say("=== API-Football, the paid one, as the baseline ===");
+          say("=== API-Sports: the plan, and what today actually cost ===");
           {
-            const s = await get("https://v3.football.api-sports.io/status", { "x-apisports-key": process.env.API_FOOTBALL_KEY ?? "" });
-            const r = s.json?.response ?? {};
-            say(`  plan ${r.subscription?.plan ?? "?"} | today ${r.requests?.current ?? "?"} of ${r.requests?.limit_day ?? "?"} requests used`);
+            // This printed "plan ? | today ? of ?" for four runs because the
+            // response was read as {response:{...}} when the key is present
+            // and something else when it is not, and nothing said which had
+            // happened. The number decides whether anything else needs
+            // moving at all - if what is left fits inside the free plan's
+            // hundred a day, the remaining files stay where they are and
+            // the code stays simple - so it is worth reading properly.
+            const key = process.env.API_FOOTBALL_KEY ?? "";
+            say(`  key present: ${key ? `yes, ends ...${key.slice(-4)}` : "NO - that is why this section was empty"}`);
+            const s = await get("https://v3.football.api-sports.io/status", { "x-apisports-key": key });
+            say(`  HTTP ${s.status}`);
+            if (!s.json) { say(`  body: ${s.text.slice(0, 200)}`); }
+            else {
+              const r = s.json.response ?? s.json;
+              const sub = r.subscription ?? {};
+              const req = r.requests ?? {};
+              say(`  account: ${r.account?.email ?? r.account?.firstname ?? "?"}`);
+              say(`  plan: ${sub.plan ?? "?"}  active: ${sub.active ?? "?"}  ends: ${sub.end ?? "?"}`);
+              say(`  TODAY: ${req.current ?? "?"} of ${req.limit_day ?? "?"} requests used`);
+              if (typeof req.current === "number" && typeof req.limit_day === "number") {
+                say(`  ${req.current <= 100 ? "FITS" : "does NOT fit"} inside the free plan's hundred a day`);
+              }
+              if (s.json.errors && Object.keys(s.json.errors).length) say(`  errors: ${JSON.stringify(s.json.errors).slice(0, 200)}`);
+            }
           }
 
           say("");
