@@ -1639,6 +1639,13 @@ jobs:
           npx wrangler d1 execute aisport-db --remote --json --command \
             "SELECT category, COUNT(*) AS n, MAX(published_at) AS newest FROM articles WHERE published_at > datetime('now','-2 days') GROUP BY category ORDER BY n DESC" \
             > bycat.json 2>&1 || true
+          # Every tick the cron route took, and what it decided. Publishing
+          # stopped at 01:51 Yerevan with an hour of the window left, and the
+          # article table cannot say whether the tick never came, was
+          # refused, or failed - only this can.
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT ts, forced, mode, generated, reason FROM cron_invocations ORDER BY id DESC LIMIT 20" \
+            > cron.json 2>&1 || true
           node -e "
             const fs=require('fs');
             const read=(f)=>{ const raw=fs.readFileSync(f,'utf8'); try{ return JSON.parse(raw.slice(raw.indexOf('[')))[0].results||[] }catch(e){ console.log('  '+raw.slice(0,300)); return [] } };
@@ -1651,6 +1658,11 @@ jobs:
             console.log('=== two days, by section ===');
             for(const r of read('bycat.json')){
               console.log('  '+String(r.category??'?').padEnd(24)+String(r.n).padStart(4)+'   newest '+String(r.newest).slice(0,16));
+            }
+            console.log('');
+            console.log('=== the last 20 cron ticks ===');
+            for(const r of read('cron.json')){
+              console.log('  '+String(r.ts).slice(0,16).padEnd(17)+String(r.mode??'?').padEnd(10)+String(r.generated??0)+'  '+String(r.reason??'').slice(0,80));
             }
           "
         env:
