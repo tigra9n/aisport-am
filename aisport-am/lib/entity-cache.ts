@@ -158,11 +158,31 @@ export async function espnTwinUrl(legacyId: number): Promise<string | null> {
 
   let url: string | null = null;
   try {
-    const known = await knownTeam(legacyId);
-    if (known?.name) {
-      const { findEspnTeamByName, espnKey } = await import("./espn");
-      const team = await findEspnTeamByName(known.name);
-      url = team ? `/team/${espnKey(team.id)}` : null;
+    // The proved map first.
+    //
+    // What follows it resolves the old number to a club NAME and then
+    // looks that name up among ESPN's clubs, which is a guess: two clubs
+    // whose names look alike send a reader who clicked on one to the
+    // other, permanently, with a 301. lib/team-map.ts holds two hundred
+    // and seven pairs that were not guessed - both providers' squads were
+    // fetched and share at least four surnames - so those are answered
+    // from the table and never reach the name matcher.
+    //
+    // It is also free and instant: no fetch, no seventeen ESPN league
+    // lists, which is what made the Armenian club page slow enough to be
+    // reported by a reader.
+    const { espnTeamFor } = await import("./team-map");
+    const proved = espnTeamFor(legacyId);
+    if (proved) {
+      const { espnKey } = await import("./espn");
+      url = `/team/${espnKey(proved)}`;
+    } else {
+      const known = await knownTeam(legacyId);
+      if (known?.name) {
+        const { findEspnTeamByName, espnKey } = await import("./espn");
+        const team = await findEspnTeamByName(known.name);
+        url = team ? `/team/${espnKey(team.id)}` : null;
+      }
     }
   } catch { /* remembered as a miss, and asked again tomorrow */ }
 
@@ -172,4 +192,90 @@ export async function espnTwinUrl(legacyId: number): Promise<string | null> {
     } catch { /* not being able to remember is not a reason to fail */ }
   }
   return url;
+}
+
+/**
+ * Where an indexed /player/<n> should go now, or null.
+ *
+ * The club map cannot answer this - it maps clubs, and there are
+ * thousands of footballers - so this is decided on the name, by
+ * chooseAthlete, which refuses a family name two men share unless the
+ * club separates them. A wrong answer here is a permanent redirect
+ * telling a reader that one footballer is another, so refusing is the
+ * default and the caller renders the page it always did.
+ *
+ * Nothing is fetched. Both sides are already in this site's own cache:
+ * the ESPN athlete indexes that the scoring charts build, and the name
+ * the top-scorer rows carry. That matters because the alternative - a
+ * roster fetch per league on a page view - is exactly what made the
+ * Armenian club page slow enough for a reader to notice.
+ */
+export async function espnPlayerTwinUrl(legacyId: number): Promise<string | null> {
+  const { env } = await import("cloudflare:workers");
+  const db = (env as unknown as { DB?: D1Database }).DB;
+  const cacheKey = `espn:playertwin:${legacyId}`;
+  const remember = async (found: string | null) => {
+    if (db) {
+      try {
+        await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey, found ?? "", Date.now()).run();
+      } catch { /* not being able to remember is not a reason to fail */ }
+    }
+    return found;
+  };
+  if (db) {
+    try {
+      await db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();
+      const row = await db.prepare("SELECT payload,saved_at AS savedAt FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{ payload: string; savedAt: number }>();
+      if (row?.savedAt) {
+        // A hit is remembered for a month, a miss for a day: the athlete
+        // indexes fill in over time, so today's "nobody" can be tomorrow's
+        // answer.
+        const ttl = row.payload ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+        if (Date.now() - row.savedAt < ttl) return row.payload || null;
+      }
+    } catch { /* the table may not exist yet on a cold worker */ }
+  }
+
+  let url: string | null = null;
+  try {
+    // The proved map first, for the same reason the club page has one.
+    //
+    // What follows it matches a name against every footballer in ten
+    // leagues at once, and it refused the first four legacy URLs asked of
+    // it on the deployed site: a footballer gets an answer there only if a
+    // cached scoring chart or squad already knows him, which most do not.
+    // lib/player-map.ts is built the other way round - inside one squad,
+    // where twenty-eight team-mates are the whole field and a family name
+    // means something.
+    const { espnAthleteFor } = await import("./player-map");
+    const proved = espnAthleteFor(legacyId);
+    if (proved) {
+      const { espnKey } = await import("./espn");
+      return await remember(`/player/${espnKey(proved)}`);
+    }
+    const known = await knownPlayer(legacyId);
+    if (known?.name) {
+      const { ESPN_SLUG_BY_CODE, espnKey } = await import("./espn");
+      const { chooseAthlete } = await import("./club-match");
+      const indexes = await readCached<Record<string, { name: string; team: string }>>(
+        Object.values(ESPN_SLUG_BY_CODE).map((slug) => `espn:athletes:${slug}`),
+      );
+      const candidates = indexes.flatMap((index) =>
+        Object.entries(index ?? {}).map(([id, row]) => ({ id, name: row.name, team: row.team })),
+      );
+      // The ESPN index spells a name the way ESPN writes it; the row this
+      // started from was spelled in Armenian by armenianPlayerName. Both
+      // go through that same function here, so the comparison is between
+      // two spellings made by one hand rather than by two providers.
+      const { armenianPlayerName } = await import("./player-names-hy");
+      const found = chooseAthlete(
+        known.name,
+        candidates.map((row) => ({ ...row, name: armenianPlayerName(row.name) })),
+        known.team,
+      );
+      url = found ? `/player/${espnKey(found.id)}` : null;
+    }
+  } catch { /* remembered as a miss, and asked again tomorrow */ }
+
+  return await remember(url);
 }

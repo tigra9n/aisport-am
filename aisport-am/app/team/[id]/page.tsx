@@ -83,7 +83,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
           <small>{coach.nationality ?? ""}{coach.age ? ` · ${coach.age} տարեկան` : ""}</small>
         </div>
       </Link>
-    )}
+)}
     <div className="squad-groups">
       {groups.map((group) => (
         <section className="squad-group" key={group.position}>

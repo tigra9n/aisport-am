@@ -883,8 +883,8 @@ export async function armenianMatchesForDate(date: string): Promise<ArmenianMatc
 //              and injuries.
 //
 // They have not moved because they are one decision, not four. Every one of
-// them lives behind a URL numbered by API-Sports - /team/50 is Chelsea
-// because API-Sports says 50, and ESPN says 363 - and those URLs are the
+// them lives behind a URL numbered by API-Sports - /team/49 is Chelsea
+// because API-Sports says 49, and ESPN says 363 - and those URLs are the
 // ones Google has just started indexing after a week of work on exactly
 // that. Swapping the source without a mapping between the two numberings
 // would point every indexed team and player page at a different footballer.
@@ -1013,6 +1013,17 @@ type EspnRosterResponse = {
     position?: { name?: string; displayName?: string };
     items?: unknown[];
   }[];
+  // This field is here to be ignored, and the reason is worth keeping.
+  //
+  // MEASURED on 6 September: eng.1 team 359 - Arsenal - answers
+  // {"id":"5","firstName":"Arsene","lastName":"Wenger"}. Wenger left
+  // Arsenal in 2018. ESPN's roster carries a manager who has not managed
+  // the club for years, so this is not a free replacement for the paid
+  // coach lookup; it is a wrong fact with a name attached, which is worse
+  // than an empty space where a manager's name would go. It was shipped
+  // for about an hour before the probe that asked for his photograph
+  // printed the object and gave it away. Neither headshot address had a
+  // picture either (both 404), so there was nothing to gain.
   coach?: { id?: string; firstName?: string; lastName?: string }[];
 };
 
@@ -1032,6 +1043,7 @@ export type EspnSquad = {
   teamName: string;
   teamLogo: string | null;
   players: { id: string; name: string; number: number | null; position: string; age: number | null; photo: string | null }[];
+  // No manager here, deliberately. See the note above the roster type.
 };
 
 // One request for the whole squad, with the shirt number, the position,

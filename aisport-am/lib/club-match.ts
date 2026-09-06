@@ -69,3 +69,65 @@ export function chooseClub(ours: Set<string>, candidates: ClubCandidate[]): Club
   if (runnerUp >= best.shared) return null;
   return { id: best.candidate.id, name: best.candidate.name, shared: best.shared, runnerUp };
 }
+
+// ---------------------------------------------------------------------
+// The same question about a footballer
+// ---------------------------------------------------------------------
+//
+// An indexed /player/<n> carries API-Football's number and the free
+// source numbers footballers its own way. The club map cannot help: it
+// maps clubs, and there are thousands of players.
+//
+// What can be compared is the name, and here that is safer than it
+// sounds, because BOTH sides are already written in Armenian by the same
+// function. The cached top-scorer rows were spelled by
+// armenianPlayerName from API-Football's Latin name; the ESPN athlete
+// index is spelled by it from ESPN's. So the same footballer, written
+// "Mohamed Salah" by both providers, becomes the same Armenian string on
+// both sides - and where the providers disagree on the given name
+// ("Bobby Decordova-Reid" against "Bobby Reid") the family name still
+// agrees, exactly as it does for clubs.
+//
+// The refusals are what matter. A surname two footballers share is not
+// an answer: the site would then be telling a reader that one man is
+// another, permanently, with a 301. When a club is known it breaks a tie
+// - two men with the same surname at different clubs are separable - and
+// when it is not, nothing is written.
+
+export type AthleteCandidate = { id: string; name: string; team?: string | null };
+
+/** The footballer that one name can only mean, or null. */
+export function chooseAthlete(
+  name: string,
+  candidates: AthleteCandidate[],
+  team?: string | null,
+): AthleteCandidate | null {
+  // Hyphens are separators, not letters. "Bobby Decordova-Reid" against
+  // "Bobby Reid" is the case this exists for, and treating the hyphenated
+  // pair as one token is what made it fail.
+  const key = (value: string) => (value || "").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const family = (value: string) => {
+    const parts = key(value).split(" ").filter(Boolean);
+    return parts[parts.length - 1] ?? "";
+  };
+  // One character is not a name. It is what is left of one this site could
+  // not transliterate, and it would match any other wreck of a name.
+  if (key(name).length < 2) return null;
+
+  const only = (rows: AthleteCandidate[]): AthleteCandidate | null => {
+    if (rows.length === 1) return rows[0];
+    if (rows.length < 2 || !team) return null;
+    // The club is the tie-breaker, and only when it picks exactly one.
+    const sameClub = rows.filter((row) => key(row.team ?? "") === key(team));
+    return sameClub.length === 1 ? sameClub[0] : null;
+  };
+
+  const whole = candidates.filter((row) => key(row.name) === key(name));
+  if (whole.length) return only(whole);
+
+  const wanted = family(name);
+  // A one-letter family name is not a family name; it is what is left of a
+  // name this site could not transliterate.
+  if (wanted.length < 2) return null;
+  return only(candidates.filter((row) => family(row.name) === wanted));
+}
