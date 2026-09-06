@@ -31,6 +31,10 @@ on:
         type: choice
         options: ['no', 'yes']
         default: 'no'
+      player_id:
+        description: 'Also ask API-Football what it holds for one player id (blank = skip)'
+        required: false
+        default: ''
 
 jobs:
   names:
@@ -127,3 +131,37 @@ jobs:
             "SELECT COUNT(*) AS refusals FROM cron_invocations WHERE log LIKE '%gemini http 429%'"
           npx wrangler d1 execute aisport-db --remote --json --command \
             "SELECT substr(ts,1,10) AS day, COUNT(*) AS runs, SUM(generated) AS articles FROM cron_invocations GROUP BY day ORDER BY day DESC LIMIT 7"
+
+      # What the provider actually says about one footballer.
+      #
+      # /player/497488 answered 404 on 6 September while the club's own
+      # squad page was linking to it. The page asks three endpoints - this
+      # season, last season, the bio - and shows a 404 only when all three
+      # come back empty, so the question is which of them answered what.
+      # Guessing at that from here is how the last three wrong verdicts
+      # about a provider were reached; this asks it.
+      - name: What API-Football holds for one player
+        if: ${{ github.event.inputs.player_id != '' }}
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          PLAYER: ${{ github.event.inputs.player_id }}
+        run: |
+          cat > player-probe.mjs <<'JS'
+          const KEY = process.env.API_FOOTBALL_KEY || "";
+          const id = process.env.PLAYER;
+          const season = new Date().getUTCMonth() + 1 >= 7 ? new Date().getUTCFullYear() : new Date().getUTCFullYear() - 1;
+          const ask = async (label, path) => {
+            const r = await fetch(`https://v3.football.api-sports.io${path}`, { headers: { "x-apisports-key": KEY, Accept: "application/json" } });
+            const body = await r.text();
+            // The whole body, trimmed: the errors object is where this
+            // provider says "your plan does not include this", and that
+            // sentence is the answer if it is there.
+            console.log(`${label}: http ${r.status} ${body.slice(0, 600)}\n`);
+          };
+          await ask(`players?id=${id}&season=${season}`, `/players?id=${id}&season=${season}`);
+          await ask(`players?id=${id}&season=${season - 1}`, `/players?id=${id}&season=${season - 1}`);
+          await ask(`players/profiles?player=${id}`, `/players/profiles?player=${id}`);
+          await ask("status", "/status");
+          JS
+          node player-probe.mjs
+          rm -f player-probe.mjs

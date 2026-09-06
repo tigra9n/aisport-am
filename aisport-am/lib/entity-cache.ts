@@ -84,5 +84,40 @@ export async function knownPlayer(playerId: number): Promise<KnownPlayer | null>
       if (row.id === playerId) return { name: row.name, photo: row.photo, team: row.team };
     }
   }
+  return knownFromSquad(playerId);
+}
+
+// The squads, when the scoring charts have never heard of the man.
+//
+// MEASURED: /player/497488 answered 404 while the club's own squad page
+// was linking to it. Nothing is wrong with the link - it is an Armenian
+// league footballer, and the three API-Football endpoints the player page
+// asks (this season, last season, the bio) all came back empty for him,
+// which is what happens to a squad player who has not been used. A reader
+// who clicks a name on a squad page and is told the page does not exist
+// has been told something false: the site knew his name, his club, his
+// number and his face a moment earlier.
+//
+// So the squad row itself is the fallback. Only the API-Football squads
+// are read - the keys without "espn-" - because these ids are
+// API-Football's, and an ESPN squad numbers its players separately: the
+// same number is a different man there, and showing the wrong footballer
+// is worse than the 404 this replaces.
+async function knownFromSquad(playerId: number): Promise<KnownPlayer | null> {
+  const { env } = await import("cloudflare:workers");
+  const db = (env as unknown as { DB?: D1Database }).DB;
+  if (!db) return null;
+  try {
+    const rows = await db
+      .prepare("SELECT payload FROM api_cache WHERE cache_key LIKE 'apifootball:v5:squad:%' AND cache_key NOT LIKE 'apifootball:v5:squad:espn-%' AND payload LIKE ?")
+      .bind(`%"id":${playerId},%`)
+      .all<{ payload: string }>();
+    for (const row of rows.results ?? []) {
+      let squad: { teamName?: string; players?: { id: number; name: string; photo?: string | null }[] };
+      try { squad = JSON.parse(row.payload); } catch { continue; }
+      const player = squad.players?.find((entry) => entry.id === playerId);
+      if (player) return { name: player.name, photo: player.photo ?? null, team: squad.teamName ?? null };
+    }
+  } catch { /* the table may not exist yet on a cold worker */ }
   return null;
 }
