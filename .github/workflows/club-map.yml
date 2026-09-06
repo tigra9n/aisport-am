@@ -65,6 +65,19 @@ jobs:
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
           LEAGUES: ${{ inputs.leagues }}
         run: |
+          # Yesterday's rows, before today's are proved.
+          #
+          # The map is meant to accumulate - a club proved in an earlier
+          # run keeps its row, and a row corrected by hand is never
+          # overwritten - but the script reads what it is accumulating on
+          # to from the working tree, and a scheduled checkout is of the
+          # default branch, which does not carry this file. So the branch's
+          # copy is fetched first. Without this the "add, never replace"
+          # rule quietly becomes "replace".
+          git fetch origin claude/club-map 2>/dev/null || true
+          git show origin/claude/club-map:aisport-am/lib/team-map.ts > lib/team-map.ts 2>/dev/null \
+            && echo "starting from $(grep -c '": "' lib/team-map.ts) rows already on the branch" \
+            || echo "no map on the branch yet"
           cat > map.mts <<'TS'
           import { readFileSync, writeFileSync, existsSync } from "node:fs";
           import { chooseClub, surnameSet } from "./lib/club-match.ts";
@@ -226,6 +239,15 @@ jobs:
             "",
           ].join("\n"));
           console.log(`\nwrote aisport-am/${path}: ${Object.keys(merged).length} rows (${Object.keys(map).length} proved this run)`);
+          // The unmatched list is the part of this job a person has to
+          // read, and in the first full run it was buried under six
+          // hundred lines of test output. It is written out so the last
+          // step can print it where it will be seen.
+          writeFileSync("map-report.txt", [
+            `${Object.keys(merged).length} rows in the file, ${Object.keys(map).length} proved this run`,
+            `${unmatched.length} clubs could not prove themselves:`,
+            ...unmatched.map((line) => `  ${line}`),
+          ].join("\n"));
           TS
           npx tsx map.mts
           rm -f map.mts
@@ -245,6 +267,19 @@ jobs:
           TARGET="claude/club-map"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # The commit has to sit ON TOP of the branch, not on top of main.
+          # The first full run committed onto main and pushed at a branch
+          # that already had a commit of its own, and git refused it as a
+          # non-fast-forward - two hundred clubs proved and thrown away
+          # because of where the commit was standing. The file is carried
+          # across by hand; nothing else in the tree needs to be.
+          git fetch origin "$TARGET" 2>/dev/null || true
+          if git rev-parse --verify --quiet "refs/remotes/origin/$TARGET" >/dev/null; then
+            cp aisport-am/lib/team-map.ts "$RUNNER_TEMP/team-map.ts"
+            git checkout -q -B "$TARGET" "origin/$TARGET"
+            cp "$RUNNER_TEMP/team-map.ts" aisport-am/lib/team-map.ts
+            if [ -z "$(git status --porcelain aisport-am/lib/team-map.ts)" ]; then echo "the branch already has these rows"; exit 0; fi
+          fi
           git add aisport-am/lib/team-map.ts
           git commit -m "Map the two providers' club numbers to each other
 
@@ -260,6 +295,11 @@ jobs:
           if [ "$open" = "0" ]; then
             curl -sS -X POST -H "Authorization: Bearer $GH_TOKEN" \
               "https://api.github.com/repos/${{ github.repository }}/pulls" \
-              -d "{\"title\":\"Map the two providers' club numbers to each other\",\"head\":\"$TARGET\",\"base\":\"main\",\"body\":\"Built while both providers still answer, which is the only time it can be built: the paid plan ends on 23 September and after that there is nothing to compare against.\\n\\nEvery row was proved by squad overlap, not by name. The two clubs' published squads share at least four surnames and no other club in the league shares as many; two different clubs do not share four players. The rule is in lib/club-match.ts and is unit-tested. A club that could not prove itself is absent from the file and is listed in the run log by name, to be resolved by hand.\\n\\nThis file changes nothing on its own - nothing reads it yet.\"}" >/dev/null
+              -d "{\"title\":\"Map the two providers' club numbers to each other\",\"head\":\"$TARGET\",\"base\":\"main\",\"body\":\"Built while both providers still answer, which is the only time it can be built: the paid plan ends on 23 September and after that there is nothing to compare against.\\n\\nEvery row was proved by squad overlap, not by name. The two clubs' published squads share at least four surnames and no other club in the league shares as many; two different clubs do not share four players. The rule is in lib/club-match.ts and is unit-tested. A club that could not prove itself is absent from the file and is named in the run log, to be resolved by hand.\\n\\nThis file changes nothing on its own - nothing reads it yet.\"}" >/dev/null
             echo "opened a pull request on $TARGET"
           fi
+
+      # Last, so it is the part of the log that is actually read.
+      - name: Say which clubs still need a hand
+        if: always()
+        run: cat map-report.txt 2>/dev/null || echo "no report written"
