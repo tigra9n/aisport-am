@@ -214,6 +214,14 @@ export async function espnPlayerTwinUrl(legacyId: number): Promise<string | null
   const { env } = await import("cloudflare:workers");
   const db = (env as unknown as { DB?: D1Database }).DB;
   const cacheKey = `espn:playertwin:${legacyId}`;
+  const remember = async (found: string | null) => {
+    if (db) {
+      try {
+        await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey, found ?? "", Date.now()).run();
+      } catch { /* not being able to remember is not a reason to fail */ }
+    }
+    return found;
+  };
   if (db) {
     try {
       await db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();
@@ -230,6 +238,21 @@ export async function espnPlayerTwinUrl(legacyId: number): Promise<string | null
 
   let url: string | null = null;
   try {
+    // The proved map first, for the same reason the club page has one.
+    //
+    // What follows it matches a name against every footballer in ten
+    // leagues at once, and it refused the first four legacy URLs asked of
+    // it on the deployed site: a footballer gets an answer there only if a
+    // cached scoring chart or squad already knows him, which most do not.
+    // lib/player-map.ts is built the other way round - inside one squad,
+    // where twenty-eight team-mates are the whole field and a family name
+    // means something.
+    const { espnAthleteFor } = await import("./player-map");
+    const proved = espnAthleteFor(legacyId);
+    if (proved) {
+      const { espnKey } = await import("./espn");
+      return await remember(`/player/${espnKey(proved)}`);
+    }
     const known = await knownPlayer(legacyId);
     if (known?.name) {
       const { ESPN_SLUG_BY_CODE, espnKey } = await import("./espn");
@@ -254,10 +277,5 @@ export async function espnPlayerTwinUrl(legacyId: number): Promise<string | null
     }
   } catch { /* remembered as a miss, and asked again tomorrow */ }
 
-  if (db) {
-    try {
-      await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey, url ?? "", Date.now()).run();
-    } catch { /* not being able to remember is not a reason to fail */ }
-  }
-  return url;
+  return await remember(url);
 }

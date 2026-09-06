@@ -1032,6 +1032,14 @@ export type EspnSquad = {
   teamName: string;
   teamLogo: string | null;
   players: { id: string; name: string; number: number | null; position: string; age: number | null; photo: string | null }[];
+  // The manager, whom this roster carries and API-Football charged for.
+  //
+  // A name and nothing else: no photograph, no nationality, no career.
+  // That is all ESPN publishes here, and it is still the difference
+  // between a club page that names its manager and one that does not -
+  // which is what an ESPN-keyed club page has been showing, because the
+  // paid lookup it used runs on API-Football's numbering and was skipped.
+  coach: { name: string } | null;
 };
 
 // One request for the whole squad, with the shirt number, the position,
@@ -1040,9 +1048,13 @@ export async function espnSquad(slug: string, teamId: string): Promise<EspnSquad
   const data = await espnJson<EspnRosterResponse>(`/${slug}/teams/${teamId}/roster`);
   const athletes = data?.athletes ?? [];
   if (!athletes.length) return null;
+  const manager = (data?.coach ?? []).find((person) => person?.firstName || person?.lastName);
   return {
     teamName: armenianTeamName(data?.team?.displayName ?? ""),
     teamLogo: data?.team?.logos?.[0]?.href ?? null,
+    coach: manager
+      ? { name: [manager.firstName, manager.lastName].filter(Boolean).join(" ").trim() }
+      : null,
     players: athletes
       .filter((athlete) => athlete.id && athlete.displayName)
       .map((athlete) => ({

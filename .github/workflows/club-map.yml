@@ -80,7 +80,7 @@ jobs:
             || echo "no map on the branch yet"
           cat > map.mts <<'TS'
           import { readFileSync, writeFileSync, existsSync } from "node:fs";
-          import { chooseClub, surnameSet } from "./lib/club-match.ts";
+          import { chooseAthlete, chooseClub, surnameSet } from "./lib/club-match.ts";
 
           const KEY = process.env.API_FOOTBALL_KEY || "";
           if (!KEY) { console.log("no API_FOOTBALL_KEY"); process.exit(1); }
@@ -145,6 +145,9 @@ jobs:
           const unmatched: string[] = [];
           const proved: string[] = [];
           const perLeague: string[] = [];
+          const players: Record<string, string> = {};
+          let playersProved = 0;
+          let playersRefused = 0;
 
           for (const league of only) {
             console.log(`\n=== ${league.code}  (api-football ${league.af}, espn ${league.espn}, season ${season})`);
@@ -167,6 +170,11 @@ jobs:
             // matched is scored against all of them, so without this the
             // league would cost twenty times as many requests.
             const rosters = new Map<string, Set<string>>();
+            // The roster rows themselves, kept beside the surname sets:
+            // the same fetch that proves which club is which club also
+            // holds every footballer in it, so the player map below costs
+            // no request of its own.
+            const rosterRows = new Map<string, { id: string; name: string }[]>();
             for (const team of espnTeams) {
               const data = await espn(`https://site.api.espn.com/apis/site/v2/sports/soccer/${league.espn}/teams/${team.id}/roster`) as
                 { athletes?: unknown } | null;
@@ -176,8 +184,11 @@ jobs:
                     ? (raw as { items?: unknown[] }[]).flatMap((g) => g.items ?? [])
                     : raw)
                 : [];
-              rosters.set(team.id, surnameSet((list as { lastName?: string; displayName?: string; fullName?: string }[])
-                .map((p) => p.lastName || p.displayName || p.fullName || "")));
+              const rows = (list as { id?: string | number; lastName?: string; displayName?: string; fullName?: string }[])
+                .map((p) => ({ id: String(p.id ?? ""), name: p.displayName || p.fullName || p.lastName || "" }))
+                .filter((p) => p.id && p.name);
+              rosterRows.set(team.id, rows);
+              rosters.set(team.id, surnameSet(rows.map((p) => p.name)));
             }
             const candidates = espnTeams.map((t) => ({ id: t.id, name: t.name, squad: rosters.get(t.id) ?? new Set<string>() }));
             // A competition ESPN lists teams for but publishes no rosters
@@ -197,12 +208,27 @@ jobs:
             }
 
             for (const club of afTeams) {
-              const squadPayload = await af(`/players/squads?team=${club.id}`) as { response?: { players?: { name?: string }[] }[] };
-              const ours = surnameSet((squadPayload.response?.[0]?.players ?? []).map((p) => p.name || ""));
+              const squadPayload = await af(`/players/squads?team=${club.id}`) as { response?: { players?: { id?: number; name?: string }[] }[] };
+              const squad = (squadPayload.response?.[0]?.players ?? []).filter((p) => p.id && p.name) as { id: number; name: string }[];
+              const ours = surnameSet(squad.map((p) => p.name));
               const verdict = chooseClub(ours, candidates);
               if (verdict) {
                 map[String(club.id)] = verdict.id;
                 proved.push(`${league.code}: ${club.name} (${club.id}) = ${verdict.name} (${verdict.id}), ${verdict.shared} shared, next best ${verdict.runnerUp}`);
+                // And the footballers inside it.
+                //
+                // A name is weak evidence across a league and strong
+                // evidence inside one squad: twenty-eight men, and
+                // chooseAthlete still refuses the two who share a family
+                // name. This is where the legacy /player/<number> URLs get
+                // an answer that was not guessed - the alternative, which
+                // shipped first, was matching a name against every
+                // footballer in ten leagues at once.
+                const theirs = rosterRows.get(verdict.id) ?? [];
+                for (const person of squad) {
+                  const found = chooseAthlete(person.name, theirs.map((p) => ({ id: p.id, name: p.name })));
+                  if (found) { players[String(person.id)] = found.id; playersProved += 1; } else { playersRefused += 1; }
+                }
               } else {
                 unmatched.push(`${league.code}: ${club.name} (${club.id}) - ${ours.size} surnames published, nothing proved`);
               }
@@ -257,12 +283,49 @@ jobs:
             "",
           ].join("\n"));
           console.log(`\nwrote aisport-am/${path}: ${Object.keys(merged).length} rows (${Object.keys(map).length} proved this run)`);
+
+          // The footballers, on the same rules and from the same fetches.
+          const playerPath = "lib/player-map.ts";
+          const existingPlayers: Record<string, string> = {};
+          if (existsSync(playerPath)) {
+            for (const m of readFileSync(playerPath, "utf8").matchAll(/(\d+)\s*:\s*"(\d+)"/g)) existingPlayers[m[1]] = m[2];
+          }
+          const mergedPlayers = { ...players, ...existingPlayers };
+          const playerRows = Object.entries(mergedPlayers)
+            .sort((a, b) => Number(a[0]) - Number(b[0]))
+            .map(([af, es]) => `  ${af}: "${es}",`)
+            .join("\n");
+          writeFileSync(playerPath, [
+            "// Generated by .github/workflows/club-map.yml. Rows are added, never",
+            "// replaced - a row corrected by hand stays corrected.",
+            "//",
+            "// The left number is API-Football's player id, which is what /player/<n>",
+            "// on this site runs on and what Google has indexed. The right one is",
+            "// ESPN's athlete id.",
+            "//",
+            "// Matched INSIDE one squad, never across a league. A family name is weak",
+            "// evidence among ten leagues of footballers and strong evidence among",
+            "// twenty-eight team-mates, and chooseAthlete still refuses the two who",
+            "// share one. A footballer who could not be told apart from a team-mate is",
+            "// absent, and his page renders exactly as it did before.",
+            "export const ESPN_ATHLETE_BY_API_FOOTBALL: Record<number, string> = {",
+            playerRows,
+            "};",
+            "",
+            "export function espnAthleteFor(apiFootballId: number | null | undefined): string | null {",
+            "  if (typeof apiFootballId !== \"number\") return null;",
+            "  return ESPN_ATHLETE_BY_API_FOOTBALL[apiFootballId] ?? null;",
+            "}",
+            "",
+          ].join("\n"));
+          console.log(`wrote aisport-am/${playerPath}: ${Object.keys(mergedPlayers).length} rows (${playersProved} proved this run, ${playersRefused} refused as ambiguous)`);
           // The unmatched list is the part of this job a person has to
           // read, and in the first full run it was buried under six
           // hundred lines of test output. It is written out so the last
           // step can print it where it will be seen.
           writeFileSync("map-report.txt", [
-            `${Object.keys(merged).length} rows in the file, ${Object.keys(map).length} proved this run`,
+            `${Object.keys(merged).length} clubs in the map, ${Object.keys(map).length} proved this run`,
+            `${Object.keys(mergedPlayers).length} footballers in the map, ${playersProved} proved this run, ${playersRefused} refused as ambiguous`,
             ...perLeague.map((line) => `  ${line}`),
             `${unmatched.length} clubs could not prove themselves:`,
             ...unmatched.map((line) => `  ${line}`),
@@ -282,7 +345,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if [ -z "$(git status --porcelain aisport-am/lib/team-map.ts)" ]; then echo "nothing to commit"; exit 0; fi
+          if [ -z "$(git status --porcelain aisport-am/lib/team-map.ts aisport-am/lib/player-map.ts)" ]; then echo "nothing to commit"; exit 0; fi
           TARGET="claude/club-map"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -300,13 +363,15 @@ jobs:
             # overwrite - which is how the second full run died with two
             # hundred proved clubs in the working tree.
             cp aisport-am/lib/team-map.ts "$RUNNER_TEMP/team-map.ts"
-            rm -f aisport-am/lib/team-map.ts
+            cp aisport-am/lib/player-map.ts "$RUNNER_TEMP/player-map.ts"
+            rm -f aisport-am/lib/team-map.ts aisport-am/lib/player-map.ts
             git checkout -q -B "$TARGET" "origin/$TARGET"
             cp "$RUNNER_TEMP/team-map.ts" aisport-am/lib/team-map.ts
-            if [ -z "$(git status --porcelain aisport-am/lib/team-map.ts)" ]; then echo "the branch already has these rows"; exit 0; fi
+            cp "$RUNNER_TEMP/player-map.ts" aisport-am/lib/player-map.ts
+            if [ -z "$(git status --porcelain aisport-am/lib/team-map.ts aisport-am/lib/player-map.ts)" ]; then echo "the branch already has these rows"; exit 0; fi
           fi
-          git add aisport-am/lib/team-map.ts
-          git commit -m "Map the two providers' club numbers to each other
+          git add aisport-am/lib/team-map.ts aisport-am/lib/player-map.ts
+          git commit -m "Map the two providers' club and player numbers to each other
 
           Every row was proved by squad overlap rather than by name: the
           two clubs' published squads share at least four surnames and no
