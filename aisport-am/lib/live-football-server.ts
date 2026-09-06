@@ -1,10 +1,5 @@
 import { formatTimeYerevan } from "./format-date";
 
-// Only the handful of fields the Armenian live overlay reads. The full
-// API-Football fixture type went out with the rest of that provider's path;
-// this is what is left of it.
-type ArmenianLiveFixture={fixture:{status:{short:string;elapsed?:number|null}};league:{id:number};teams:{home:{name:string}};goals:{home:number|null;away:number|null}};
-
 export type LiveMatch={id:string;status:string;competition:string;home:string;away:string;homeId:number|null;awayId:number|null;homeKey?:string|null;awayKey?:string|null;homeLogo:string|null;awayLogo:string|null;homeScore:number|null;awayScore:number|null;isLive:boolean};
 export type LineupPlayer={id:number|null;key?:string|null;name:string;number:number|null;grid:string|null;rating:string|null};
 // The optional fields at the end arrived with ESPN, which sends more than
@@ -57,8 +52,8 @@ export async function getLiveMatches(dayOffset=0,allowProviderRequest=true){
   //
   // The two sources are merged rather than one replacing the other: the
   // Armenian league is why this site exists and ESPN's own list of 218
-  // soccer leagues does not contain it. Armenia keeps the paid provider and
-  // sorts to the top, as it always has.
+  // soccer leagues does not contain it. Armenia comes from Highlightly
+  // below and sorts to the top, as it always has.
   const espnMatches=await (async()=>{
     try{
       const {espnMatchesForDate}=await import("./espn");
@@ -81,104 +76,81 @@ export async function getLiveMatches(dayOffset=0,allowProviderRequest=true){
     }catch{return []}
   })();
 
-  // Armenia, from the free source, because the paid one is being cancelled.
+  // Armenia, from Highlightly, which is now the whole of it.
   //
-  // TheSportsDB gives the fixtures and the finished results; its livescore
-  // is the one thing behind its paywall. So an Armenian match reads as
-  // scheduled while it is being played and appears with its score when it
-  // ends. That is the whole cost of the subscription going, and it is worth
-  // saying plainly rather than discovering on a Saturday evening.
+  // What this replaced, and why, MEASURED on 6 September:
   //
-  // It rate-limits Cloudflare's addresses hard - two calls in a minute from
-  // this Worker drew a 429 - so it goes through api_cache on the same
-  // window as everything else and is never asked per page view.
+  //   TheSportsDB gave the fixtures free but has no live feed, so a match
+  //     in progress sat at its kick-off time with no score - and counted
+  //     by date it had four of twelve rows wrong, two with the result on
+  //     the wrong side.
+  //   API-Football filled the minute in over the top. That was described
+  //     here as running on the free tier. It was not: the free plan serves
+  //     "only seasons between Y-4 and Y-2" - for 2026, 2022 to 2024 - on
+  //     every endpoint, /fixtures?live=all included. It was the paid key
+  //     doing that work, and on 23 September the minute would have stopped
+  //     with nothing in the logs to explain it.
+  //
+  // Highlightly answers both in one row: state.description, state.clock
+  // and state.score come back with the fixture. TheSportsDB stays behind
+  // it as the fallback, worth having when the better source is down and
+  // not otherwise.
+  //
+  // The allowance is a hundred requests a day, so the window decides when
+  // to ask: every five minutes from ten minutes before a kick-off to two
+  // and a half hours after, and once per ordinary cache window the rest of
+  // the time. The window is read off the rows already cached, so deciding
+  // costs nothing. A match day runs about thirty requests; a day with no
+  // Armenian football runs almost none.
   const armenian=await (async()=>{
+    const db=(env as unknown as {DB?:D1Database}).DB;
+    const cacheKey=`highlightly:v1:matches:${date}`;
+    const inWindow=(rows:{kickoffMs?:number|null;homeScore:number|null}[])=>{
+      const now=Date.now();
+      return rows.some(m=>{
+        if(!m.kickoffMs)return false;
+        return now>m.kickoffMs-10*60_000&&now<m.kickoffMs+150*60_000;
+      });
+    };
+    let cached:import("./espn").ArmenianMatch[]|null=null;
+    if(db){
+      await ensureCacheTable(db);
+      const row=await db.prepare("SELECT payload,saved_at AS savedAt FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{payload:string;savedAt:number}>();
+      if(row?.payload){
+        try{
+          cached=JSON.parse(row.payload) as import("./espn").ArmenianMatch[];
+          const fresh=Date.now()-row.savedAt<(inWindow(cached)?5*60_000:ttl*1000);
+          if(fresh)return cached;
+        }catch{cached=null}
+      }
+    }
+    if(!allowProviderRequest)return cached??[];
     try{
-      const {armenianMatchesForDate}=await import("./espn");
-      const cacheKey=`sportsdb:v2:armenia:${date}`;
-      const db=(env as unknown as {DB?:D1Database}).DB;
-      if(db){
-        await ensureCacheTable(db);
-        const row=await db.prepare("SELECT payload,saved_at AS savedAt FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{payload:string;savedAt:number}>();
-        if(row?.savedAt&&Date.now()-row.savedAt<ttl*1000){
-          try{return JSON.parse(row.payload) as LiveMatch[]}catch{/* refetch */}
-        }
-      }
-      if(!allowProviderRequest)return [];
-      const fresh=await armenianMatchesForDate(date);
-      if(db&&fresh.length){
-        await db.prepare("INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0")
-          .bind(cacheKey,JSON.stringify(fresh),Date.now()).run();
-      }
-      return fresh;
-    }catch{return []}
-  })();
-
-  // The Armenian minute, from API-Football's free plan.
-  //
-  // Nothing here costs money. The subscription is being cancelled and this
-  // runs on the free tier, which is not unlimited but is free: a hundred
-  // requests a day. That allowance is the whole reason this is written the
-  // way it is.
-  //
-  // TheSportsDB gives the fixtures and the finished scores for nothing but
-  // has no live feed, so a match in progress would sit at its kick-off time
-  // with no score. Asking API-Football every eight minutes around the clock
-  // would spend a hundred and eighty requests a day - more than the free
-  // plan allows - and most of them on days with no Armenian football at
-  // all. That is what makes a subscription look necessary when it is not.
-  //
-  // So the free source decides when to ask: ten minutes before kick-off to
-  // two and a half hours after, one call every five minutes, one league. A
-  // match costs about two dozen requests and a quiet day costs none, which
-  // fits inside a hundred with room to spare.
-  const withLive=await (async()=>{
-    if(!allowProviderRequest)return armenian;
-    const {env:runtimeEnv}=await import("cloudflare:workers");
-    const key=(runtimeEnv as unknown as Record<string,string|undefined>).API_FOOTBALL_KEY;
-    if(!key||!armenian.length)return armenian;
-    try{
-      const {armenianMatchWindow}=await import("./espn");
-      if(!(await armenianMatchWindow(date)))return armenian;
-      const db=(env as unknown as {DB?:D1Database}).DB;
-      const cacheKey="apifootball:armenia:live";
-      let payload:{response?:ArmenianLiveFixture[]}|null=null;
-      if(db){
-        await ensureCacheTable(db);
-        const row=await db.prepare("SELECT payload,saved_at AS savedAt FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{payload:string;savedAt:number}>();
-        if(row?.savedAt&&Date.now()-row.savedAt<5*60_000){
-          try{payload=JSON.parse(row.payload)}catch{/* refetch */}
-        }
-      }
-      if(!payload){
-        const res=await fetch("https://v3.football.api-sports.io/fixtures?live=all",{headers:{"x-apisports-key":key,Accept:"application/json"}});
-        if(!res.ok)return armenian;
-        payload=await res.json() as {response?:ArmenianLiveFixture[]};
+      const {armenianMatchesHighlightly}=await import("./highlightly");
+      const rows=await armenianMatchesHighlightly(date);
+      // Null is the provider saying nothing - a spent allowance answers
+      // 429 - and an empty array is a day with no Armenian football. Only
+      // the second is worth writing down.
+      if(rows){
         if(db){
           await db.prepare("INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0")
-            .bind(cacheKey,JSON.stringify(payload),Date.now()).run();
+            .bind(cacheKey,JSON.stringify(rows),Date.now()).run();
         }
+        return rows;
       }
-      const live=(payload.response??[]).filter(fx=>[342,709].includes(fx.league.id));
-      if(!live.length)return armenian;
-      // Matched on the home club's name rather than on an id: the two
-      // providers number clubs differently and neither number means
-      // anything to the other.
-      const normalise=(name:string)=>name.toLowerCase().replace(/[^a-z]/g,"");
-      return armenian.map(m=>{
-        const fx=live.find(f=>normalise(f.teams.home.name)===normalise(m.home)||normalise(f.teams.home.name).includes(normalise(m.home).slice(0,6)));
-        if(!fx)return m;
-        const minute=fx.fixture.status.elapsed;
-        return{...m,
-          status:fx.fixture.status.short==="HT"?"Ընդմիջում":minute?`${minute}′`:"LIVE",
-          homeScore:fx.goals.home,
-          awayScore:fx.goals.away,
-          isLive:true};
-      });
-    }catch{return armenian}
+      if(cached)return cached;
+      const {armenianMatchesForDate}=await import("./espn");
+      return await armenianMatchesForDate(date);
+    }catch{
+      if(cached)return cached;
+      try{
+        const {armenianMatchesForDate}=await import("./espn");
+        return await armenianMatchesForDate(date);
+      }catch{return []}
+    }
   })();
 
-  const matches=[...withLive,...espnMatches];
+  const matches=[...armenian,...espnMatches];
   if(!matches.length)return{matches:[],demo:false,unavailable:true,limited:true,updatedAt};
   return{matches,demo:false,unavailable:false,limited:false,updatedAt};
 }

@@ -808,17 +808,6 @@ async function sportsDb<T>(path: string): Promise<T | null> {
  * hours after it - long enough for stoppages, a delayed start and a full
  * match, short enough that a Wednesday afternoon costs nothing.
  */
-export async function armenianMatchWindow(date: string): Promise<boolean> {
-  const matches = await armenianMatchesForDate(date);
-  const now = Date.now();
-  return matches.some((m) => {
-    if (m.homeScore !== null) return false;
-    const kickoff = m.kickoffMs;
-    if (!kickoff) return false;
-    return now > kickoff - 10 * 60_000 && now < kickoff + 150 * 60_000;
-  });
-}
-
 export type ArmenianMatch = LiveMatch & { kickoffMs: number | null };
 
 export async function armenianMatchesForDate(date: string): Promise<ArmenianMatch[]> {
@@ -846,9 +835,10 @@ export async function armenianMatchesForDate(date: string): Promise<ArmenianMatc
         awayScore: played ? Number(e.intAwayScore) : null,
         // TheSportsDB's free tier has no live feed, so nothing from it is
         // ever marked live. Claiming otherwise would put a "LIVE" badge on
-        // a score that is not moving. While a match is actually in progress
-        // API-Football's free plan fills the minute in, which is what
-        // armenianMatchWindow above decides.
+        // a score that is not moving. This is now only the fallback behind
+        // Highlightly, which does carry the minute; armenianMatchWindow,
+        // which used to decide when to spend an API-Football request on
+        // top, went with that provider.
         isLive: false,
         kickoffMs: kickoff ? kickoff.getTime() : null,
       };
@@ -890,6 +880,18 @@ export async function armenianMatchesForDate(date: string): Promise<ArmenianMatc
 // than carry that complexity now, which is the right call: these pages are
 // lightly visited and cached, so what they cost is small, while what a
 // wrong mapping would cost is every indexed page on the site.
+//
+// Armenia is the part of those four that cannot wait, and it is also the
+// part ESPN cannot take: its 218 soccer leagues do not include the
+// Armenian Premier League. Highlightly, the only free source that does,
+// was asked for the same four on 6 September and has none of them - no
+// squad endpoint in any spelling (/teams/{id}/squad and /squads both 404)
+// and no /top-scorers - while /teams and /players answer with an id, a
+// name and a badge and nothing else. So from 23 September the Armenian
+// squad, the Armenian scoring chart and an Armenian player's profile have
+// no free source at all, and the surfaces that showed them hide
+// themselves rather than stand empty. The board and the match page do not:
+// those moved to Highlightly, which carries them.
 
 
 // ---------------------------------------------------------------------
