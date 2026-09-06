@@ -275,7 +275,7 @@ export async function espnStandings(code: string): Promise<import("./football").
 // It does not carry injuries or a prediction. Those two sections of the
 // page have no free equivalent and are the honest cost of the move.
 
-type EspnAthlete = { displayName?: string; shortName?: string };
+type EspnAthlete = { id?: string; displayName?: string; shortName?: string };
 type EspnRosterPlayer = {
   starter?: boolean;
   jersey?: string;
@@ -398,6 +398,11 @@ function assistFrom(text: string | undefined): string | null {
 
 export type EspnPlayerLine = {
   id: null;
+  // ESPN's own athlete number, under the "espn-" prefix, so the lineup can
+  // be the way into a player page. The two providers number footballers
+  // differently and a bare number cannot say which is meant - the same
+  // reason the standings carry teamKey beside teamId.
+  key: string | null;
   name: string;
   number: number | null;
   grid: string | null;
@@ -435,7 +440,10 @@ export async function espnMatchDetail(eventId: string, leagueSlug: string): Prom
 
   const player = (p: EspnRosterPlayer): EspnPlayerLine => ({
     id: null,
-    name: p.athlete?.displayName ?? p.athlete?.shortName ?? "",
+    key: p.athlete?.id ? espnKey(p.athlete.id) : null,
+    // Armenian, like the rest of the page. The lineup is where a reader
+    // meets most of these names.
+    name: armenianPlayerName(p.athlete?.displayName ?? p.athlete?.shortName ?? ""),
     number: p.jersey ? Number(p.jersey) : null,
     grid: p.formationPlace ?? null,
     // ESPN publishes no player rating. Showing nothing is right; a number
@@ -618,6 +626,12 @@ export async function espnLiveMatchDetail(id: string): Promise<import("./live-fo
       away: armenianTeamName(away.team.displayName),
       homeId: null,
       awayId: null,
+      // The two clubs in the title were the only crests on the page leading
+      // nowhere: homeId is the paid provider's number and ESPN has no such
+      // thing, so the link was never drawn. The board's rows have carried
+      // homeKey since they moved to ESPN; the match header had not.
+      homeKey: home.team.id ? espnKey(home.team.id) : null,
+      awayKey: away.team.id ? espnKey(away.team.id) : null,
       homeLogo: crest(home.team),
       awayLogo: crest(away.team),
       homeScore: score(home),
@@ -630,8 +644,8 @@ export async function espnLiveMatchDetail(id: string): Promise<import("./live-fo
     lineups: (detail?.lineups ?? []).map((l) => ({
       team: l.team,
       formation: l.formation,
-      starters: l.starters.map((p) => ({ id: null, name: p.name, number: p.number, grid: p.grid, rating: p.rating })),
-      substitutes: l.substitutes.map((p) => ({ id: null, name: p.name, number: p.number, grid: p.grid, rating: p.rating })),
+      starters: l.starters.map((p) => ({ id: null, key: p.key, name: p.name, number: p.number, grid: p.grid, rating: p.rating })),
+      substitutes: l.substitutes.map((p) => ({ id: null, key: p.key, name: p.name, number: p.number, grid: p.grid, rating: p.rating })),
     })),
     // The page's statistics block has four fixed slots. ESPN sends
     // twenty-eight numbers; three of them go here and the rest wait for the

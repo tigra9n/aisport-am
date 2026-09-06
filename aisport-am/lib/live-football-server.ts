@@ -6,7 +6,7 @@ import { formatTimeYerevan } from "./format-date";
 type ArmenianLiveFixture={fixture:{status:{short:string;elapsed?:number|null}};league:{id:number};teams:{home:{name:string}};goals:{home:number|null;away:number|null}};
 
 export type LiveMatch={id:string;status:string;competition:string;home:string;away:string;homeId:number|null;awayId:number|null;homeKey?:string|null;awayKey?:string|null;homeLogo:string|null;awayLogo:string|null;homeScore:number|null;awayScore:number|null;isLive:boolean};
-export type LineupPlayer={id:number|null;name:string;number:number|null;grid:string|null;rating:string|null};
+export type LineupPlayer={id:number|null;key?:string|null;name:string;number:number|null;grid:string|null;rating:string|null};
 // The optional fields at the end arrived with ESPN, which sends more than
 // the paid provider ever did: every team statistic it measures rather than
 // the four the layout was built around, what each named player actually did
