@@ -98,6 +98,57 @@ jobs:
             .replace(/\b(fc|cf|sc|ac|afc|ss|as|rc|cd|ud|sv|vfb|vfl|tsg|fk|club|calcio|futbol|football)\b/g, " ")
             .replace(/\s+/g, " ").trim();
 
+          // Names no normaliser can bridge, ESPN's on the left and
+          // API-Football's on the right.
+          //
+          // MEASURED, run #4 on 6 September: 118 of 144 clubs matched and
+          // every one of the twenty-six misses was spelling rather than an
+          // absent club - "Internazionale" against "Inter", "FC Cologne"
+          // against "FC Koln", "Red Bull New York" against "New York Red
+          // Bulls". A club that fails to match keeps whatever ESPN gave it,
+          // which is a squad page of grey outlines, so the ones that can be
+          // written down are written down here and the rest are asked of
+          // the provider by name.
+          const ALIASES = {
+            // England: ESPN writes the full registered name, API-Football
+            // the short one.
+            "brighton hove albion": "Brighton",
+            "tottenham hotspur": "Tottenham",
+            "newcastle united": "Newcastle",
+            "leeds united": "Leeds",
+            "ipswich town": "Ipswich",
+            "coventry city": "Coventry",
+            "wolverhampton wanderers": "Wolves",
+            "west ham united": "West Ham",
+            // Spain
+            "deportivo": "Deportivo La Coruna",
+            // Italy
+            "internazionale": "Inter",
+            // Germany: the umlaut survives at API-Football and is spelled
+            // out in English at ESPN, which no accent-stripping can undo.
+            "bayern munich": "Bayern Munchen",
+            "fc cologne": "FC Koln",
+            "hamburg sv": "Hamburger SV",
+            "mainz": "FSV Mainz 05",
+            // France
+            "aj auxerre": "Auxerre",
+            "brest": "Stade Brestois 29",
+            "stade rennais": "Rennes",
+            // United States: the abbreviations are ESPN's habit.
+            "d c united": "DC United",
+            "la galaxy": "Los Angeles Galaxy",
+            "lafc": "Los Angeles FC",
+            "red bull new york": "New York Red Bulls",
+            // Saudi Arabia: hyphenated at API-Football, and several carry
+            // the city as well.
+            "al ahli": "Al-Ahli Jeddah",
+            "al hilal": "Al-Hilal Saudi FC",
+            "al hazem": "Al-Hazem",
+            "al khaleej": "Al-Khaleej",
+            "al qadsiah": "Al-Qadsiah",
+            "al taawoun": "Al-Taawoun",
+          };
+
           const quote = (text) => "'" + String(text).replace(/'/g, "''") + "'";
           // Content-Length only: the outline has to be told from a
           // photograph, and its length is enough to do that without
@@ -133,12 +184,44 @@ jobs:
             const list = espnTeams.map((t) => t.team).filter((t) => t?.id && t?.displayName);
             const afTeams = (await af(`/teams?league=${leagueId}&season=${SEASON}`))?.response ?? [];
             const byName = new Map(afTeams.map((entry) => [clubKey(entry.team?.name ?? ""), entry.team?.id]).filter(([k, v]) => k && v));
+            const leagueIds = new Set(afTeams.map((entry) => entry.team?.id).filter(Boolean));
             console.log(`${slug}: ${list.length} clubs at ESPN, ${afTeams.length} at API-Football`);
+
+            // Three tries, cheapest first, and every one of them has to be
+            // unique before it counts: an ambiguous match hands a club
+            // somebody else's squad, which is worse than no photographs.
+            const resolveClub = async (name) => {
+              const named = [ALIASES[key(name)], name].filter(Boolean);
+              for (const candidate of named) {
+                const found = byName.get(clubKey(candidate));
+                if (found) return [found, candidate === name ? "name" : "alias"];
+              }
+              // One club's words inside the other's: "Tottenham" is all of
+              // "Tottenham Hotspur" minus the part only ESPN writes, and
+              // "Al Hilal" all of "Al-Hilal Saudi FC" minus the country.
+              for (const candidate of named) {
+                const words = clubKey(candidate).split(" ").filter(Boolean);
+                if (!words.length) continue;
+                const near = [...byName].filter(([k]) => {
+                  const other = k.split(" ");
+                  return words.every((w) => other.includes(w)) || other.every((w) => words.includes(w));
+                });
+                if (near.length === 1) return [near[0][1], "words"];
+              }
+              // The provider's own search, which is what it is for. One
+              // request, and only for a club nothing else could place.
+              await wait(400);
+              const hits = (await af(`/teams?search=${encodeURIComponent(name.slice(0, 40))}`))?.response ?? [];
+              const inLeague = [...new Set(hits.map((entry) => entry.team?.id).filter((id) => leagueIds.has(id)))];
+              if (inLeague.length === 1) return [inLeague[0], "search"];
+              return [null, "none"];
+            };
 
             for (const club of list) {
               clubs++;
-              const afId = byName.get(clubKey(club.displayName));
+              const [afId, how] = await resolveClub(club.displayName);
               if (!afId) { unmatched.push(`${slug} ${club.displayName}`); continue; }
+              if (how !== "name") console.log(`  ${club.displayName} matched by ${how}`);
               matched++;
               await wait(400);
               const squad = (await af(`/players/squads?team=${afId}`))?.response?.[0]?.players ?? [];
