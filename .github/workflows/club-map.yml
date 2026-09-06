@@ -144,6 +144,7 @@ jobs:
           const map: Record<string, string> = {};
           const unmatched: string[] = [];
           const proved: string[] = [];
+          const perLeague: string[] = [];
 
           for (const league of only) {
             console.log(`\n=== ${league.code}  (api-football ${league.af}, espn ${league.espn}, season ${season})`);
@@ -179,6 +180,21 @@ jobs:
                 .map((p) => p.lastName || p.displayName || p.fullName || "")));
             }
             const candidates = espnTeams.map((t) => ({ id: t.id, name: t.name, squad: rosters.get(t.id) ?? new Set<string>() }));
+            // A competition ESPN lists teams for but publishes no rosters
+            // for cannot prove anything, and saying so once is the honest
+            // report. The first full run instead printed a hundred and ten
+            // Conference League clubs as "nothing proved", which reads as a
+            // hundred and ten separate problems and hid the one real one.
+            //
+            // It is also not a gap worth closing here: a cup club belongs
+            // to a domestic league, and it is that league's own run that
+            // can map it. A club from a league this site does not cover has
+            // no ESPN counterpart to be found in the first place.
+            if (!candidates.some((c) => c.squad.size)) {
+              console.log(`    espn publishes no rosters for this competition - ${afTeams.length} clubs skipped, not failed`);
+              perLeague.push(`${league.code}: skipped, espn has no rosters for this competition (${afTeams.length} clubs)`);
+              continue;
+            }
 
             for (const club of afTeams) {
               const squadPayload = await af(`/players/squads?team=${club.id}`) as { response?: { players?: { name?: string }[] }[] };
@@ -191,6 +207,8 @@ jobs:
                 unmatched.push(`${league.code}: ${club.name} (${club.id}) - ${ours.size} surnames published, nothing proved`);
               }
             }
+            const done = afTeams.filter((c) => map[String(c.id)]).length;
+            perLeague.push(`${league.code}: ${done} of ${afTeams.length} proved`);
           }
 
           console.log(`\n=== proved (${proved.length})`);
@@ -245,6 +263,7 @@ jobs:
           // step can print it where it will be seen.
           writeFileSync("map-report.txt", [
             `${Object.keys(merged).length} rows in the file, ${Object.keys(map).length} proved this run`,
+            ...perLeague.map((line) => `  ${line}`),
             `${unmatched.length} clubs could not prove themselves:`,
             ...unmatched.map((line) => `  ${line}`),
           ].join("\n"));
@@ -275,7 +294,13 @@ jobs:
           # across by hand; nothing else in the tree needs to be.
           git fetch origin "$TARGET" 2>/dev/null || true
           if git rev-parse --verify --quiet "refs/remotes/origin/$TARGET" >/dev/null; then
+            # Out of the way BEFORE the checkout, not just copied aside.
+            # The file is untracked on main and tracked on the branch, and
+            # git refuses to check out over an untracked file it would
+            # overwrite - which is how the second full run died with two
+            # hundred proved clubs in the working tree.
             cp aisport-am/lib/team-map.ts "$RUNNER_TEMP/team-map.ts"
+            rm -f aisport-am/lib/team-map.ts
             git checkout -q -B "$TARGET" "origin/$TARGET"
             cp "$RUNNER_TEMP/team-map.ts" aisport-am/lib/team-map.ts
             if [ -z "$(git status --porcelain aisport-am/lib/team-map.ts)" ]; then echo "the branch already has these rows"; exit 0; fi
