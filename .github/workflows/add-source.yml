@@ -1002,6 +1002,36 @@ jobs:
               } else {
                 say(`      ${String(all.text ?? "").slice(0, 120).replace(/\s+/g, " ")}`);
               }
+              // eventsseason.php answered with exactly five fixtures - one
+              // matchday - while the provider's own table has Alashkert on
+              // six played. So the season endpoint is truncated, not empty,
+              // and the clubs it names are all ten. Rounds are a separate
+              // endpoint: ask for them one at a time and see how far back
+              // the free key will go. Ten rounds is ten requests, cached for
+              // a day, against a league that plays five matches a week.
+              const byRound = new Map();
+              for (let round = 1; round <= 10; round++) {
+                const r = await get(`${db}/eventsround.php?id=${top.idLeague}&r=${round}&s=${season}`);
+                const es = r.json?.events;
+                if (!Array.isArray(es) || !es.length) { say(`  round ${round}: HTTP ${r.status}, nothing`); continue; }
+                const done = es.filter((e) => e.intHomeScore !== null && e.intHomeScore !== "" && e.intAwayScore !== null && e.intAwayScore !== "");
+                say(`  round ${round}: ${es.length} fixtures, ${done.length} finished`);
+                for (const e of done) byRound.set(e.idEvent, e);
+              }
+              if (byRound.size) {
+                const tally = new Map();
+                const seat = (name) => { if (!tally.has(name)) tally.set(name, { p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0 }); return tally.get(name); };
+                for (const e of byRound.values()) {
+                  const h = seat(e.strHomeTeam), a = seat(e.strAwayTeam);
+                  const hs = Number(e.intHomeScore), as = Number(e.intAwayScore);
+                  h.p++; a.p++; h.gf += hs; h.ga += as; a.gf += as; a.ga += hs;
+                  if (hs > as) { h.w++; a.l++; } else if (hs < as) { a.w++; h.l++; } else { h.d++; a.d++; }
+                }
+                const computed = [...tally.entries()].map(([name, r]) => ({ name, ...r, pts: r.w * 3 + r.d, gd: r.gf - r.ga }))
+                  .sort((x, y) => y.pts - x.pts || y.gd - x.gd);
+                say(`  the table the rounds produce (${computed.length} clubs, ${byRound.size} results):`);
+                for (const [i, r] of computed.entries()) say(`        ${i + 1}. ${r.name}  ${r.pts} pts (${r.p} played, ${r.gd > 0 ? "+" : ""}${r.gd})`);
+              }
             }
             const live = await get(`${db}/latestsoccer.php`);
             say(`  livescore endpoint on the free key: HTTP ${live.status}, keys ${Object.keys(live.json ?? {}).join(",").slice(0, 80)}`);
