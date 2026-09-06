@@ -74,10 +74,24 @@ jobs:
           # default branch, which does not carry this file. So the branch's
           # copy is fetched first. Without this the "add, never replace"
           # rule quietly becomes "replace".
-          git fetch origin claude/club-map 2>/dev/null || true
-          git show origin/claude/club-map:aisport-am/lib/team-map.ts > lib/team-map.ts 2>/dev/null \
-            && echo "starting from $(grep -c '": "' lib/team-map.ts) rows already on the branch" \
-            || echo "no map on the branch yet"
+          # Seeded from main, not from this job's own branch.
+          #
+          # It used to read claude/club-map, which made that branch load
+          # bearing: deleting it - an obvious tidy-up, since every row on
+          # it has been merged - would have quietly reset the map to empty
+          # on the next run, and the "add, never replace" rule with it.
+          # main is where the reviewed rows live and where a hand
+          # correction lands, so main is what a new run should build on.
+          for ref in origin/main origin/claude/club-map; do
+            git fetch origin "${ref#origin/}" 2>/dev/null || true
+            for f in team-map player-map; do
+              git show "$ref:aisport-am/lib/$f.ts" > "lib/$f.ts" 2>/dev/null || true
+            done
+            if [ -s lib/team-map.ts ]; then
+              echo "starting from $ref: $(grep -c '": "' lib/team-map.ts) clubs, $(grep -c '": "' lib/player-map.ts 2>/dev/null || echo 0) footballers"
+              break
+            fi
+          done
           cat > map.mts <<'TS'
           import { readFileSync, writeFileSync, existsSync } from "node:fs";
           import { chooseAthlete, chooseClub, surnameSet } from "./lib/club-match.ts";
