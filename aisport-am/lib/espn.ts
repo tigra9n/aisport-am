@@ -883,8 +883,8 @@ export async function armenianMatchesForDate(date: string): Promise<ArmenianMatc
 //              and injuries.
 //
 // They have not moved because they are one decision, not four. Every one of
-// them lives behind a URL numbered by API-Sports - /team/50 is Chelsea
-// because API-Sports says 50, and ESPN says 363 - and those URLs are the
+// them lives behind a URL numbered by API-Sports - /team/49 is Chelsea
+// because API-Sports says 49, and ESPN says 363 - and those URLs are the
 // ones Google has just started indexing after a week of work on exactly
 // that. Swapping the source without a mapping between the two numberings
 // would point every indexed team and player page at a different footballer.
