@@ -229,7 +229,20 @@ jobs:
           await ask("statistics", `/statistics/${ID}`, (b) => (Array.isArray(b) ? b[0] : b));
           await ask("the match itself", `/matches/${ID}`, (b) => (Array.isArray(b) ? b[0]?.events?.slice(0, 3) : null));
 
-          // 3. The three the daily limit cut off last time.
+          // 3. What /players will actually accept.
+          //
+          // Highlightly has no squad endpoint - /teams/{id}/squad and
+          // /squads both answer 404 - but /players is real: it answered
+          // 400 "property teamId should not exist" to the first round and
+          // 200 to ?name=. A provider that names the property it rejects
+          // can be asked which ones it wants, so this asks. If any of
+          // these opens a squad, the Armenian squad page comes back
+          // without a new provider.
+          for (const param of ["teamName", "clubId", "team", "squadId", "leagueId", "countryCode", "season"]) {
+            await ask(`players by ${param}`, `/players?${param}=${param === "leagueId" ? LEAGUE : "Shirak"}`);
+          }
+
+          // 4. The three the daily limit cut off last time.
           await ask("the leagues of a country", `/leagues?countryCode=AM`);
           await ask("last five games", `/last-five-games?teamId=${played.homeTeam?.id}`);
           await ask("a real player by id", `/players/7014119`, (b) => b);
