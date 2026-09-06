@@ -80,6 +80,25 @@ jobs:
           # measured is not which page appears but that the new path does
           # not throw: 200 or 301 is fine, 500 is the change breaking a
           # page that used to work.
+          # Does ESPN publish anything of a manager beyond his name?
+          #
+          # The club page now prints the name from the roster response and
+          # nothing else, because nothing else was read. Before inventing a
+          # headshot URL and hoping, this asks: the whole coach object as
+          # ESPN sends it, and then the two addresses a photograph would
+          # plausibly live at. A 200 means there is a face to show; a 404
+          # means the name is genuinely all there is.
+          echo "--- what ESPN publishes about a manager:"
+          roster=$(curl -sS --max-time 30 "https://site.api.espn.com/apis/site/v2/sports/soccer/eng.1/teams/359/roster")
+          echo "  coach object: $(grep -o '"coach":\[[^]]*\]' <<<"$roster" | head -c 300)"
+          cid=$(grep -o '"coach":\[{"id":"[0-9]*' <<<"$roster" | grep -o '[0-9]*$' | head -1)
+          echo "  coach id: ${cid:-none}"
+          if [ -n "$cid" ]; then
+            for u in "https://a.espncdn.com/i/headshots/soccer/players/full/$cid.png"                      "https://a.espncdn.com/i/headshots/soccer/coaches/full/$cid.png"; do
+              echo "  $(curl -s -o /dev/null -w "%{http_code}" "$u" || true)  $u"
+            done
+          fi
+
           echo "--- legacy /player/<number>:"
           for pid in 306 1100 497488 154; do
             # One line, no process substitution: curl's -w output has no
