@@ -23,7 +23,7 @@ on:
       league:
         description: 'One league slug, or all'
         type: choice
-        options: ['all', 'eng.1', 'esp.1', 'ita.1', 'ger.1', 'fra.1', 'usa.1', 'ksa.1']
+        options: ['all', 'arm', 'eng.1', 'esp.1', 'ita.1', 'ger.1', 'fra.1', 'usa.1', 'ksa.1']
         default: 'all'
       limit:
         description: 'How many names to ask for at most'
@@ -53,6 +53,7 @@ jobs:
           ONLY: ${{ github.event.inputs.league || 'all' }}
           LIMIT: ${{ github.event.inputs.limit || '400' }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
           cat > name-fill.mts <<'TS'
           import { readFileSync, writeFileSync } from "node:fs";
@@ -61,7 +62,10 @@ jobs:
           const KEY = process.env.GEMINI_API_KEY || "";
           if (!KEY) { console.log("no GEMINI_API_KEY"); process.exit(1); }
           const SLUGS = ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1", "usa.1", "ksa.1"];
-          const only = process.env.ONLY && process.env.ONLY !== "all" ? [process.env.ONLY] : SLUGS;
+          const only = process.env.ONLY && process.env.ONLY !== "all"
+            // "arm" is not an ESPN slug - it is handled below, on its own.
+            ? SLUGS.filter((slug) => slug === process.env.ONLY)
+            : SLUGS;
           const limit = Number(process.env.LIMIT) || 400;
 
           const FILE = "lib/player-names-hy.ts";
@@ -81,6 +85,33 @@ jobs:
           // only clue the roster gives about what language the name is in,
           // and it is the difference between Խիմենես and Ջիմենեզ.
           const missing = new Map<string, { name: string; club: string; league: string }>();
+          // The Armenian league first, because it is the one this site
+          // exists for and the one ESPN does not carry: its 218 soccer
+          // competitions do not include it, so not one Armenian footballer
+          // was in the count that said 4330. They come from API-Football,
+          // which is where the Armenian squad pages come from too.
+          if (process.env.ONLY === "all" || process.env.ONLY === "arm") {
+            const afKey = process.env.API_FOOTBALL_KEY || "";
+            const af = async (path: string) => {
+              try {
+                const r = await fetch(`https://v3.football.api-sports.io${path}`, { headers: { "x-apisports-key": afKey, Accept: "application/json" } });
+                return r.ok ? await r.json() as { response?: unknown[] } : null;
+              } catch { return null; }
+            };
+            const season = new Date().getUTCMonth() + 1 >= 7 ? new Date().getUTCFullYear() : new Date().getUTCFullYear() - 1;
+            const teams = (await af(`/teams?league=342&season=${season}`))?.response as { team?: { id?: number; name?: string } }[] ?? [];
+            for (const entry of teams) {
+              if (!entry.team?.id) continue;
+              const squad = ((await af(`/players/squads?team=${entry.team.id}`))?.response as { players?: { name?: string }[] }[] ?? [])[0]?.players ?? [];
+              for (const player of squad) {
+                const k = key(player.name ?? "");
+                if (!k || table.has(k) || missing.has(k)) continue;
+                missing.set(k, { name: player.name as string, club: entry.team.name ?? "", league: "Armenian Premier League" });
+              }
+            }
+            console.log(`arm: ${teams.length} clubs, ${missing.size} unnamed so far`);
+          }
+
           for (const slug of only) {
             const clubs = await espnTeams(slug);
             for (let start = 0; start < clubs.length; start += 5) {
@@ -107,6 +138,7 @@ jobs:
             "Armenian conventions this site follows:",
             "- a word-initial e is written Է and a word-initial o is written Օ, because ե and ո are read 'ye' and 'vo' at the start of a word",
             "- a name opens with the rolled Ռ, not Ր",
+            "- an Armenian footballer gets his name back, not a transliteration of the Latin spelling of it: Spertsyan is Սպերցյան, Mkhitaryan is Մխիթարյան, Bichakhchyan is Բիչախչյան, and a surname in -yan ends -յան",
             "- Spanish and Portuguese surnames ending -ez end in -ես (Խիմենես, Ֆերնանդես), and Spanish j is խ",
             "- Portuguese final unstressed o is ու (Ռոնալդու, Ռամուշ) and nh/lh are նյ/լյ",
             "- English silent letters are not written (Ուայթ, not Վհիտե; Քին, not Կեանե)",
@@ -115,14 +147,20 @@ jobs:
             "Answer with a JSON array of {\"latin\":..., \"hy\":...} and nothing else. Use exactly the latin spelling you were given. Every hy value must be Armenian letters only.",
           ].join("\n");
 
+          // A hundred a request. The answer is about 25 tokens a name, so
+          // a batch this size is a quarter of what the model may write
+          // back, and it turns four thousand names into forty-two requests
+          // rather than seventy - inside a day's allowance either way, but
+          // half the wall clock.
+          const BATCH = 100;
           const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
           const armenianOnly = /^[Ա-֏\s'’.\-]+$/;
           const accepted: [string, string][] = [];
           const written = new Set<string>();
           let asked = 0, refused = 0;
 
-          for (let start = 0; start < wanted.length; start += 60) {
-            const batch = wanted.slice(start, start + 60);
+          for (let start = 0; start < wanted.length; start += BATCH) {
+            const batch = wanted.slice(start, start + BATCH);
             const payload = batch.map(([, v]) => ({ latin: v.name, club: v.club, league: v.league }));
             let text: string | null = null;
             // Three tries: the free tier allows ten requests a minute and a
@@ -155,9 +193,9 @@ jobs:
               const data = await response.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
               text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") || null;
             }
-            if (!text) { console.log(`  batch ${start / 60 + 1}: no answer`); continue; }
+            if (!text) { console.log(`  batch ${start / BATCH + 1}: no answer`); continue; }
             let rows: { latin?: string; hy?: string }[] = [];
-            try { rows = JSON.parse(text); } catch { console.log(`  batch ${start / 60 + 1}: unparseable`); continue; }
+            try { rows = JSON.parse(text); } catch { console.log(`  batch ${start / BATCH + 1}: unparseable`); continue; }
             const asKey = new Map(batch.map(([k, v]) => [key(v.name), k]));
             for (const row of rows) {
               const k = asKey.get(key(row.latin ?? ""));
@@ -172,7 +210,7 @@ jobs:
               written.add(k);
               accepted.push([k, row.hy.trim()]);
             }
-            console.log(`  batch ${start / 60 + 1}: ${rows.length} back, ${accepted.length} kept so far`);
+            console.log(`  batch ${start / BATCH + 1}: ${rows.length} back, ${accepted.length} kept so far`);
             await wait(7000);
           }
 
