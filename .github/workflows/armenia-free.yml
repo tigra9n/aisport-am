@@ -86,8 +86,32 @@ jobs:
           await ask("one match, for lineups and events", `/matches/${LEAGUE}`);
           await ask("top scorers", `/top-scorers?leagueId=${LEAGUE}&season=${SEASON}`);
           await ask("statistics", `/statistics?leagueId=${LEAGUE}&season=${SEASON}`);
-          // And what the plan actually allows, if they say.
-          await ask("the endpoint list, if there is one", `/`);
+          // Round two, guided by what the first round's errors said.
+          //
+          // /teams and /players answered 400 "property leagueId should
+          // not exist" and "property teamId should not exist" - which is
+          // not a 404. Those endpoints are there and were asked with the
+          // wrong parameter names, so the squads question is still open
+          // and this tries the names an API of this shape would use.
+          //
+          // And /matches/{id} was given the league's number instead of a
+          // match's. This gives it a real one, taken from the fixture the
+          // first round found: Shirak against Sardarapat, today.
+          const MATCH = "1345873453";
+          const HOME = "3137570";
+          console.log("\n\n---- round two: the parameters the errors asked for ----");
+          await ask("teams by country", `/teams?countryCode=AM`);
+          await ask("teams by name", `/teams?name=Shirak`);
+          await ask("one team by id", `/teams/${HOME}`);
+          await ask("players by name", `/players?name=Spertsyan`);
+          await ask("one player by id", `/players/1`);
+          await ask("the match itself", `/matches/${MATCH}`);
+          await ask("lineups for the match", `/lineups/${MATCH}`);
+          await ask("events for the match", `/events/${MATCH}`);
+          await ask("statistics for the match", `/statistics/${MATCH}`);
+          await ask("the leagues of a country", `/leagues?countryCode=AM`);
+          await ask("last five games", `/last-five-games?teamId=${HOME}`);
+          await ask("head to head", `/head-2-head?teamIdOne=${HOME}&teamIdTwo=22295282`);
           JS
           node probe.mjs
           rm -f probe.mjs
