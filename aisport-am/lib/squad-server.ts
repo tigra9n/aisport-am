@@ -132,6 +132,25 @@ async function clubPhotos(db: D1Database | undefined, espnId: string, clubName: 
 }
 
 
+// A cached squad's names, respelled from the Latin the row also carries.
+//
+// The Armenian name was written into the cached row, so a correction to the
+// name tables did not reach a club page until the row expired - a day. The
+// tables were fixed at four in the morning and Reece James was still Ռիսե
+// Ջամես on the site; the deploy had gone out and the page had not changed,
+// which is the same shape of confusion as the club names in September.
+//
+// Bumping the cache key fixes it once. Doing it here fixes it for every
+// correction after this one, and it costs nothing: the row already carries
+// the Latin spelling for the photograph matching, so the Armenian one can
+// be made fresh on every read.
+function withNames(squad: Squad): Squad {
+  return {
+    ...squad,
+    players: squad.players.map((p) => (p.latin ? { ...p, name: armenianPlayerName(p.latin) } : p)),
+  };
+}
+
 // Faces on a squad, applied at read time rather than stored with it.
 //
 // The order is about how the page looks, not about which provider is
@@ -326,7 +345,7 @@ export async function getSquad(teamId: number | string): Promise<Squad | null> {
           const espnKeyed = typeof teamId === "string" && teamId.startsWith("espn-") ? teamId.slice(5) : null;
           if (!espnKeyed) return squad;
           const club = (await teamIndex(db))[espnKeyed];
-          return withFaces(squad, db, espnKeyed, club?.name ?? "");
+          return withFaces(withNames(squad), db, espnKeyed, club?.name ?? "");
         }
       } catch { /* refetch */ }
     }
