@@ -275,7 +275,7 @@ export async function espnStandings(code: string): Promise<import("./football").
 // It does not carry injuries or a prediction. Those two sections of the
 // page have no free equivalent and are the honest cost of the move.
 
-type EspnAthlete = { displayName?: string; shortName?: string };
+type EspnAthlete = { id?: string; displayName?: string; shortName?: string };
 type EspnRosterPlayer = {
   starter?: boolean;
   jersey?: string;
@@ -398,6 +398,11 @@ function assistFrom(text: string | undefined): string | null {
 
 export type EspnPlayerLine = {
   id: null;
+  // ESPN's own athlete number, under the "espn-" prefix, so the lineup can
+  // be the way into a player page. The two providers number footballers
+  // differently and a bare number cannot say which is meant - the same
+  // reason the standings carry teamKey beside teamId.
+  key: string | null;
   name: string;
   number: number | null;
   grid: string | null;
@@ -435,7 +440,10 @@ export async function espnMatchDetail(eventId: string, leagueSlug: string): Prom
 
   const player = (p: EspnRosterPlayer): EspnPlayerLine => ({
     id: null,
-    name: p.athlete?.displayName ?? p.athlete?.shortName ?? "",
+    key: p.athlete?.id ? espnKey(p.athlete.id) : null,
+    // Armenian, like the rest of the page. The lineup is where a reader
+    // meets most of these names.
+    name: armenianPlayerName(p.athlete?.displayName ?? p.athlete?.shortName ?? ""),
     number: p.jersey ? Number(p.jersey) : null,
     grid: p.formationPlace ?? null,
     // ESPN publishes no player rating. Showing nothing is right; a number
@@ -618,6 +626,12 @@ export async function espnLiveMatchDetail(id: string): Promise<import("./live-fo
       away: armenianTeamName(away.team.displayName),
       homeId: null,
       awayId: null,
+      // The two clubs in the title were the only crests on the page leading
+      // nowhere: homeId is the paid provider's number and ESPN has no such
+      // thing, so the link was never drawn. The board's rows have carried
+      // homeKey since they moved to ESPN; the match header had not.
+      homeKey: home.team.id ? espnKey(home.team.id) : null,
+      awayKey: away.team.id ? espnKey(away.team.id) : null,
       homeLogo: crest(home.team),
       awayLogo: crest(away.team),
       homeScore: score(home),
@@ -630,8 +644,8 @@ export async function espnLiveMatchDetail(id: string): Promise<import("./live-fo
     lineups: (detail?.lineups ?? []).map((l) => ({
       team: l.team,
       formation: l.formation,
-      starters: l.starters.map((p) => ({ id: null, name: p.name, number: p.number, grid: p.grid, rating: p.rating })),
-      substitutes: l.substitutes.map((p) => ({ id: null, name: p.name, number: p.number, grid: p.grid, rating: p.rating })),
+      starters: l.starters.map((p) => ({ id: null, key: p.key, name: p.name, number: p.number, grid: p.grid, rating: p.rating })),
+      substitutes: l.substitutes.map((p) => ({ id: null, key: p.key, name: p.name, number: p.number, grid: p.grid, rating: p.rating })),
     })),
     // The page's statistics block has four fixed slots. ESPN sends
     // twenty-eight numbers; three of them go here and the rest wait for the
@@ -1383,19 +1397,44 @@ type SportsDbPlayers = {
 const photoKey = (name: string) =>
   name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z ]/g, " ").trim().replace(/\s+/g, " ");
 
-export async function sportsDbSquadPhotos(clubName: string): Promise<Record<string, string>> {
+// Two maps, not one, because a squad should look like one photo session.
+//
+// The provider carries three kinds of picture and they do not sit together
+// on a page: strCutout is a head-and-shoulders on a transparent ground,
+// strThumb is a photograph taken during a match, strRender something else
+// again. Collapsing them into one field - which this did - gave a squad
+// where some men were studio portraits and their team-mates were caught
+// mid-stride against a crowd.
+//
+// So the cutouts are kept apart from the rest. The page fills every place
+// it can from `cut` first, and only reaches into `alt` for a footballer no
+// cutout exists for anywhere.
+export type SportsDbPhotos = { cut: Record<string, string>; alt: Record<string, string> };
+
+export async function sportsDbSquadPhotos(clubName: string): Promise<SportsDbPhotos> {
   const found = await sportsDb<SportsDbTeamSearch>(`/searchteams.php?t=${encodeURIComponent(clubName)}`);
   const teamId = found?.teams?.[0]?.idTeam;
-  if (!teamId) return {};
+  if (!teamId) return { cut: {}, alt: {} };
   const squad = await sportsDb<SportsDbPlayers>(`/lookup_all_players.php?id=${teamId}`);
-  const photos: Record<string, string> = {};
+  const photos: SportsDbPhotos = { cut: {}, alt: {} };
   for (const player of squad?.player ?? []) {
-    // The cutout is a transparent head-and-shoulders and is what the card
-    // wants; the thumbnail is a match photograph and is the fallback.
-    const url = player.strCutout || player.strThumb || player.strRender;
-    if (player.strPlayer && url) photos[photoKey(player.strPlayer)] = url;
+    if (!player.strPlayer) continue;
+    const key = photoKey(player.strPlayer);
+    if (player.strCutout) photos.cut[key] = player.strCutout;
+    else if (player.strThumb || player.strRender) photos.alt[key] = (player.strThumb || player.strRender) as string;
   }
   return photos;
+}
+
+// A stored map is either the current shape or the flat one this used to
+// write. Reading both means the weekly run's rows keep working through the
+// deploy that changes the shape, instead of a day with no faces at all.
+export function readPhotoMaps(payload: unknown): SportsDbPhotos {
+  const value = payload as Partial<SportsDbPhotos> & Record<string, unknown>;
+  if (value && typeof value === "object" && (value.cut || value.alt)) {
+    return { cut: (value.cut as Record<string, string>) ?? {}, alt: (value.alt as Record<string, string>) ?? {} };
+  }
+  return { cut: (payload as Record<string, string>) ?? {}, alt: {} };
 }
 
 export const squadPhotoKey = photoKey;

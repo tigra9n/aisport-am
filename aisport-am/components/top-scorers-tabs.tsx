@@ -39,8 +39,8 @@ export function TopScorersTabs({ tables }: { tables: Record<string, { rows: TopS
                     </Link>
                   </td>
                   <td>
-                    {row.teamId ? (
-                      <Link href={`/team/${row.teamId}`} className="team-with-logo team-cell-link">
+                    {(row.teamKey ?? row.teamId) ? (
+                      <Link href={`/team/${row.teamKey ?? row.teamId}`} className="team-with-logo team-cell-link">
                         {row.teamLogo && <img src={sizedImage(row.teamLogo, 24)} alt="" className="team-logo" loading="lazy" />}
                         {row.team}
                       </Link>

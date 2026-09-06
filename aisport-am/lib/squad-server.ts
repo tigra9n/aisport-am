@@ -108,40 +108,51 @@ async function teamIndex(db: D1Database | undefined): Promise<Record<string, { s
 // reached yet. It costs one refused request and then goes quiet for five
 // minutes (see sportsDb in espn.ts), and it heals itself the moment
 // TheSportsDB does answer.
-async function clubPhotos(db: D1Database | undefined, espnId: string, clubName: string): Promise<Record<string, string>> {
+async function clubPhotos(db: D1Database | undefined, espnId: string, clubName: string): Promise<import("./espn").SportsDbPhotos> {
   const cacheKey = `sportsdb:photos:v2:${espnId}`;
+  const { sportsDbSquadPhotos, readPhotoMaps } = await import("./espn");
+  const empty = { cut: {}, alt: {} };
   if (db) {
     await ensureCacheTable(db);
     const row = await db.prepare("SELECT payload,saved_at AS savedAt FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{ payload: string; savedAt: number }>();
     if (row?.savedAt && Date.now() - row.savedAt < 30 * 24 * 60 * 60 * 1000) {
-      try { return JSON.parse(row.payload) as Record<string, string>; } catch { /* refetch */ }
+      try { return readPhotoMaps(JSON.parse(row.payload)); } catch { /* refetch */ }
     }
   }
   try {
-    if (!clubName) return {};
-    const { sportsDbSquadPhotos } = await import("./espn");
+    if (!clubName) return empty;
     const photos = await sportsDbSquadPhotos(clubName);
-    if (db && Object.keys(photos).length) {
+    if (db && (Object.keys(photos.cut).length || Object.keys(photos.alt).length)) {
       await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey, JSON.stringify(photos), Date.now()).run();
     }
     return photos;
   } catch {
-    return {};
+    return empty;
   }
 }
 
 
-// Faces on a squad, from TheSportsDB, applied at read time rather than
-// stored with it. Players ESPN already has a headshot for keep it.
+// Faces on a squad, applied at read time rather than stored with it.
+//
+// The order is about how the page looks, not about which provider is
+// better. A squad of cards should read as one photo session: same crop,
+// same ground, same distance. TheSportsDB's cutouts and ESPN's headshots
+// are both head-and-shoulders on a transparent ground and sit together;
+// TheSportsDB's thumbnails are photographs taken during a match and do not.
+//
+// So: every cutout first, then ESPN's headshot for whoever has none, and a
+// match photograph only for a footballer no portrait exists for anywhere.
+// That is the most uniform page the free sources allow.
 async function withFaces(squad: Squad, db: D1Database | undefined, espnId: string, clubName: string): Promise<Squad> {
-  const missing = squad.players.filter((p) => !p.photo).length;
-  if (missing <= squad.players.length / 3) return squad;
   const photos = await clubPhotos(db, espnId, clubName);
-  if (!Object.keys(photos).length) return squad;
+  if (!Object.keys(photos.cut).length && !Object.keys(photos.alt).length) return squad;
   const { pickPhoto } = await import("./espn");
   return {
     ...squad,
-    players: squad.players.map((p) => ({ ...p, photo: p.photo ?? pickPhoto(photos, p.latin ?? "") })),
+    players: squad.players.map((p) => {
+      const latin = p.latin ?? "";
+      return { ...p, photo: pickPhoto(photos.cut, latin) ?? p.photo ?? pickPhoto(photos.alt, latin) };
+    }),
   };
 }
 
