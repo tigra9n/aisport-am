@@ -1,13 +1,13 @@
 import { sizedImage } from "../../../lib/image-proxy";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
 import { SiteHeader } from "../../../components/site-header";
 import { formatDateHy } from "../../../lib/format-date";
 import { getPlayerProfile, getPlayerTransfers } from "../../../lib/player-server";
 import { getSquad } from "../../../lib/squad-server";
-import { knownPlayer } from "../../../lib/entity-cache";
+import { espnPlayerTwinUrl, knownPlayer } from "../../../lib/entity-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -115,6 +115,15 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
   if (id.startsWith("espn-")) return EspnPlayerPage({ id });
   const playerId = Number.parseInt(id, 10);
   if (!Number.isFinite(playerId)) notFound();
+  // The same move the team page makes, for the same reason: every URL
+  // Google indexed carries API-Football's number, and that provider is
+  // being cancelled on 23 September. A footballer the free source can be
+  // shown to be the same man is sent on with a 301 and read for nothing
+  // from here on; one it cannot is left exactly as it was, on the paid
+  // path below, and the refusal is deliberate - a wrong redirect here
+  // tells a reader that one footballer is another, permanently.
+  const moved = await espnPlayerTwinUrl(playerId);
+  if (moved) permanentRedirect(moved);
   const [profile, transfers] = await Promise.all([getPlayerProfile(playerId), getPlayerTransfers(playerId)]);
 
   // Same rule as the team page: a player the top-scorer table already knows

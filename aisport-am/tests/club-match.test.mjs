@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { chooseClub, surnameOf, surnameSet } from "../lib/club-match.ts";
+import { chooseAthlete, chooseClub, surnameOf, surnameSet } from "../lib/club-match.ts";
 
 const squad = (...names) => surnameSet(names);
 const club = (id, name, ...names) => ({ id, name, squad: squad(...names) });
@@ -69,4 +69,59 @@ test("no overlap at all is no match, not the least-bad one", () => {
     club("363", "Chelsea", "Sánchez", "Colwill", "Caicedo", "Palmer", "Jackson"),
   ]);
   assert.equal(verdict, null);
+});
+
+// ---------------------------------------------------------------------
+// And the same question about a footballer
+// ---------------------------------------------------------------------
+
+const athlete = (id, name, team) => ({ id, name, team });
+
+test("one name that can only mean one footballer", () => {
+  const found = chooseAthlete("Մոհամեդ Սալահ", [
+    athlete("1", "Մոհամեդ Սալահ", "Լիվերպուլ"),
+    athlete("2", "Բուկայո Սակա", "Արսենալ"),
+  ]);
+  assert.equal(found?.id, "1");
+});
+
+// The providers disagree on given names far more than on family names.
+test("the family name carries when the given name does not", () => {
+  const found = chooseAthlete("Բոբի Ռեյդ", [
+    athlete("1", "Բոբի Դեկորդովա-Ռեյդ", "Ֆուլհեմ"),
+    athlete("2", "Իլյա Զաբարնի", "Բորնմութ"),
+  ]);
+  assert.equal(found?.id, "1");
+});
+
+// The refusals. A wrong row here is a permanent redirect telling a reader
+// that one footballer is another.
+test("a shared family name is not an answer", () => {
+  const found = chooseAthlete("Ջեյմս", [
+    athlete("1", "Ռիս Ջեյմս", "Չելսի"),
+    athlete("2", "Դանիել Ջեյմս", "Լիդս"),
+  ]);
+  assert.equal(found, null);
+});
+
+test("the club separates two men who share a family name", () => {
+  const found = chooseAthlete("Ջեյմս", [
+    athlete("1", "Ռիս Ջեյմս", "Չելսի"),
+    athlete("2", "Դանիել Ջեյմս", "Լիդս"),
+  ], "Չելսի");
+  assert.equal(found?.id, "1");
+});
+
+test("a club that separates nobody still refuses", () => {
+  const found = chooseAthlete("Ջեյմս", [
+    athlete("1", "Ռիս Ջեյմս", "Չելսի"),
+    athlete("2", "Դանիել Ջեյմս", "Չելսի"),
+  ], "Չելսի");
+  assert.equal(found, null);
+});
+
+test("nothing to go on is no match", () => {
+  assert.equal(chooseAthlete("", [athlete("1", "Ռիս Ջեյմս")]), null);
+  assert.equal(chooseAthlete("Ռիս Ջեյմս", []), null);
+  assert.equal(chooseAthlete("Ա", [athlete("1", "Ա")]), null);
 });
