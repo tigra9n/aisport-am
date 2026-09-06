@@ -36,6 +36,10 @@ on:
         description: "Match day to read (YYYY-MM-DD). Empty = yesterday."
         required: false
         default: ""
+      mode:
+        description: "provider = ask Highlightly. site = read the deployed board instead."
+        required: false
+        default: "provider"
 
 jobs:
   probe:
@@ -44,7 +48,42 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '22' }
+      # Which source actually served the board, read from the deployed
+      # site rather than guessed. The Armenian rows carry the provider in
+      # their own link: "hl-" is Highlightly, "sdb-" is the TheSportsDB
+      # fallback, "af-" is the paid provider that is going away. This runs
+      # from a runner because the site refuses this agent's addresses.
+      - name: What the deployed board is serving
+        if: ${{ inputs.mode == 'site' }}
+        run: |
+          board=$(curl -sS --max-time 45 "https://aifootball.am/live?_c=$(date +%s)")
+          echo "bytes: ${#board}"
+          echo "highlightly rows: $(grep -o 'hl-[0-9]*' <<<"$board" | sort -u | tr '\n' ' ')"
+          echo "sportsdb rows:    $(grep -o 'sdb-[0-9]*' <<<"$board" | sort -u | tr '\n' ' ')"
+          echo "apifootball rows: $(grep -o 'af-[0-9]*' <<<"$board" | sort -u | tr '\n' ' ')"
+          echo "--- every line mentioning an Armenian club or a minute:"
+          grep -o '[^<>]\{0,60\}\(Շիրակ\|Սարդարապատ\|Ընդմիջում\|Ավարտված\|[0-9]\{1,3\}′\)[^<>]\{0,60\}' <<<"$board" | sort -u | head -20
+          # And what the fallback itself can see, asked directly. An empty
+          # Armenian board has two possible causes - Highlightly refused,
+          # or TheSportsDB does not carry the match - and only this
+          # separates them. Its free league lists are "next" and "past",
+          # so a match being played right now can be in neither, which is
+          # the weakness the move to Highlightly was meant to end.
+          echo "--- what TheSportsDB has for the Armenian league today ($(date -u +%F)):"
+          for list in eventsnextleague eventspastleague; do
+            curl -sS --max-time 30 "https://www.thesportsdb.com/api/v1/json/3/$list.php?id=4619"               | grep -o '"dateEvent":"[^"]*","[^"]*":"[^"]*"\|"strEvent":"[^"]*"\|"dateEvent":"[^"]*"'               | paste - - 2>/dev/null | grep "$(date -u +%F)" || echo "  $list: nothing today"
+          done
+
+          first=$(grep -o 'hl-[0-9]*' <<<"$board" | head -1)
+          if [ -n "$first" ]; then
+            echo "--- the match page for $first:"
+            page=$(curl -sS --max-time 45 "https://aifootball.am/live/match/$first?_c=$(date +%s)")
+            echo "bytes: ${#page}"
+            grep -o '[^<>]\{0,50\}\(Կազմ\|Իրադարձ\|Վիճակագր\|Մարզադաշտ\|Մրցավար\)[^<>]\{0,50\}' <<<"$page" | sort -u | head -10
+          fi
+
       - name: Does Highlightly fill a finished Armenian match?
+        if: ${{ inputs.mode != 'site' }}
         env:
           HIGHLIGHTLY_KEY: ${{ secrets.HIGHLIGHTLY_KEY }}
           DAY: ${{ inputs.date }}
