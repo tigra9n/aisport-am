@@ -37,7 +37,7 @@ on:
         required: false
         default: ""
       mode:
-        description: "provider = ask Highlightly. site = read the deployed board instead."
+        description: "provider = ask Highlightly. site = read the deployed board. sources = look for another free provider."
         required: false
         default: "provider"
 
@@ -116,8 +116,73 @@ jobs:
             grep -o '[^<>]\{0,50\}\(Կազմ\|Իրադարձ\|Վիճակագր\|Մարզադաշտ\|Մրցավար\)[^<>]\{0,50\}' <<<"$page" | sort -u | head -10
           fi
 
+      # Who else has the Armenian league, and how much of it?
+      #
+      # Highlightly has the table, the fixtures and the live minute and
+      # nothing else - no squad endpoint in any spelling, no top scorers.
+      # ESPN's 218 soccer leagues do not include Armenia at all. So the
+      # squads, the scoring chart and the player pages have no free source
+      # YET, and "yet" is the word this step exists to test.
+      #
+      # The first candidate is the one already in the repository. The
+      # photograph workflow pulls Armenian faces from TheSportsDB and has
+      # filled three and a half thousand of them, which means that provider
+      # knows Armenian squads by name. It has never been asked for the rest
+      # of the row - position, shirt number, birth date - and if it has
+      # them, the Armenian squad page comes back for nothing.
+      - name: Who else has the Armenian league
+        if: ${{ inputs.mode == 'sources' }}
+        env:
+          FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
+        run: |
+          echo "=== TheSportsDB, which already gives this site Armenian faces"
+          for club in Alashkert Pyunik Urartu Noah; do
+            team=$(curl -sS --max-time 30 "https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=$club" || true)
+            tid=$(grep -o '"idTeam":"[0-9]*"' <<<"$team" | head -1 | grep -o '[0-9]*' || true)
+            echo "--- $club (idTeam ${tid:-none}, country $(grep -o '"strCountry":"[^"]*"' <<<"$team" | head -1))"
+            [ -z "$tid" ] && continue
+            squad=$(curl -sS --max-time 30 "https://www.thesportsdb.com/api/v1/json/3/lookup_all_players.php?id=$tid" || true)
+            echo "    players named: $(grep -o '"strPlayer":' <<<"$squad" | wc -l)"
+            echo "    fields on the first row:"
+            head -c 1200 <<<"$squad" | tr ',' '\n' | grep -E '"(strPlayer|strPosition|strNumber|dateBorn|strNationality|strCutout|strThumb|strTeam)"' | head -10 | sed 's/^/      /'
+          done
+
+          echo
+          echo "=== Bzzoiro (BSD), which advertises all of this for nothing"
+          # A service offering what API-Football and Sportmonks charge for,
+          # free and without a rate limit, is either very generous or very
+          # short-lived. Neither matters if it does not have the league:
+          # its own material names thirty-four, and every one of them
+          # named is a big one. So the only question asked here is whether
+          # Armenia is in its list at all.
+          # The coverage page itself, which is the one that answers this.
+          # Guessing endpoint paths got 301s and 404s; the page a human
+          # would read is right there and needs no key.
+          cov=$(curl -sSL --max-time 30 "https://sports.bzzoiro.com/football-coverage/" || true)
+          echo "--- coverage page: ${#cov} bytes, armenia mentioned $(grep -o -i -c armenia <<<"$cov" || true) times"
+          grep -o -i '[^<>]\{0,80\}armenia[^<>]\{0,80\}' <<<"$cov" | head -5 | sed 's/^/    /'
+          echo "--- the leagues it does name:"
+          grep -o -i '[A-ZÀ-Ý][A-Za-zÀ-ÿ. ]\{3,30\}\(League\|Liga\|Serie\|Bundesliga\|Ligue\|Premier\|Eredivisie\|Championship\|Cup\)' <<<"$cov" \
+            | sed 's/^ *//' | sort -u | head -45 | sed 's/^/    /'
+
+          for path in /api/leagues /api/v1/leagues /leagues /api/competitions; do
+            body=$(curl -sS --max-time 25 "https://sports.bzzoiro.com$path" || true)
+            code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 25 "https://sports.bzzoiro.com$path" || true)
+            echo "--- $path -> http $code, ${#body} bytes"
+            [ "${#body}" -lt 40 ] && continue
+            echo "    armenia mentioned: $(grep -o -i -c armenia <<<"$body" || true)"
+            echo "    first 300: $(head -c 300 <<<"$body" | tr '\n' ' ')"
+          done
+
+          echo
+          echo "=== football-data.org, whose token this site already holds"
+          comps=$(curl -sS --max-time 30 -H "X-Auth-Token: $FOOTBALL_DATA_TOKEN" "https://api.football-data.org/v4/competitions" || true)
+          echo "    competitions on this plan: $(grep -o '"code":' <<<"$comps" | wc -l)"
+          echo "    the plan's list: $(grep -o '"code":"[A-Z0-9]*"' <<<"$comps" | tr '\n' ' ')"
+          echo "    anything Armenian: $(grep -c -i armenia <<<"$comps" || true)"
+
       - name: Does Highlightly fill a finished Armenian match?
-        if: ${{ inputs.mode != 'site' }}
+        if: ${{ inputs.mode != 'site' && inputs.mode != 'sources' }}
         env:
           HIGHLIGHTLY_KEY: ${{ secrets.HIGHLIGHTLY_KEY }}
           DAY: ${{ inputs.date }}
@@ -191,7 +256,20 @@ jobs:
           await ask("statistics", `/statistics/${ID}`, (b) => (Array.isArray(b) ? b[0] : b));
           await ask("the match itself", `/matches/${ID}`, (b) => (Array.isArray(b) ? b[0]?.events?.slice(0, 3) : null));
 
-          // 3. The three the daily limit cut off last time.
+          // 3. What /players will actually accept.
+          //
+          // Highlightly has no squad endpoint - /teams/{id}/squad and
+          // /squads both answer 404 - but /players is real: it answered
+          // 400 "property teamId should not exist" to the first round and
+          // 200 to ?name=. A provider that names the property it rejects
+          // can be asked which ones it wants, so this asks. If any of
+          // these opens a squad, the Armenian squad page comes back
+          // without a new provider.
+          for (const param of ["teamName", "clubId", "team", "squadId", "leagueId", "countryCode", "season"]) {
+            await ask(`players by ${param}`, `/players?${param}=${param === "leagueId" ? LEAGUE : "Shirak"}`);
+          }
+
+          // 4. The three the daily limit cut off last time.
           await ask("the leagues of a country", `/leagues?countryCode=AM`);
           await ask("last five games", `/last-five-games?teamId=${played.homeTeam?.id}`);
           await ask("a real player by id", `/players/7014119`, (b) => b);
