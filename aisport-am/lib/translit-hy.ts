@@ -39,15 +39,12 @@ const DIGRAPHS: [string, string][] = [
   // all of it, so the pair is one letter. "w" alone is left as վ, because
   // Polish and German say it that way and Լևանդովսկի is right.
   ["wh", "ու"],
-  // Portuguese writes պալատալ n and l as nh and lh: Savinho, Carvalho,
-  // Cunha. Read letter by letter they became Սավինհո and Կարվալհո, which is
-  // why every one of them is spelled by hand in the table above -
-  // Ռաֆինյա, Մարկինյոս, Վիտինյա, Կունյա. The rule can carry the rest.
-  ["nh", "նյ"],
-  ["lh", "լյ"],
-  // Italian "gli" is the same sound again: Guglielmo, Migliaccio. Only
-  // before i, so Gloria and Inglese are untouched.
-  ["gli", "լյ"],
+  // Italian doubles the c before a front vowel and the h only says the c
+  // stays hard: Carnesecchi is Կարնեսեկի, not Կարնեսեկհի, which is what
+  // reading "cc" and then "ch" produced. Both spellings are Italian and
+  // nothing else spells a name this way.
+  ["cch", "կ"],
+  ["cci", "չի"],
   ["ou", "ու"],
   ["oo", "ու"],
   ["ee", "ի"],
@@ -82,6 +79,38 @@ function transliterateWord(word: string): string {
   let atStart = true;
 
   while (rest.length > 0) {
+    // Portuguese writes the palatal n and l as nh and lh - Savinho,
+    // Carvalho, Cunha - and Italian writes the same l as gli. Read letter
+    // by letter they became Սավինհո and Կարվալհո, which is why every one
+    // of them had to be spelled by hand in the table.
+    //
+    // MEASURED, and the reason these are not in the plain digraph list:
+    // the pair occurs in other languages where it is two sounds, and the
+    // rule was damaging more names than it repaired - Alhassane became
+    // Ալյասանե, Abdelhamid Աբդելյամիդ, Lienhart Լիենյարտ, and the Georgian
+    // Goglichidze Գոլյչիդզե. Arabic writes "al-" in front of half of a
+    // Saudi league and German joins whole words together.
+    //
+    // What Portuguese does and the others do not: the digraph is followed
+    // by a vowel that all but ends the word - Cunha, Savinho, Carvalho,
+    // Marquinhos, Coutinho. Italian gli is followed by a vowel too, where
+    // Goglichidze has a consonant after it.
+    if (rest.startsWith("nh") || rest.startsWith("lh")) {
+      const after = rest.slice(2);
+      if ("aeiou".includes(after[0] ?? "") && after.length <= 2) {
+        out += rest[0] === "n" ? "նյ" : "լյ";
+        rest = after;
+        atStart = false;
+        continue;
+      }
+    }
+    if (rest.startsWith("gli") && "aeou".includes(rest[3] ?? "")) {
+      out += "լյ";
+      rest = rest.slice(3);
+      atStart = false;
+      continue;
+    }
+
     // A digraph first, longest ones before shorter: "sch" must not be read
     // as "sc" + "h".
     const digraph = DIGRAPHS.find(([latin]) => rest.startsWith(latin));
@@ -135,6 +164,25 @@ function transliterateWord(word: string): string {
 export function transliterateName(name: string | null | undefined): string | null {
   if (!name) return null;
   const plain = name
+    // Letters that are not an accent on top of a letter, so stripping
+    // accents does not reach them and they come out untouched: Christian
+    // Nørgaard was printed "Քրիստիան Նørգարդ" on a squad page, Latin
+    // letters standing in the middle of an Armenian word.
+    //
+    // The two with a sound of their own are done here rather than in the
+    // letter table, because they are two Armenian letters each and the
+    // table maps one at a time: Spanish and Portuguese ñ is the same
+    // palatal n as Portuguese nh (Niño -> Նինյո), and ç is s in every
+    // language that writes it (Bragança -> Բրագանսա) where the bare c it
+    // decomposes to would have come out կ.
+    .replace(/ñ/g, "ny").replace(/Ñ/g, "Ny")
+    .replace(/ç/g, "s").replace(/Ç/g, "S")
+    .replace(/[øØ]/g, "o").replace(/[åÅ]/g, "a")
+    .replace(/æ/g, "ae").replace(/Æ/g, "Ae")
+    .replace(/œ/g, "oe").replace(/Œ/g, "Oe")
+    .replace(/ß/g, "ss").replace(/[łŁ]/g, "l")
+    .replace(/[đðĐÐ]/g, "d").replace(/[þÞ]/g, "th")
+    .replace(/[ıİ]/g, "i").replace(/[ŋŊ]/g, "ng")
     // Accents carry pronunciation this mapping cannot express, so they are
     // reduced to the base letter rather than guessed at.
     .normalize("NFD")

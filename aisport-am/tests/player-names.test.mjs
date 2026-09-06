@@ -60,3 +60,38 @@ test("Portuguese nh and lh, and Italian gli", () => {
   // Only before i: an English word with gl is untouched.
   assert.equal(transliterateName("Gloria Inglese"), "Գլորիա Ինգլեսե");
 });
+
+// MEASURED on 6 September, by running every roster the site reads through
+// these two functions: 4330 footballers, 93 of them named by the table and
+// 4237 spelled out by rule. Reading the rules' own work is what found
+// these; each one was damaging names in a language the digraph was never
+// written for.
+test("nh and lh are Portuguese, not Arabic or German", () => {
+  // Half a Saudi league is written "al-" and German joins whole words, so
+  // the pair falls in the middle of names that say both letters.
+  assert.equal(transliterateName("Rahim Alhassane"), "Ռահիմ Ալհասանե");
+  assert.equal(transliterateName("Abdelhamid Ait Boudlal"), "Աբդելհամիդ Աիտ Բուդլալ");
+  assert.equal(transliterateName("Philipp Lienhart"), "Ֆիլիպ Լիենհարտ");
+  // What Portuguese does and those do not: a vowel right after it, at the
+  // end of the word.
+  assert.equal(transliterateName("Matheus Cunha"), "Մաթեուս Կունյա");
+  assert.equal(transliterateName("Coutinho"), "Կուտինյո");
+});
+
+test("Italian gli takes a vowel after it", () => {
+  // Georgian, and it was coming out Գոլյչիդզե.
+  assert.equal(transliterateName("Saba Goglichidze"), "Սաբա Գոգլիչիդզե");
+});
+
+test("Italian cch is one hard k", () => {
+  assert.equal(transliterateName("Marco Carnesecchi"), "Մարկո Կարնեսեկի");
+});
+
+// Latin letters standing in the middle of an Armenian word: stripping the
+// accents never reached these, because they are not a letter with an
+// accent on top.
+test("the letters that are not an accented letter", () => {
+  assert.equal(transliterateName("Christian Nørgaard"), "Քրիստիան Նորգարդ");
+  assert.equal(transliterateName("Fernando Niño"), "Ֆերնանդո Նինյո");
+  assert.equal(transliterateName("Daniel Bragança"), "Դանիել Բրագանսա");
+});
