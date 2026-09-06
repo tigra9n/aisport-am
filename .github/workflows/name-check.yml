@@ -26,6 +26,11 @@ on:
         description: 'How many rule-spelled names to print per league'
         required: false
         default: '30'
+      quota:
+        description: "Also ask D1 what Google's own refusals say the daily limit is"
+        type: choice
+        options: ['no', 'yes']
+        default: 'no'
 
 jobs:
   names:
@@ -94,3 +99,25 @@ jobs:
           console.log(`\n${total} footballers: ${named} from the table (${Math.round((named / total) * 100)}%), ${spelled} from the rules (${Math.round((spelled / total) * 100)}%)`);
           TS
           npx tsx name-check.mts
+
+      # What the free tier actually allows, from Google's own refusals
+      # rather than from either number written down.
+      #
+      # CLAUDE.md says twenty requests a day and that is why the site
+      # publishes at most one article an hour; the comment in
+      # content-generation.ts says two hundred and fifty. They cannot both
+      # be right, and the difference is the difference between seventeen
+      # articles a day and as many as the pipeline can write. A 429 from
+      # Google names the limit in its body, and every one the pipeline has
+      # ever been given is in cron_invocations.
+      - name: What Google's refusals say the limit is
+        if: ${{ github.event.inputs.quota == 'yes' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT ts, substr(log, instr(log,'429'), 400) AS refusal FROM cron_invocations WHERE log LIKE '%429%' ORDER BY id DESC LIMIT 8"
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT COUNT(*) AS runs, SUM(generated) AS articles, MIN(ts) AS since FROM cron_invocations WHERE ts > date('now','-2 day')"
