@@ -74,6 +74,21 @@ jobs:
             curl -sS --max-time 30 "https://www.thesportsdb.com/api/v1/json/3/$list.php?id=4619"               | grep -o '"dateEvent":"[^"]*","[^"]*":"[^"]*"\|"strEvent":"[^"]*"\|"dateEvent":"[^"]*"'               | paste - - 2>/dev/null | grep "$(date -u +%F)" || echo "  $list: nothing today"
           done
 
+          # The legacy footballer URLs, which are the ones Google holds
+          # and the only ones the new redirect touches - every link on the
+          # site itself already carries an "espn-" key. What is being
+          # measured is not which page appears but that the new path does
+          # not throw: 200 or 301 is fine, 500 is the change breaking a
+          # page that used to work.
+          echo "--- legacy /player/<number>:"
+          for pid in 306 1100 497488 154; do
+            # One line, no process substitution: curl's -w output has no
+            # trailing newline, so `read` returns non-zero at EOF and
+            # `bash -e` killed the step before it printed anything.
+            out=$(curl -s -o /dev/null -w "%{http_code} %{redirect_url}" "https://aifootball.am/player/$pid" || true)
+            echo "  player/$pid -> ${out:-no answer}"
+          done
+
           first=$(grep -o 'hl-[0-9]*' <<<"$board" | head -1)
           if [ -n "$first" ]; then
             echo "--- the match page for $first:"
