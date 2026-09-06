@@ -106,7 +106,11 @@ jobs:
             process.exit(0);
           }
           const ID = played.id;
-          console.log(`\nreading ${played.homeTeam?.name} - ${played.awayTeam?.name}, id ${ID}, state ${played.state?.description}, score ${JSON.stringify(played.state?.score)}`);
+          console.log(`\nreading ${played.homeTeam?.name} - ${played.awayTeam?.name}, id ${ID}`);
+          // state.score printed WHOLE. Round two cut it off at two levels
+          // and left lib/highlightly.ts reading five plausible spellings
+          // instead of the one real one.
+          console.log(`    state whole: ${JSON.stringify(played.state)}`);
 
           // 2. The three that decide it.
           await ask("lineups", `/lineups/${ID}`, (b) => b?.homeTeam);

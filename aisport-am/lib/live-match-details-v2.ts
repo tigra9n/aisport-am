@@ -332,6 +332,18 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
       return detail;
     }catch{return null}
   }
+  // Armenian matches now arrive with an "hl-" prefix. They used to be
+  // "af-" and paid; then the board moved to TheSportsDB and they became
+  // "sdb-", which fell through the test below and left every Armenian
+  // match on the board with no page behind it at all. Highlightly answers
+  // the match, its events and its statistics in one request and its
+  // lineups in a second, for nothing.
+  if(id.startsWith("hl-")){
+    try{
+      const {armenianMatchDetailHighlightly}=await import("./highlightly");
+      return await armenianMatchDetailHighlightly(id);
+    }catch{return null}
+  }
   const fixtureId=id.replace(/^af-/,"").replace(/^fd-/,"");
   if(!/^\d+$/.test(fixtureId))return null;
 
