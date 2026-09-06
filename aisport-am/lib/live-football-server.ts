@@ -125,28 +125,63 @@ export async function getLiveMatches(dayOffset=0,allowProviderRequest=true){
       }
     }
     if(!allowProviderRequest)return cached??[];
+    // TheSportsDB behind it, on its own cache row.
+    //
+    // That cache is not decoration. It rate-limits Cloudflare's addresses
+    // hard - two calls in a minute from this Worker drew a 429 - and it
+    // then answers nothing at all, which puts an empty board where an
+    // Armenian match should be. When this moved to Highlightly the
+    // fallback briefly lost its cache and became a live call per page
+    // view, which is exactly how to be rate-limited into silence.
+    const fromSportsDb=async()=>{
+      const sdbKey=`sportsdb:v2:armenia:${date}`;
+      try{
+        if(db){
+          const row=await db.prepare("SELECT payload,saved_at AS savedAt FROM api_cache WHERE cache_key=?").bind(sdbKey).first<{payload:string;savedAt:number}>();
+          if(row?.savedAt&&Date.now()-row.savedAt<ttl*1000){
+            try{return JSON.parse(row.payload) as import("./espn").ArmenianMatch[]}catch{/* refetch */}
+          }
+        }
+        const {armenianMatchesForDate}=await import("./espn");
+        const rows=await armenianMatchesForDate(date);
+        if(db&&rows.length){
+          await db.prepare("INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0")
+            .bind(sdbKey,JSON.stringify(rows),Date.now()).run();
+        }
+        return rows;
+      }catch{return [] as import("./espn").ArmenianMatch[]}
+    };
     try{
       const {armenianMatchesHighlightly}=await import("./highlightly");
       const rows=await armenianMatchesHighlightly(date);
       // Null is the provider saying nothing - a spent allowance answers
       // 429 - and an empty array is a day with no Armenian football. Only
       // the second is worth writing down.
-      if(rows){
+      //
+      // And an empty array is not automatically the truth either: it is
+      // also what a day looks like before this league's fixtures are
+      // published. So when Highlightly has nothing, the fallback is still
+      // asked, and whichever of the two actually names a match wins.
+      if(rows?.length){
         if(db){
           await db.prepare("INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0")
             .bind(cacheKey,JSON.stringify(rows),Date.now()).run();
         }
         return rows;
       }
-      if(cached)return cached;
-      const {armenianMatchesForDate}=await import("./espn");
-      return await armenianMatchesForDate(date);
+      if(cached?.length)return cached;
+      const fallback=await fromSportsDb();
+      if(fallback.length)return fallback;
+      // Nothing anywhere: remember the empty day so the next page view
+      // does not ask both providers again.
+      if(rows&&db){
+        await db.prepare("INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0")
+          .bind(cacheKey,JSON.stringify(rows),Date.now()).run();
+      }
+      return [];
     }catch{
-      if(cached)return cached;
-      try{
-        const {armenianMatchesForDate}=await import("./espn");
-        return await armenianMatchesForDate(date);
-      }catch{return []}
+      if(cached?.length)return cached;
+      return await fromSportsDb();
     }
   })();
 
