@@ -143,6 +143,18 @@ export async function espnTwinUrl(legacyId: number): Promise<string | null> {
 
   const { env } = await import("cloudflare:workers");
   const db = (env as unknown as { DB?: D1Database }).DB;
+  // The proved map before the cache, for the reason written against the
+  // footballers below: a lookup that costs nothing does not need a cache,
+  // and a miss remembered before the map existed would hide it for a day.
+  {
+    const { espnTeamFor } = await import("./team-map");
+    const proved = espnTeamFor(legacyId);
+    if (proved) {
+      const { espnKey } = await import("./espn");
+      return `/team/${espnKey(proved)}`;
+    }
+  }
+
   const cacheKey = `espn:twin:${legacyId}`;
   if (db) {
     try {
@@ -158,31 +170,15 @@ export async function espnTwinUrl(legacyId: number): Promise<string | null> {
 
   let url: string | null = null;
   try {
-    // The proved map first.
-    //
-    // What follows it resolves the old number to a club NAME and then
-    // looks that name up among ESPN's clubs, which is a guess: two clubs
-    // whose names look alike send a reader who clicked on one to the
-    // other, permanently, with a 301. lib/team-map.ts holds two hundred
-    // and seven pairs that were not guessed - both providers' squads were
-    // fetched and share at least four surnames - so those are answered
-    // from the table and never reach the name matcher.
-    //
-    // It is also free and instant: no fetch, no seventeen ESPN league
-    // lists, which is what made the Armenian club page slow enough to be
-    // reported by a reader.
-    const { espnTeamFor } = await import("./team-map");
-    const proved = espnTeamFor(legacyId);
-    if (proved) {
-      const { espnKey } = await import("./espn");
-      url = `/team/${espnKey(proved)}`;
-    } else {
-      const known = await knownTeam(legacyId);
-      if (known?.name) {
-        const { findEspnTeamByName, espnKey } = await import("./espn");
-        const team = await findEspnTeamByName(known.name);
-        url = team ? `/team/${espnKey(team.id)}` : null;
-      }
+    // Only the name search reaches here; the map answered above. This is
+    // a guess - two clubs whose names look alike send a reader who clicked
+    // on one to the other, permanently - and it walks seventeen ESPN
+    // league lists to make it, which is what the cache around it is for.
+    const known = await knownTeam(legacyId);
+    if (known?.name) {
+      const { findEspnTeamByName, espnKey } = await import("./espn");
+      const team = await findEspnTeamByName(known.name);
+      url = team ? `/team/${espnKey(team.id)}` : null;
     }
   } catch { /* remembered as a miss, and asked again tomorrow */ }
 
@@ -213,6 +209,27 @@ export async function espnTwinUrl(legacyId: number): Promise<string | null> {
 export async function espnPlayerTwinUrl(legacyId: number): Promise<string | null> {
   const { env } = await import("cloudflare:workers");
   const db = (env as unknown as { DB?: D1Database }).DB;
+  // The proved map before the cache, because it is free and the cache
+  // can be wrong about it.
+  //
+  // MEASURED: three of the four legacy URLs asked on the deployed site
+  // are in lib/player-map.ts and none of them redirected. The misses had
+  // been remembered half an hour earlier, when the map was still empty,
+  // and a miss is kept for a day - so four thousand eight hundred proved
+  // footballers would have sat behind a stale "nobody" until tomorrow.
+  //
+  // A table lookup costs nothing, so there was never anything to cache
+  // about it. What the cache is for is the name search below, which walks
+  // every athlete index this site has stored.
+  {
+    const { espnAthleteFor } = await import("./player-map");
+    const proved = espnAthleteFor(legacyId);
+    if (proved) {
+      const { espnKey } = await import("./espn");
+      return `/player/${espnKey(proved)}`;
+    }
+  }
+
   const cacheKey = `espn:playertwin:${legacyId}`;
   const remember = async (found: string | null) => {
     if (db) {
@@ -238,21 +255,7 @@ export async function espnPlayerTwinUrl(legacyId: number): Promise<string | null
 
   let url: string | null = null;
   try {
-    // The proved map first, for the same reason the club page has one.
-    //
-    // What follows it matches a name against every footballer in ten
-    // leagues at once, and it refused the first four legacy URLs asked of
-    // it on the deployed site: a footballer gets an answer there only if a
-    // cached scoring chart or squad already knows him, which most do not.
-    // lib/player-map.ts is built the other way round - inside one squad,
-    // where twenty-eight team-mates are the whole field and a family name
-    // means something.
-    const { espnAthleteFor } = await import("./player-map");
-    const proved = espnAthleteFor(legacyId);
-    if (proved) {
-      const { espnKey } = await import("./espn");
-      return await remember(`/player/${espnKey(proved)}`);
-    }
+    // Only the name search reaches here; the map answered above.
     const known = await knownPlayer(legacyId);
     if (known?.name) {
       const { ESPN_SLUG_BY_CODE, espnKey } = await import("./espn");
