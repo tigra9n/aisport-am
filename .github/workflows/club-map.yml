@@ -1,0 +1,262 @@
+# The map between the two providers' club numbers.
+#
+# WHY THIS EXISTS, and why it exists NOW rather than later.
+#
+# Four things on this site still read the paid provider: squads, player
+# pages, top scorers and team pages. ESPN has all four for nothing -
+# measured on 6 September, not assumed - but every one of those pages
+# lives behind a URL numbered by API-Sports. /team/50 is Chelsea because
+# API-Sports says 50; ESPN calls the same club 363. Those URLs are the
+# ones Google has been indexing. Swapping the source without a map between
+# the two numberings would point every indexed team and player page at a
+# different footballer, which is worse than losing the pages.
+#
+# So the map is the work, not the reading. And it can only be built while
+# BOTH providers answer: the paid plan ends on 23 September, and after
+# that there is nothing left to compare against. That is the whole reason
+# this runs in the first week of September.
+#
+# HOW IT AVOIDS A WRONG ROW, which is the only thing that matters here.
+#
+# The rule is in lib/club-match.ts, where it is unit-tested, and it is
+# this: the name decides nothing. Every club in the league is scored on
+# how many surnames its published squad shares with the club being
+# matched, and a row is written only when one club shares at least four
+# and no other club shares as many. Two different clubs do not share four
+# players.
+#
+# An unmatched club is not a failure of this job, it is its output: the
+# run prints them by name so they can be resolved by hand, exactly the way
+# the twenty-six clubs the photograph workflow could not match were.
+#
+# Nothing here touches the deployed site. It writes a file, commits it to
+# its own branch and opens one pull request.
+name: Club map
+
+on:
+  workflow_dispatch:
+    inputs:
+      leagues:
+        description: "Comma-separated codes, or all"
+        required: false
+        default: "all"
+
+jobs:
+  map:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    defaults:
+      run:
+        working-directory: aisport-am
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: npm ci --no-audit --no-fund
+
+      - name: Match every club at both providers, and make each pair prove it
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          LEAGUES: ${{ inputs.leagues }}
+        run: |
+          cat > map.mts <<'TS'
+          import { readFileSync, writeFileSync, existsSync } from "node:fs";
+          import { chooseClub, surnameSet } from "./lib/club-match.ts";
+
+          const KEY = process.env.API_FOOTBALL_KEY || "";
+          if (!KEY) { console.log("no API_FOOTBALL_KEY"); process.exit(1); }
+
+          // Armenia is not here on purpose: ESPN's list of 218 soccer
+          // leagues does not contain the Armenian Premier League, so there
+          // is no ESPN club to map an Armenian club onto. That gap is real
+          // and is not this job's to close.
+          const LEAGUES = [
+            { code: "CL",  af: 2,   espn: "uefa.champions" },
+            { code: "EL",  af: 3,   espn: "uefa.europa" },
+            { code: "ECL", af: 848, espn: "uefa.europa.conf" },
+            { code: "PL",  af: 39,  espn: "eng.1" },
+            { code: "PD",  af: 140, espn: "esp.1" },
+            { code: "SA",  af: 135, espn: "ita.1" },
+            { code: "BL1", af: 78,  espn: "ger.1" },
+            { code: "FL1", af: 61,  espn: "fra.1" },
+            { code: "SPL", af: 307, espn: "ksa.1" },
+            { code: "MLS", af: 253, espn: "usa.1" },
+          ];
+          const asked = (process.env.LEAGUES || "all").trim().toUpperCase();
+          const only = !asked || asked === "ALL"
+            ? LEAGUES
+            : LEAGUES.filter((l) => asked.split(",").map((s) => s.trim()).includes(l.code));
+
+          const now = new Date();
+          const season = now.getUTCMonth() + 1 >= 7 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
+          const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+          const af = async (path: string) => {
+            // 400ms between calls. The paid plan allows far more per
+            // minute; the photograph workflow settled on this pace and was
+            // never throttled at it.
+            await wait(400);
+            const res = await fetch(`https://v3.football.api-sports.io${path}`, {
+              headers: { "x-apisports-key": KEY, Accept: "application/json" },
+              signal: AbortSignal.timeout(20000),
+            });
+            const json = await res.json() as { errors?: unknown; response?: unknown };
+            // api-sports answers 200 with an errors object when it is
+            // refusing - a rate limit, an expired plan - and results: 0.
+            // Reading that as "this club has no squad" is how an afternoon
+            // was once spent; here it stops the run, because a refusal
+            // would quietly become an unmatched club and an unmatched club
+            // reads like a naming problem.
+            const errors = json?.errors;
+            if (errors && !Array.isArray(errors) && typeof errors === "object" && Object.keys(errors).length) {
+              throw new Error(`api-sports refused: ${JSON.stringify(errors)}`);
+            }
+            return json;
+          };
+
+          const espn = async (url: string) => {
+            try {
+              const res = await fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(20000) });
+              if (!res.ok) return null;
+              return await res.json();
+            } catch { return null; }
+          };
+
+          const map: Record<string, string> = {};
+          const unmatched: string[] = [];
+          const proved: string[] = [];
+
+          for (const league of only) {
+            console.log(`\n=== ${league.code}  (api-football ${league.af}, espn ${league.espn}, season ${season})`);
+            const teamsPayload = await af(`/teams?league=${league.af}&season=${season}`) as { response?: { team?: { id?: number; name?: string } }[] };
+            const afTeams = (teamsPayload.response ?? [])
+              .map((row) => ({ id: row.team?.id, name: row.team?.name }))
+              .filter((t): t is { id: number; name: string } => typeof t.id === "number" && !!t.name);
+
+            const espnList = await espn(`https://site.api.espn.com/apis/site/v2/sports/soccer/${league.espn}/teams`) as
+              { sports?: { leagues?: { teams?: { team?: { id?: string | number; displayName?: string; name?: string } }[] }[] }[] } | null;
+            const espnTeams = (espnList?.sports?.[0]?.leagues?.[0]?.teams ?? [])
+              .map((entry) => entry.team)
+              .filter(Boolean)
+              .map((t) => ({ id: String(t!.id), name: t!.displayName || t!.name || "" }));
+
+            console.log(`    ${afTeams.length} clubs at api-football, ${espnTeams.length} at espn`);
+            if (!afTeams.length || !espnTeams.length) { console.log("    one side is empty - skipping rather than guessing"); continue; }
+
+            // Every roster is fetched once and reused: each club being
+            // matched is scored against all of them, so without this the
+            // league would cost twenty times as many requests.
+            const rosters = new Map<string, Set<string>>();
+            for (const team of espnTeams) {
+              const data = await espn(`https://site.api.espn.com/apis/site/v2/sports/soccer/${league.espn}/teams/${team.id}/roster`) as
+                { athletes?: unknown } | null;
+              const raw = data?.athletes;
+              const list = Array.isArray(raw)
+                ? ((raw[0] as { items?: unknown[] } | undefined)?.items
+                    ? (raw as { items?: unknown[] }[]).flatMap((g) => g.items ?? [])
+                    : raw)
+                : [];
+              rosters.set(team.id, surnameSet((list as { lastName?: string; displayName?: string; fullName?: string }[])
+                .map((p) => p.lastName || p.displayName || p.fullName || "")));
+            }
+            const candidates = espnTeams.map((t) => ({ id: t.id, name: t.name, squad: rosters.get(t.id) ?? new Set<string>() }));
+
+            for (const club of afTeams) {
+              const squadPayload = await af(`/players/squads?team=${club.id}`) as { response?: { players?: { name?: string }[] }[] };
+              const ours = surnameSet((squadPayload.response?.[0]?.players ?? []).map((p) => p.name || ""));
+              const verdict = chooseClub(ours, candidates);
+              if (verdict) {
+                map[String(club.id)] = verdict.id;
+                proved.push(`${league.code}: ${club.name} (${club.id}) = ${verdict.name} (${verdict.id}), ${verdict.shared} shared, next best ${verdict.runnerUp}`);
+              } else {
+                unmatched.push(`${league.code}: ${club.name} (${club.id}) - ${ours.size} surnames published, nothing proved`);
+              }
+            }
+          }
+
+          console.log(`\n=== proved (${proved.length})`);
+          for (const line of proved) console.log(`  ${line}`);
+          console.log(`\n=== unmatched (${unmatched.length}) - these need a hand, and are why this run is read`);
+          for (const line of unmatched) console.log(`  ${line}`);
+
+          if (!Object.keys(map).length) { console.log("\nnothing proved - not writing a file"); process.exit(0); }
+
+          const path = "lib/team-map.ts";
+          // An existing map is added to, never replaced: a club proved in
+          // an earlier run keeps its row even when this run could not
+          // reach its squad, and a row corrected by hand is not overwritten
+          // by a machine.
+          const existing: Record<string, string> = {};
+          if (existsSync(path)) {
+            for (const m of readFileSync(path, "utf8").matchAll(/(\d+)\s*:\s*"(\d+)"/g)) existing[m[1]] = m[2];
+          }
+          const merged = { ...map, ...existing };
+          const rows = Object.entries(merged)
+            .sort((a, b) => Number(a[0]) - Number(b[0]))
+            .map(([af, es]) => `  ${af}: "${es}",`)
+            .join("\n");
+          writeFileSync(path, [
+            "// Generated by .github/workflows/club-map.yml. Rows are added, never",
+            "// replaced - a row corrected by hand stays corrected.",
+            "//",
+            "// The left number is API-Football's club id, which is what /team/<n> on",
+            "// this site runs on and what Google has indexed. The right one is ESPN's,",
+            "// which is where the squad, the roster and the crest come from once the",
+            "// paid plan ends on 23 September.",
+            "//",
+            "// Every row here was proved, not guessed: the two clubs' published squads",
+            "// share at least four surnames and no other club in the league shares as",
+            "// many. A club that could not show that is absent from this file, and its",
+            "// page keeps whatever lib/entity-cache.ts already holds rather than being",
+            "// pointed at somebody else. The rule is lib/club-match.ts.",
+            "export const ESPN_TEAM_BY_API_FOOTBALL: Record<number, string> = {",
+            rows,
+            "};",
+            "",
+            "export function espnTeamFor(apiFootballId: number | null | undefined): string | null {",
+            "  if (typeof apiFootballId !== \"number\") return null;",
+            "  return ESPN_TEAM_BY_API_FOOTBALL[apiFootballId] ?? null;",
+            "}",
+            "",
+          ].join("\n"));
+          console.log(`\nwrote aisport-am/${path}: ${Object.keys(merged).length} rows (${Object.keys(map).length} proved this run)`);
+          TS
+          npx tsx map.mts
+          rm -f map.mts
+
+      - name: Typecheck and test what was written
+        run: |
+          if [ ! -f lib/team-map.ts ]; then echo "no map written"; exit 0; fi
+          npm run typecheck
+          npm run test:units
+
+      - name: Commit it and ask for a read
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -z "$(git status --porcelain aisport-am/lib/team-map.ts)" ]; then echo "nothing to commit"; exit 0; fi
+          TARGET="claude/club-map"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add aisport-am/lib/team-map.ts
+          git commit -m "Map the two providers' club numbers to each other
+
+          Every row was proved by squad overlap rather than by name: the
+          two clubs' published squads share at least four surnames and no
+          other club in the league shares as many. A club that could not
+          show that is absent, and its page keeps what the entity cache
+          already holds instead of being pointed at a different club."
+          git push origin HEAD:"$TARGET"
+          open=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls?head=${{ github.repository_owner }}:$TARGET&state=open" \
+            | grep -c '"number"' || true)
+          if [ "$open" = "0" ]; then
+            curl -sS -X POST -H "Authorization: Bearer $GH_TOKEN" \
+              "https://api.github.com/repos/${{ github.repository }}/pulls" \
+              -d "{\"title\":\"Map the two providers' club numbers to each other\",\"head\":\"$TARGET\",\"base\":\"main\",\"body\":\"Built while both providers still answer, which is the only time it can be built: the paid plan ends on 23 September and after that there is nothing to compare against.\\n\\nEvery row was proved by squad overlap, not by name. The two clubs' published squads share at least four surnames and no other club in the league shares as many; two different clubs do not share four players. The rule is in lib/club-match.ts and is unit-tested. A club that could not prove itself is absent from the file and is listed in the run log by name, to be resolved by hand.\\n\\nThis file changes nothing on its own - nothing reads it yet.\"}" >/dev/null
+            echo "opened a pull request on $TARGET"
+          fi
