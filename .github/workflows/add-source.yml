@@ -1872,66 +1872,79 @@ jobs:
           JS
           node armdays.mjs
 
-      # Every footballer's face, asked of ESPN properly this time.
+      # Highlightly, which Tigran found, against the two things this site
+      # still cannot get free: a footballer's photograph and the Armenian
+      # table.
       #
-      # The earlier measurement said ESPN NAMES a headshot for two of
-      # Arsenal's twenty-four, and that was read as "ESPN has two". Not
-      # naming one is not the same as not having one: the address is
-      # predictable, and a field missing from a roster response says nothing
-      # about what sits on the CDN.
+      # ESPN has now answered the photograph question and the answer is no.
+      # Asked for the address itself, one player at a time: Chelsea 3 faces
+      # of 30, Real Madrid 1 of 32, and the combiner adds none. Courtois,
+      # Ruediger, Alexander-Arnold and Cucurella have no photograph on the
+      # CDN at all. TheSportsDB has them but its free key stops at ten a
+      # club, which is the ceiling the squad pages sit at now.
       #
-      # So take a whole squad, and for every man in it try the address
-      # directly - full, and the two other sizes ESPN serves - and count how
-      # many actually answer. TheSportsDB's free key caps a club at ten
-      # players, so if ESPN answers for most of a squad it is the better
-      # source and the ceiling goes away.
-      - name: Does ESPN have a face for every footballer
+      # Without a key this can only learn what to sign up for: which host
+      # answers, which header it wants, and what it says to a caller with no
+      # key. Set HIGHLIGHTLY_KEY as a repository secret and it measures the
+      # data instead - the Armenian table against the real one, club by
+      # club, and a squad's photographs counted.
+      #
+      # The key goes in the secret, never in a message and never in the log.
+      - name: What Highlightly answers
         if: ${{ github.event.inputs.livescore != 'no' && github.event.inputs.espn == 'no' }}
+        env:
+          HIGHLIGHTLY_KEY: ${{ secrets.HIGHLIGHTLY_KEY }}
         run: |
-          cat > faces.mjs <<'JS'
+          cat > high.mjs <<'JS'
+          const KEY = process.env.HIGHLIGHTLY_KEY || "";
           const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
-          const WEB = "https://site.web.api.espn.com/apis/site/v2/sports/soccer";
-          const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+          console.log(KEY ? "a key is set" : "no key set - measuring only what the door says");
 
-          async function json(url) {
+          // The documented host, and the two shapes an API of this kind
+          // usually takes: its own domain with an x-api-key, or RapidAPI.
+          const HOSTS = [
+            "https://soccer.highlightly.net",
+            "https://sport.highlightly.net/football",
+            "https://football-highlights-api.p.rapidapi.com",
+          ];
+          const headerSets = KEY
+            ? [{ "x-api-key": KEY }, { "x-rapidapi-key": KEY, "x-rapidapi-host": "football-highlights-api.p.rapidapi.com" }, { Authorization: `Bearer ${KEY}` }]
+            : [{}];
+
+          async function ask(url, headers) {
             try {
-              const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(20000) });
-              return r.ok ? await r.json() : null;
-            } catch { return null; }
-          }
-          async function exists(url) {
-            try {
-              const r = await fetch(url, { method: "GET", headers: { "User-Agent": UA }, signal: AbortSignal.timeout(15000) });
-              // A 200 with a handful of bytes is a placeholder, not a face.
-              if (!r.ok) return 0;
-              const buf = await r.arrayBuffer();
-              return buf.byteLength > 2000 ? buf.byteLength : 0;
-            } catch { return 0; }
+              const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json", ...headers }, signal: AbortSignal.timeout(20000) });
+              const text = await r.text();
+              let json = null; try { json = JSON.parse(text) } catch {}
+              return { status: r.status, json, text };
+            } catch (e) { return { status: 0, json: null, text: String(e) }; }
           }
 
-          for (const [club, slug, id] of [["Arsenal", "eng.1", "359"], ["Chelsea", "eng.1", "363"], ["Real Madrid", "esp.1", "86"]]) {
-            const roster = await json(`${WEB}/${slug}/teams/${id}/roster`);
-            const men = (roster?.athletes ?? []).filter((a) => a.id && a.displayName);
-            console.log("");
-            console.log(`=== ${club}: ${men.length} in the squad ===`);
-            let named = 0, direct = 0, combiner = 0, none = [];
-            for (const a of men) {
-              if (a.headshot?.href) named++;
-              await wait(120);
-              const full = await exists(`https://a.espncdn.com/i/headshots/soccer/players/full/${a.id}.png`);
-              if (full) { direct++; continue; }
-              const comb = await exists(`https://a.espncdn.com/combiner/i?img=/i/headshots/soccer/players/full/${a.id}.png&w=350&h=254`);
-              if (comb) { combiner++; continue; }
-              none.push(a.displayName);
+          for (const host of HOSTS) {
+            for (const [i, headers] of headerSets.entries()) {
+              const r = await ask(`${host}/leagues?limit=5`, headers);
+              const label = Object.keys(headers)[0] ?? "no header";
+              console.log(`  ${host}  [${label}]  HTTP ${r.status}  ${String(r.text).replace(/\s+/g, " ").slice(0, 140)}`);
+              if (r.status === 200) {
+                // Found a door. Ask it the two questions that matter.
+                console.log("");
+                console.log("=== does it carry the Armenian Premier League ===");
+                const arm = await ask(`${host}/leagues?countryName=Armenia`, headers);
+                console.log(`  HTTP ${arm.status}  ${String(arm.text).replace(/\s+/g, " ").slice(0, 400)}`);
+                console.log("");
+                console.log("=== does a squad come with photographs ===");
+                const teams = await ask(`${host}/teams?limit=3`, headers);
+                console.log(`  teams HTTP ${teams.status}  ${String(teams.text).replace(/\s+/g, " ").slice(0, 300)}`);
+                process.exit(0);
+              }
+              if (!KEY) break;
             }
-            console.log(`  named in the roster response: ${named}`);
-            console.log(`  the direct address answers:   ${direct}`);
-            console.log(`  only the combiner answers:    ${combiner}`);
-            console.log(`  no face anywhere:             ${none.length}`);
-            if (none.length) console.log(`      ${none.slice(0, 12).join(", ")}`);
           }
+          console.log("");
+          console.log("no door opened. The status and the body above say what to sign up for:");
+          console.log("401/403 means the endpoint is right and a key is needed; 404 means the path is wrong.");
           JS
-          node faces.mjs
+          node high.mjs
 
       - name: What the sources table holds now
         if: ${{ github.event.inputs.livescore == 'all' && github.event.inputs.espn == 'no' }}
