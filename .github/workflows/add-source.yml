@@ -1872,6 +1872,94 @@ jobs:
           JS
           node armdays.mjs
 
+      # Wikipedia, as a source for the one table this site cannot get free.
+      #
+      # The article's standings are maintained by editors, licensed CC BY-SA,
+      # and there is a proper API - no scraping and no terms to break, unlike
+      # the livescore sites. The obligation is attribution on the page.
+      #
+      # The test is not "does it return a table". TheSportsDB returned twelve
+      # clubs and four of them were wrong, which is worse than the five-row
+      # one it replaced. So this is checked against the real table, club by
+      # club: twelve of twelve or it is not usable.
+      - name: Can Wikipedia carry the Armenian table
+        if: ${{ github.event.inputs.livescore != 'no' && github.event.inputs.espn == 'no' }}
+        run: |
+          cat > wiki.mjs <<'JS'
+          const UA = "aifootball.am/1.0 (https://aifootball.am; Armenian football news)";
+          const API = "https://en.wikipedia.org/w/api.php";
+
+          // The real table, read off the league's own standings on
+          // 6 September. Every candidate source is measured against this.
+          const TRUTH = [
+            ["Noah", 6, 18, 11], ["Alashkert", 6, 13, 12], ["Ararat-Armenia", 6, 13, 4],
+            ["Pyunik", 5, 11, 6], ["Sardarapat", 4, 10, 6], ["Urartu", 5, 8, 3],
+            ["Shirak", 5, 7, 3], ["BKMA", 5, 4, -2], ["Gandzasar", 6, 3, -7],
+            ["Ararat", 6, 3, -10], ["Syunik", 6, 2, -10], ["Van", 6, 1, -16],
+          ];
+
+          async function get(url) {
+            try {
+              const r = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(25000) });
+              return r.ok ? await r.json() : null;
+            } catch { return null; }
+          }
+
+          const titles = ["2026-27 Armenian Premier League", "2026\u201327 Armenian Premier League", "Armenian Premier League"];
+          let html = null, used = null;
+          for (const title of titles) {
+            const r = await get(`${API}?action=parse&page=${encodeURIComponent(title)}&prop=text&formatversion=2&format=json`);
+            if (r?.parse?.text) { html = r.parse.text; used = r.parse.title; break; }
+            console.log(`  "${title}": ${r?.error?.code ?? "no text"}`);
+          }
+          if (!html) { console.log("no article found"); process.exit(0); }
+          console.log(`article: ${used}, ${html.length} bytes`);
+
+          // Every wikitable, then the one whose header carries the league
+          // table's own columns.
+          const tables = html.match(/<table[\s\S]*?<\/table>/g) ?? [];
+          const strip = (t) => t.replace(/<[^>]*>/g, " ").replace(/&#\d+;|&[a-z]+;/g, " ").replace(/\s+/g, " ").trim();
+          let best = null;
+          for (const t of tables) {
+            const head = strip(t.slice(0, 1200));
+            if (/\bPld\b/.test(head) && /\bPts\b/.test(head) && /\bGD\b/.test(head)) { best = t; break; }
+          }
+          if (!best) { console.log(`no standings table among ${tables.length} tables`); process.exit(0); }
+
+          const rows = (best.match(/<tr[\s\S]*?<\/tr>/g) ?? []).map((tr) => {
+            const cells = (tr.match(/<t[hd][\s\S]*?<\/t[hd]>/g) ?? []).map(strip).filter((c) => c !== "");
+            return cells;
+          }).filter((c) => c.length >= 8);
+
+          const parsed = [];
+          for (const cells of rows) {
+            // pos, team, Pld, W, D, L, GF, GA, GD, Pts - the team is the
+            // first cell that is not a number.
+            const nums = cells.map((c) => Number(String(c).replace(/[^\d-]/g, "")));
+            const teamAt = cells.findIndex((c, i) => i > 0 && !/^\d+\.?$/.test(c) && /[A-Za-z]/.test(c));
+            if (teamAt < 0) continue;
+            const after = nums.slice(teamAt + 1).filter((n) => Number.isFinite(n));
+            if (after.length < 8) continue;
+            parsed.push({ team: cells[teamAt].replace(/\[.*?\]/g, "").trim(), pld: after[0], gd: after[6], pts: after[7] });
+          }
+
+          console.log(`rows parsed: ${parsed.length}`);
+          for (const r of parsed) console.log(`  ${String(r.team).padEnd(20)} ${String(r.pts).padStart(3)} pts  ${r.pld} played  ${r.gd > 0 ? "+" : ""}${r.gd}`);
+
+          console.log("");
+          console.log("against the real table:");
+          let right = 0;
+          for (const [team, pld, pts, gd] of TRUTH) {
+            const mine = parsed.find((r) => r.team.toLowerCase().includes(team.toLowerCase().split(" ")[0].replace("-armenia", "")));
+            const ok = mine && mine.pld === pld && mine.pts === pts && mine.gd === gd;
+            if (ok) right++;
+            console.log(`  ${String(team).padEnd(16)} real ${String(pts).padStart(3)}/${pld}/${gd > 0 ? "+" : ""}${gd}   wiki ${mine ? `${String(mine.pts).padStart(3)}/${mine.pld}/${mine.gd > 0 ? "+" : ""}${mine.gd}` : "  not found"}   ${ok ? "ok" : "NO"}`);
+          }
+          console.log("");
+          console.log(`${right} of ${TRUTH.length} clubs correct`);
+          JS
+          node wiki.mjs
+
       - name: What the sources table holds now
         if: ${{ github.event.inputs.livescore == 'all' && github.event.inputs.espn == 'no' }}
         run: |

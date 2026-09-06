@@ -137,8 +137,15 @@ export async function GET(request: Request) {
       // none, the loss is inside the match path, not in the data.
       const scorers = await import("../../../../lib/topscorers-server");
       await say("getTopScorers(PL)", async () => (await scorers.getTopScorers("PL")).rows);
+      // Through getLiveMatchDetailsV2, which is what the modal's own request
+      // calls. Asking espnLiveMatchDetail directly reports no scorers by
+      // design now - that file stopped fetching the chart when the lazy
+      // import between it and topscorers-server turned out to be a cycle,
+      // and the caller fills it instead. A probe that measures the half
+      // without the fix reads like a fault and is not one.
+      const details = await import("../../../../lib/live-match-details-v2");
       await say("matchDetail.topScorers", async () => {
-        const detail = await espn.espnLiveMatchDetail("espn-eng.1-401879288");
+        const detail = await details.getLiveMatchDetailsV2("espn-eng.1-401879288");
         if (!detail) return "the match itself came back null";
         return `${detail.topScorers?.length ?? 0} scorer row(s), ${detail.events?.length ?? 0} event(s), standings ${detail.standings?.length ?? 0}`;
       });
