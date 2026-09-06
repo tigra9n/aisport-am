@@ -30,6 +30,10 @@ type HighlightlySide = {
 type HighlightlyRow = {
   position?: number;
   points?: number | null;
+  // A total is in the row after all - it was not in the first sample and
+  // this file added home and away by hand because of that. Both are kept:
+  // total when it is there, the sum when it is not.
+  total?: HighlightlySide;
   home?: HighlightlySide;
   away?: HighlightlySide;
   team?: { id?: number; name?: string; logo?: string | null };
@@ -54,7 +58,13 @@ export async function armenianStandingsHighlightly(): Promise<StandingRow[] | nu
 
   try {
     const res = await fetch(`${HOST}/standings?leagueId=${ARMENIAN_LEAGUE}&season=${currentSeasonYear()}`, {
-      headers: { "x-api-key": key, Accept: "application/json" },
+      // x-rapidapi-key, not x-api-key. MEASURED against this host with
+      // both: x-api-key answers 403 "Missing mandatory HTTP Headers" and
+      // x-rapidapi-key answers 200, on highlightly.net's own domain rather
+      // than RapidAPI's. Shipped with the wrong one first, which meant the
+      // Worker quietly fell through to the five-row table while a runner
+      // was reading twelve correct ones.
+      headers: { "x-rapidapi-key": key, Accept: "application/json" },
       signal: AbortSignal.timeout(12_000),
     });
     if (!res.ok) return null;
@@ -71,10 +81,13 @@ export async function armenianStandingsHighlightly(): Promise<StandingRow[] | nu
     const table = rows.map((row) => {
       const home = row.home ?? {};
       const away = row.away ?? {};
-      const won = num(home.wins) + num(away.wins);
-      const draw = num(home.draws) + num(away.draws);
-      const scored = num(home.scoredGoals) + num(away.scoredGoals);
-      const conceded = num(home.receivedGoals) + num(away.receivedGoals);
+      const total = row.total;
+      const sum = (pick: (side: HighlightlySide) => unknown) =>
+        total ? num(pick(total)) : num(pick(home)) + num(pick(away));
+      const won = sum((side) => side.wins);
+      const draw = sum((side) => side.draws);
+      const scored = sum((side) => side.scoredGoals);
+      const conceded = sum((side) => side.receivedGoals);
       return {
         position: 0,
         // armenianTeamName carries banants -> Ուրարտու, because this
@@ -87,10 +100,10 @@ export async function armenianStandingsHighlightly(): Promise<StandingRow[] | nu
         // reason the old Armenian table carried none.
         teamKey: null,
         teamLogo: row.team?.logo ?? null,
-        played: num(home.games) + num(away.games),
+        played: sum((side) => side.games),
         won,
         draw,
-        lost: num(home.loses) + num(away.loses),
+        lost: sum((side) => side.loses),
         goalDifference: scored - conceded,
         points: typeof row.points === "number" ? row.points : won * 3 + draw,
       };
