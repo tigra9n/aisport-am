@@ -107,6 +107,13 @@ async function cachedGet<T>(cacheKey: string, ttlMs: number, url: string, key: s
     const response = await fetchApi(url, key);
     if (!response) throw new Error("unreachable");
     const json = await response.json();
+    // A refusal arrives as HTTP 200 with an errors object; see
+    // lib/api-sports.ts. Throwing here is what sends it down to the cached
+    // row and then to knownPlayer, instead of letting an empty list be
+    // read as "this footballer does not exist".
+    const { providerRefusal } = await import("./api-sports");
+    const refusal = providerRefusal(json);
+    if (refusal) throw new Error(refusal);
     const result = extract(json);
     if (result === null) throw new Error("empty");
     if (db) {

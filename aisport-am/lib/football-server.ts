@@ -144,6 +144,9 @@ export async function getStandings(code: string): Promise<{ rows: StandingRow[];
     });
     if (!response.ok) throw new Error(`http ${response.status}`);
     const data = await response.json() as ApiFootballStandingsResponse;
+    const { providerRefusal } = await import("./api-sports");
+    const refusal = providerRefusal(data);
+    if (refusal) throw new Error(refusal);
     // Most leagues return a single flat table in standings[0]. US-style
     // leagues (MLS confirmed) split into multiple groups instead (Eastern
     // Conference, Western Conference) - taking only standings[0] silently

@@ -397,6 +397,12 @@ export async function getSquad(teamId: number | string): Promise<Squad | null> {
     const response = await fetchApi(`https://v3.football.api-sports.io/players/squads?team=${teamId}`, key);
     if (!response) throw new Error("unreachable");
     const data = await response.json() as { response?: ApiFootballSquad[] };
+    const { providerRefusal } = await import("./api-sports");
+    // Refused this minute is not "this club has no squad": throwing sends
+    // it to the stale row below, which is a day-old squad rather than an
+    // empty page.
+    const refusal = providerRefusal(data);
+    if (refusal) throw new Error(refusal);
     const entry = data.response?.[0];
     if (!entry?.players?.length) throw new Error("empty");
     const squad: Squad = {

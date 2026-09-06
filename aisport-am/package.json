@@ -15,7 +15,7 @@
     "lint": "bash scripts/sites-env.sh -- eslint . --ignore-pattern dist --ignore-pattern .next",
     "typecheck": "tsc --noEmit",
     "db:generate": "bash scripts/sites-env.sh -- drizzle-kit generate",
-    "test:units": "tsx --test tests/story-ranking.test.mjs tests/team-names.test.mjs tests/espn-leaders.test.mjs tests/feed-image.test.mjs tests/squad-photos.test.mjs tests/player-names.test.mjs tests/armenian-clubs.test.mjs"
+    "test:units": "tsx --test tests/story-ranking.test.mjs tests/team-names.test.mjs tests/espn-leaders.test.mjs tests/feed-image.test.mjs tests/squad-photos.test.mjs tests/player-names.test.mjs tests/armenian-clubs.test.mjs tests/api-sports.test.mjs"
   },
   "dependencies": {
     "drizzle-orm": "0.45.2",
