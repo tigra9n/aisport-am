@@ -33,6 +33,21 @@ const DIGRAPHS: [string, string][] = [
   ["gh", "գ"],
   ["ck", "կ"],
   ["qu", "կվ"],
+  // MEASURED against a Premier League squad list: "wh" was coming out as
+  // "վհ" - Ben White as Բեն Վհիտե, Adam Wharton as Ադամ Վհարտոն. English is
+  // the only language that spells the sound this way and the h is silent in
+  // all of it, so the pair is one letter. "w" alone is left as վ, because
+  // Polish and German say it that way and Լևանդովսկի is right.
+  ["wh", "ու"],
+  // Portuguese writes պալատալ n and l as nh and lh: Savinho, Carvalho,
+  // Cunha. Read letter by letter they became Սավինհո and Կարվալհո, which is
+  // why every one of them is spelled by hand in the table above -
+  // Ռաֆինյա, Մարկինյոս, Վիտինյա, Կունյա. The rule can carry the rest.
+  ["nh", "նյ"],
+  ["lh", "լյ"],
+  // Italian "gli" is the same sound again: Guglielmo, Migliaccio. Only
+  // before i, so Gloria and Inglese are untouched.
+  ["gli", "լյ"],
   ["ou", "ու"],
   ["oo", "ու"],
   ["ee", "ի"],
