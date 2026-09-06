@@ -89,10 +89,14 @@ complexity is scar tissue from platform limits. Read the comments in
    lives inside that row's `feed_url`, not in an env var. `lib/football-entities.ts` is
    the ordered club/person search chain (clubs are searched by title, people by
    `person.name`; APITube's taxonomy has no clubs).
-4. **Writing it.** `lib/content-generation.ts` calls Anthropic (Claude Sonnet 5) with a
-   100s timeout. Gemini is a fallback for one case only — an exhausted Anthropic balance;
-   `CONTENT_MODEL_PROVIDER=claude` is re-pinned on every deploy so the primary provider is
-   a property of `cf-deploy.sh`, not of a lingering secret.
+4. **Writing it.** `lib/content-generation.ts` calls Gemini, with Anthropic (Claude
+   Sonnet 5) behind it, each with a 100s timeout. `CONTENT_MODEL_PROVIDER=gemini` is
+   re-pinned on every deploy so the primary provider is a property of `cf-deploy.sh`, not
+   of a lingering secret. It was `claude` until 5 September and the site ran on the paid
+   balance; Gemini's free tier allows twenty requests a day, and that number — not an
+   editorial one — is why `/api/cron/content` publishes at most one article an hour
+   inside a 10:00–03:00 Yerevan window. Seventeen a day, three in hand for a retry.
+   Raising the rate means paying for it somewhere.
 5. **Not repeating itself.** Exact source-URL dedup, plus a topic check that compares
    distinctive words in the headline against the last story used for that entity, with an
    entity cooldown — two outlets reporting the same transfer have different URLs.
