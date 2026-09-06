@@ -53,7 +53,10 @@ export async function getStandings(code: string): Promise<{ rows: StandingRow[];
   // v5 on 6 September, when the Armenian table moved to Highlightly. The
   // stored row holds the old five-row one and would sit there for six
   // hours, which is the whole point of this key being versioned.
-  const cacheKey = `apifootball:v5:standings:${leagueId}:${season}`;
+  // v6 on 6 September, when the Armenian rows got their club numbers back.
+  // The stored v5 row holds them as null and would sit there six hours,
+  // with every club name on the table leading nowhere.
+  const cacheKey = `apifootball:v6:standings:${leagueId}:${season}`;
 
   if (db) {
     await ensureCacheTable(db);

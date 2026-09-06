@@ -40,6 +40,37 @@ type HighlightlyRow = {
 };
 type HighlightlyStandings = { groups?: { name?: string; standings?: HighlightlyRow[] }[] };
 
+// The Armenian clubs at API-Football, keyed by their Armenian name.
+//
+// The table moved here and the rows lost their links with it: Highlightly
+// numbers clubs its own way and /team/<number> does not run on those
+// numbers, so rather than open a page about a different club the code
+// opened none. Refusing a wrong link was right; leaving a reader with no
+// way in was not - before the move every club name in this table worked.
+//
+// Keyed on the Armenian name rather than the provider's spelling, so it
+// does not matter that this one still writes Noah as Artsakh and Urartu as
+// Banants: armenianTeamName has already made them one club by the time
+// this is read. A club not on the list simply has no link, which is what
+// the whole table had five minutes ago.
+//
+// MEASURED from API-Football's own /teams?league=342 on 6 September - all
+// twelve, and its Armenian squads carry a photograph each.
+export const ARMENIAN_CLUB_IDS: Record<string, number> = {
+  "Ալաշկերտ": 582,
+  "Գանձասար": 688,
+  "Փյունիկ": 709,
+  "Ուրարտու": 2276,
+  "Արարատ": 3682,
+  "Արարատ-Արմենիա": 3683,
+  "Նոա": 3684,
+  "Շիրակ": 3686,
+  "ԲԿՄԱ": 6279,
+  "Վան": 6286,
+  "Սյունիք": 20087,
+  "Սարդարապատ": 26198,
+};
+
 function currentSeasonYear() {
   const now = new Date();
   return now.getUTCMonth() + 1 >= 7 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
@@ -88,16 +119,17 @@ export async function armenianStandingsHighlightly(): Promise<StandingRow[] | nu
       const draw = sum((side) => side.draws);
       const scored = sum((side) => side.scoredGoals);
       const conceded = sum((side) => side.receivedGoals);
+      // armenianTeamName carries banants -> Ուրարտու and artsakh -> Նոա,
+      // because this provider still files both clubs under the names they
+      // dropped in 2019.
+      const team = armenianTeamName(row.team?.name ?? "");
       return {
         position: 0,
-        // armenianTeamName carries banants -> Ուրարտու, because this
-        // provider still files the club under the name it dropped in 2019.
-        team: armenianTeamName(row.team?.name ?? ""),
-        teamId: null,
-        // Highlightly's club numbers are its own, and the site's club pages
-        // run on ESPN's. Linking one to the other would open a page about a
-        // different club, so an Armenian row carries no link - the same
-        // reason the old Armenian table carried none.
+        team,
+        // API-Football's number, which is what /team/<number> answers on
+        // for a club that is not ESPN's. Highlightly's own number would
+        // open a page about a different club, so it is not used.
+        teamId: ARMENIAN_CLUB_IDS[team] ?? null,
         teamKey: null,
         teamLogo: row.team?.logo ?? null,
         played: sum((side) => side.games),

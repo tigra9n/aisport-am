@@ -99,7 +99,33 @@ jobs:
             .replace(/\s+/g, " ").trim();
 
           const quote = (text) => "'" + String(text).replace(/'/g, "''") + "'";
+          // Content-Length only: the outline has to be told from a
+          // photograph, and its length is enough to do that without
+          // downloading four thousand images.
+          const weigh = async (url) => {
+            try {
+              const r = await fetch(url, { method: "HEAD", headers: { "User-Agent": UA }, signal: AbortSignal.timeout(10000) });
+              if (!r.ok) return 0;
+              return Number(r.headers.get("content-length") ?? 0) || 0;
+            } catch { return 0; }
+          };
+          const SDB = "https://www.thesportsdb.com/api/v1/json/3";
+          const sdb = async (path) => {
+            for (let attempt = 0; attempt < 3; attempt++) {
+              try {
+                const r = await fetch(`${SDB}${path}`, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(20000) });
+                if (r.status === 429) { await wait(8000 * (attempt + 1)); continue; }
+                if (!r.ok) return null;
+                return await r.json();
+              } catch { await wait(2000); }
+            }
+            return null;
+          };
+          const sizes = new Map();
+          const byPhoto = [];
+          const clubNames = new Map();
           const statements = [];
+          const clubPhotos = new Map();
           let clubs = 0, matched = 0, faces = 0, unmatched = [];
 
           for (const [slug, leagueId] of only) {
@@ -121,16 +147,83 @@ jobs:
               // photo session. So they all go in cut, and alt stays empty.
               const photos = { cut: {}, alt: {} };
               for (const player of squad) {
-                if (player.name && player.photo) photos.cut[key(player.name)] = player.photo;
+                if (!player.name || !player.photo) continue;
+                // A url is not a photograph of that man. MEASURED: this
+                // provider answers for every footballer, and for the ones
+                // it has no picture of it answers with the same outline -
+                // one file, 5192 bytes, seven of Pyunik's twenty-nine and
+                // four of Arsenal's thirty-six. Counting those as faces is
+                // how "29 of 29" was claimed for a squad the owner could
+                // see was not complete.
+                //
+                // The size is not hard-coded. Every image in the run is
+                // weighed and the length that comes back hundreds of times
+                // is the outline: two real photographs sharing a byte count
+                // happens, hundreds sharing one does not.
+                const size = await weigh(player.photo);
+                if (!size) continue;
+                photos.cut[key(player.name)] = player.photo;
+                sizes.set(size, (sizes.get(size) ?? 0) + 1);
+                byPhoto.push({ club: club.id, key: key(player.name), size });
               }
               const n = Object.keys(photos.cut).length;
               console.log(`  ${String(club.displayName).padEnd(28)} ${n} of ${squad.length}`);
               if (!n) continue;
-              faces += n;
-              statements.push(
-                `INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(${quote(`sportsdb:photos:v2:${club.id}`)},${quote(JSON.stringify(photos))},${Date.now()},0) ` +
-                `ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0;`);
+              clubPhotos.set(club.id, photos);
+              clubNames.set(club.id, { name: club.displayName, squad: squad.map((p) => p.name).filter(Boolean) });
             }
+          }
+
+          // The outline, found rather than assumed: the one length that
+          // comes back far more often than any real photograph could.
+          const ranked = [...sizes.entries()].sort((a, b) => b[1] - a[1]);
+          const [placeholderSize, seen] = ranked[0] ?? [0, 0];
+          const isOutline = seen >= 20 ? placeholderSize : 0;
+          console.log("");
+          console.log(isOutline
+            ? `the outline is ${isOutline} bytes, served ${seen} times - dropped`
+            : `no repeated image found, nothing dropped (most common: ${placeholderSize} bytes, ${seen} times)`);
+
+          for (const entry of byPhoto) {
+            if (isOutline && entry.size === isOutline) {
+              const photos = clubPhotos.get(entry.club);
+              if (photos) delete photos.cut[entry.key];
+            }
+          }
+
+          // The men the outline was standing in for still deserve a face,
+          // and TheSportsDB has portraits this provider does not. Its free
+          // key stops at ten a club, which is why it is no longer the
+          // source - but ten is more than nothing for the handful left
+          // over, and its cutouts sit beside these on the same ground.
+          let topped = 0;
+          for (const [clubId, photos] of clubPhotos) {
+            const missing = (clubNames.get(clubId) ?? { squad: [] }).squad.filter((name) => !photos.cut[key(name)]);
+            if (!missing.length) continue;
+            await wait(2500);
+            const found = await sdb(`/searchteams.php?t=${encodeURIComponent(clubNames.get(clubId).name)}`);
+            const teamId = found?.teams?.[0]?.idTeam;
+            if (!teamId) continue;
+            await wait(2500);
+            const list = (await sdb(`/lookup_all_players.php?id=${teamId}`))?.player ?? [];
+            const cutouts = new Map();
+            for (const player of list) {
+              if (player.strPlayer && player.strCutout) cutouts.set(key(player.strPlayer), player.strCutout);
+            }
+            for (const name of missing) {
+              const cutout = cutouts.get(key(name));
+              if (cutout) { photos.cut[key(name)] = cutout; topped++; }
+            }
+          }
+          console.log(`${topped} face(s) filled from TheSportsDB where the outline had been`);
+
+          for (const [clubId, photos] of clubPhotos) {
+            const n = Object.keys(photos.cut).length;
+            if (!n) continue;
+            faces += n;
+            statements.push(
+              `INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(${quote(`sportsdb:photos:v2:${clubId}`)},${quote(JSON.stringify(photos))},${Date.now()},0) ` +
+              `ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0;`);
           }
 
           console.log("");

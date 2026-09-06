@@ -1939,66 +1939,67 @@ jobs:
           JS
           node afphotos.mjs
 
-      # How many of a squad end up with figures, not how many of three.
+      # Is every photograph a photograph of that man, or is some of it one
+      # silhouette served many times?
       #
-      # Three men were measured and two of them had statistics, and that is
-      # a sample, not an answer. Tigran asked whether it is fixed for every
-      # footballer and the honest reply was that nobody had counted. So
-      # count: two whole squads, every man, both addresses, and say what
-      # share of each ends up with something the page can show.
+      # Tigran: you said Pyunik has all of them and it does not. The earlier
+      # measurement said "29 of 29 have a photo url and the url returns
+      # something over two kilobytes", and that is not the same claim. A
+      # provider that has no picture of a footballer usually answers with a
+      # default outline, which is also over two kilobytes.
       #
-      #   /athletes/{id}/stats            the season table, when it exists
-      #   core /athletes/{id}/statistics  the career total, the fallback
-      #
-      # A man with neither is a man ESPN has no figures for, which the page
-      # is right to say plainly - the point is to know how many that is.
-      - name: How many of a squad have figures
+      # So compare the bytes. Photographs of different men differ; a
+      # placeholder served twice is the same file twice. This counts the
+      # distinct sizes in a squad and names the repeats - and reads the club
+      # page beside it, because what the reader sees is the only number that
+      # settles the question.
+      - name: Are the squad photographs distinct
         if: ${{ github.event.inputs.livescore != 'no' && github.event.inputs.espn == 'no' }}
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
-          cat > cover.mjs <<'JS'
+          cat > distinct.mjs <<'JS'
+          import { createHash } from "node:crypto";
+          const KEY = process.env.API_FOOTBALL_KEY || "";
+          if (!KEY) { console.log("no key"); process.exit(0); }
           const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
-          const WEB = "https://site.web.api.espn.com/apis/site/v2/sports/soccer";
-          const COMMON = "https://site.web.api.espn.com/apis/common/v3/sports/soccer";
-          const CORE = "https://sports.core.api.espn.com/v2/sports/soccer";
-          const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-          const get = async (url) => {
-            try {
-              const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(20000) });
-              return r.ok ? await r.json() : null;
-            } catch { return null; }
-          };
-          // The same test the page applies: a column with a value that is
-          // not zero. A response that parses but holds nothing showable is
-          // an empty page, whatever its status was.
-          const usable = (stats) => (stats ?? []).some((s) => {
-            const v = s.displayValue ?? (s.value === undefined ? "" : String(s.value));
-            return v && v !== "0" && v !== "0.0";
-          });
 
-          for (const [club, slug, id] of [["Arsenal", "eng.1", "359"], ["Paris Saint-Germain", "fra.1", "160"]]) {
-            const roster = await get(`${WEB}/${slug}/teams/${id}/roster`);
-            const men = (roster?.athletes ?? []).filter((a) => a.id && a.displayName);
-            let seasonTable = 0, careerOnly = 0, nothing = [];
-            for (const a of men) {
-              await wait(150);
-              const table = await get(`${COMMON}/athletes/${a.id}/stats`);
-              const blocks = (table?.categories ?? []).flatMap((c) => c.statistics ?? []);
-              if (blocks.some((b) => (b.stats ?? []).some((v) => v && String(v) !== "0"))) { seasonTable++; continue; }
-              const core = await get(`${CORE}/athletes/${a.id}/statistics`);
-              const cats = core?.splits?.categories ?? [];
-              if (cats.some((c) => usable(c.stats))) { careerOnly++; continue; }
-              nothing.push(a.displayName);
+          for (const [club, team, page] of [["Pyunik", 709, "https://aifootball.am/team/709"], ["Arsenal", 42, null]]) {
+            const r = await fetch(`https://v3.football.api-sports.io/players/squads?team=${team}`, {
+              headers: { "x-apisports-key": KEY, Accept: "application/json" },
+            });
+            const players = (await r.json())?.response?.[0]?.players ?? [];
+            const seen = new Map();
+            for (const p of players) {
+              if (!p.photo) continue;
+              try {
+                const img = await fetch(p.photo, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(15000) });
+                if (!img.ok) { continue; }
+                const buf = Buffer.from(await img.arrayBuffer());
+                const hash = createHash("sha1").update(buf).digest("hex").slice(0, 12);
+                if (!seen.has(hash)) seen.set(hash, { bytes: buf.length, men: [] });
+                seen.get(hash).men.push(p.name);
+              } catch { /* counted as missing */ }
             }
+            const repeated = [...seen.values()].filter((e) => e.men.length > 1);
             console.log("");
-            console.log(`=== ${club}: ${men.length} in the squad ===`);
-            console.log(`  a season table:        ${seasonTable}`);
-            console.log(`  only a career total:   ${careerOnly}`);
-            console.log(`  no figures at all:     ${nothing.length}`);
-            console.log(`  so the page shows something for ${seasonTable + careerOnly} of ${men.length}`);
-            if (nothing.length) console.log(`      without: ${nothing.join(", ")}`);
+            console.log(`=== ${club}: ${players.length} in the squad ===`);
+            console.log(`  distinct images: ${seen.size}`);
+            for (const e of repeated) {
+              console.log(`  the same ${e.bytes} bytes for ${e.men.length}: ${e.men.join(", ")}`);
+            }
+            const real = [...seen.values()].filter((e) => e.men.length === 1).length;
+            console.log(`  a picture of that man: ${real} of ${players.length}`);
+
+            if (page) {
+              const html = await (await fetch(page, { headers: { "User-Agent": UA } })).text();
+              const shown = (html.match(/class="squad-photo"/g) ?? []).length;
+              const blank = (html.match(/squad-photo-placeholder/g) ?? []).length;
+              console.log(`  the club page draws: ${shown} photographs, ${blank} lettered placeholders`);
+            }
           }
           JS
-          node cover.mjs
+          node distinct.mjs
 
       - name: What the sources table holds now
         if: ${{ github.event.inputs.livescore == 'all' && github.event.inputs.espn == 'no' }}
