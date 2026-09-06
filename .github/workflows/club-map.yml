@@ -5,9 +5,12 @@
 # Four things on this site still read the paid provider: squads, player
 # pages, top scorers and team pages. ESPN has all four for nothing -
 # measured on 6 September, not assumed - but every one of those pages
-# lives behind a URL numbered by API-Sports. /team/50 is Chelsea because
-# API-Sports says 50; ESPN calls the same club 363. Those URLs are the
-# ones Google has been indexing. Swapping the source without a map between
+# lives behind a URL numbered by API-Sports. /team/49 is Chelsea because
+# API-Sports says 49; ESPN calls the same club 363. (This comment said 50
+# until the first run printed the real rows: 50 is Manchester City, whose
+# ESPN number is 382. An example invented from memory is exactly the kind
+# of thing this workflow exists to stop being done to a URL.) Those URLs
+# are the ones Google has been indexing. Swapping the source without a map between
 # the two numberings would point every indexed team and player page at a
 # different footballer, which is worse than losing the pages.
 #
