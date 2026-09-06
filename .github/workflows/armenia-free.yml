@@ -1,0 +1,93 @@
+# What can the Armenian league be built from, for nothing?
+#
+# MEASURED on 6 September, from api-sports' own support and its pricing
+# page: the free plan serves "only seasons between Y-4 and Y-2" - for
+# 2026 that is 2022 to 2024 - and the restriction applies to every
+# endpoint. So when the Pro subscription ends on 23 September, six
+# things go with it: the Armenian squads, the Armenian player pages, the
+# live minute, the Armenian scoring chart, the Armenian match centre and
+# the weekly photograph refresh. The cheapest paid plan is $19 a month,
+# $228 a year, and the owner wants the site to cost nothing.
+#
+# Highlightly is the only free candidate left, and it already carries the
+# one thing measured against the league's own table: the standings, all
+# twelve clubs. What it carries besides that has never been asked.
+#
+# This asks. It tries the paths a football API plausibly uses, prints
+# what each answers and the shape of it, and spends about a dozen of the
+# free plan's hundred a day. Nothing is written anywhere.
+name: Armenia for free
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - name: What Highlightly holds for the Armenian league
+        env:
+          HIGHLIGHTLY_KEY: ${{ secrets.HIGHLIGHTLY_KEY }}
+        run: |
+          cat > probe.mjs <<'JS'
+          const KEY = process.env.HIGHLIGHTLY_KEY || "";
+          if (!KEY) { console.log("no HIGHLIGHTLY_KEY"); process.exit(1); }
+          // x-rapidapi-key, not x-api-key: the other one answers 403
+          // "Missing mandatory HTTP Headers", which cost a day in
+          // September when it shipped that way.
+          const H = { "x-rapidapi-key": KEY, Accept: "application/json" };
+          const HOST = "https://sports.highlightly.net/football";
+          const LEAGUE = "291826";
+          const SEASON = new Date().getUTCMonth() + 1 >= 7 ? new Date().getUTCFullYear() : new Date().getUTCFullYear() - 1;
+          const today = new Date().toISOString().slice(0, 10);
+
+          // The shape, not the values: field names with one example each,
+          // two levels deep. Reading the values is what buried the answer
+          // the last three times a provider was judged from here.
+          const shape = (v, depth = 0) => {
+            const pad = "    ".repeat(depth + 1);
+            if (Array.isArray(v)) return v.length ? `[${v.length}] of\n${shape(v[0], depth)}` : "[]";
+            if (v && typeof v === "object") {
+              if (depth >= 2) return "{...}";
+              return "\n" + Object.entries(v).slice(0, 14).map(([k, val]) => `${pad}${k}: ${shape(val, depth + 1)}`).join("\n");
+            }
+            return JSON.stringify(v)?.slice(0, 60) ?? String(v);
+          };
+
+          const ask = async (label, path) => {
+            try {
+              const r = await fetch(`${HOST}${path}`, { headers: H, signal: AbortSignal.timeout(20000) });
+              const text = await r.text();
+              let json = null;
+              try { json = JSON.parse(text); } catch { /* not json */ }
+              console.log(`\n=== ${label}\n    ${path}\n    http ${r.status}`);
+              if (!json) { console.log(`    ${text.slice(0, 200)}`); return; }
+              const body = Array.isArray(json) ? json : (json.data ?? json.response ?? json);
+              console.log(`    ${shape(body)}`);
+            } catch (e) { console.log(`\n=== ${label}\n    ${path}\n    ${String(e).slice(0, 150)}`); }
+          };
+
+          // The standings are the control: this one is known to work, so
+          // if it fails the key or the host is the problem and nothing
+          // below means anything.
+          await ask("standings (the control)", `/standings?leagueId=${LEAGUE}&season=${SEASON}`);
+
+          // The six the subscription is paying for, in the order they
+          // matter to a reader.
+          await ask("teams in the league", `/teams?leagueId=${LEAGUE}&season=${SEASON}`);
+          await ask("a club's squad", `/teams/582/squad`);
+          await ask("a club's squad, the other spelling", `/squads?teamId=582`);
+          await ask("players of a club", `/players?teamId=582`);
+          await ask("today's matches", `/matches?leagueId=${LEAGUE}&date=${today}`);
+          await ask("live matches", `/matches?leagueId=${LEAGUE}&live=true`);
+          await ask("one match, for lineups and events", `/matches/${LEAGUE}`);
+          await ask("top scorers", `/top-scorers?leagueId=${LEAGUE}&season=${SEASON}`);
+          await ask("statistics", `/statistics?leagueId=${LEAGUE}&season=${SEASON}`);
+          // And what the plan actually allows, if they say.
+          await ask("the endpoint list, if there is one", `/`);
+          JS
+          node probe.mjs
+          rm -f probe.mjs
