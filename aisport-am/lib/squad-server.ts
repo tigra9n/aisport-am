@@ -96,6 +96,18 @@ async function teamIndex(db: D1Database | undefined): Promise<Record<string, { s
 // breaks kept, so pickPhoto can compare a two-name spelling against a
 // four-name one. The v1 rows are keyed the old way and would match nothing,
 // so they are left to expire rather than read.
+//
+// These rows are normally written by .github/workflows/squad-photos.yml,
+// weekly, not by this function. MEASURED from inside the Worker on the day
+// the name matching was fixed: two faces on a squad of twenty-four, and
+// TheSportsDB answering 429 - Cloudflare's own error 1015. It refuses this
+// Worker about every other request and a GitHub runner never, so the runner
+// collects the photographs and writes them here.
+//
+// The fetch below stays as the fallback for a club the weekly run has not
+// reached yet. It costs one refused request and then goes quiet for five
+// minutes (see sportsDb in espn.ts), and it heals itself the moment
+// TheSportsDB does answer.
 async function clubPhotos(db: D1Database | undefined, espnId: string, clubName: string): Promise<Record<string, string>> {
   const cacheKey = `sportsdb:photos:v2:${espnId}`;
   if (db) {

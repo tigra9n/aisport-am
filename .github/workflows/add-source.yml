@@ -1382,6 +1382,18 @@ jobs:
           const names = [...ts.html.matchAll(/\/player\/((?:espn-)?\d+)/g)].slice(0, 3).map((m) => m[1]);
           if (names.length) say(`  first ids: ${names.join(", ")}`);
 
+          // A club's squad: how many of its footballers have a face. The
+          // photographs come from TheSportsDB and are matched on the name,
+          // which is where a third of them were being lost - so count the
+          // placeholders, which is what the reader sees.
+          say("");
+          for (const [club, id] of [["Arsenal", "espn-359"], ["Chelsea", "espn-363"], ["Liverpool", "espn-364"]]) {
+            const page = await get(`https://aifootball.am/team/${id}`);
+            const faces = count(page.html, /class="squad-photo"/g);
+            const blanks = count(page.html, /squad-photo-placeholder/g);
+            say(`  ${String(club).padEnd(10)} HTTP ${page.status}  ${faces} with a photograph, ${blanks} without`);
+          }
+
           say("");
           // /standings takes no league query: it renders all eight leagues as
           // tabs and only the active one - the Premier League - reaches the
