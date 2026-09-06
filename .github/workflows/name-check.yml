@@ -244,7 +244,20 @@ jobs:
           // failure was a moment's.
           const page = await fetch(`https://aifootball.am/player/${id}`, { headers: { "User-Agent": "aifootball-diag" } });
           const html = await page.text();
-          console.log(`the page: http ${page.status}, ${html.includes("Այս էջը չկա") ? "shows the 404 page" : "renders"}, ${html.length} bytes`);
+          // Look for what only the real page has, not for the 404's words.
+          //
+          // MEASURED and wrong the first way round: this asked whether the
+          // HTML contains "Այս էջը չկա" and answered "shows the 404 page"
+          // for Neymar, whose page came back at 50730 bytes against
+          // 27167 for the footballer that really was missing. Two pages
+          // that different are not the same 404, and the phrase is in the
+          // payload of every page on this site. A page is judged by
+          // whether it carries the profile it was asked for.
+          const rendered = html.includes("Խաղացողի պրոֆիլ");
+          const empty = /Այս խաղացողի մանրամասն վիճակագրությունը/.test(html);
+          console.log(`the page: http ${page.status}, ${rendered ? (empty ? "renders, name only" : "renders the profile") : "does NOT render the profile"}, ${html.length} bytes`);
+          const title = html.match(/<h1[^>]*class="page-title"[^>]*>([^<]{1,80})</);
+          if (title) console.log(`  its heading: ${title[1]}`);
           JS
           node player-probe.mjs
           rm -f player-probe.mjs
