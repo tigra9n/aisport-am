@@ -1872,194 +1872,6 @@ jobs:
           JS
           node armdays.mjs
 
-      # Highlightly, which Tigran found, against the two things this site
-      # still cannot get free: a footballer's photograph and the Armenian
-      # table.
-      #
-      # ESPN has now answered the photograph question and the answer is no.
-      # Asked for the address itself, one player at a time: Chelsea 3 faces
-      # of 30, Real Madrid 1 of 32, and the combiner adds none. Courtois,
-      # Ruediger, Alexander-Arnold and Cucurella have no photograph on the
-      # CDN at all. TheSportsDB has them but its free key stops at ten a
-      # club, which is the ceiling the squad pages sit at now.
-      #
-      # Without a key this can only learn what to sign up for: which host
-      # answers, which header it wants, and what it says to a caller with no
-      # key. Set HIGHLIGHTLY_KEY as a repository secret and it measures the
-      # data instead - the Armenian table against the real one, club by
-      # club, and a squad's photographs counted.
-      #
-      # The key goes in the secret, never in a message and never in the log.
-      - name: What Highlightly answers
-        if: ${{ github.event.inputs.livescore != 'no' && github.event.inputs.espn == 'no' }}
-        env:
-          HIGHLIGHTLY_KEY: ${{ secrets.HIGHLIGHTLY_KEY }}
-        run: |
-          cat > high.mjs <<'JS'
-          const KEY = process.env.HIGHLIGHTLY_KEY || "";
-          const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
-          console.log(KEY ? "a key is set" : "no key set - measuring only what the door says");
-
-          // The documented host, and the two shapes an API of this kind
-          // usually takes: its own domain with an x-api-key, or RapidAPI.
-          // MEASURED without a key: soccer.highlightly.net answers 403
-          // "Missing mandatory HTTP Headers", which is the right door with
-          // no key; sport.highlightly.net does not resolve at all - the
-          // host is sports, plural, and the football API sits under a path
-          // on it. Tigran's own demo request confirms the shape:
-          //   https://sports.highlightly.net/football/leagues?countryName=Armenia
-          const HOSTS = [
-            "https://sports.highlightly.net/football",
-            "https://soccer.highlightly.net",
-            "https://football-highlights-api.p.rapidapi.com",
-          ];
-
-          // Armenia's Premier League, from that same demo response: league
-          // 291826, and the seasons it lists include 2026.
-          const ARM_LEAGUE = "291826";
-          const ARM_SEASON = "2026";
-
-          // The real table, read off the league's own standings on
-          // 6 September. Every candidate is measured against this, because
-          // "it returned a table" is what made TheSportsDB look usable when
-          // four of its twelve clubs were wrong.
-          const TRUTH = [
-            ["Noah", 6, 18, 11], ["Alashkert", 6, 13, 12], ["Ararat-Armenia", 6, 13, 4],
-            ["Pyunik", 5, 11, 6], ["Sardarapat", 4, 10, 6], ["Urartu", 5, 8, 3],
-            ["Shirak", 5, 7, 3], ["BKMA", 5, 4, -2], ["Gandzasar", 6, 3, -7],
-            ["Ararat", 6, 3, -10], ["Syunik", 6, 2, -10], ["Van", 6, 1, -16],
-          ];
-          const headerSets = KEY
-            ? [{ "x-api-key": KEY }, { "x-rapidapi-key": KEY, "x-rapidapi-host": "football-highlights-api.p.rapidapi.com" }, { Authorization: `Bearer ${KEY}` }]
-            : [{}];
-
-          async function ask(url, headers) {
-            try {
-              const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json", ...headers }, signal: AbortSignal.timeout(20000) });
-              const text = await r.text();
-              let json = null; try { json = JSON.parse(text) } catch {}
-              return { status: r.status, json, text };
-            } catch (e) { return { status: 0, json: null, text: String(e) }; }
-          }
-
-          for (const host of HOSTS) {
-            for (const [i, headers] of headerSets.entries()) {
-              const r = await ask(`${host}/leagues?limit=5`, headers);
-              const label = Object.keys(headers)[0] ?? "no header";
-              console.log(`  ${host}  [${label}]  HTTP ${r.status}  ${String(r.text).replace(/\s+/g, " ").slice(0, 140)}`);
-              if (r.status === 200) {
-                console.log("");
-                console.log("=== the Armenian table, against the real one ===");
-                const st = await ask(`${host}/standings?leagueId=${ARM_LEAGUE}&season=${ARM_SEASON}`, headers);
-                console.log(`  HTTP ${st.status}`);
-                // The shape is not documented here, so find the array of
-                // rows wherever it sits and read the numbers off each one
-                // rather than assuming a path into the JSON.
-                const rows = (() => {
-                  const seen = [];
-                  const walk = (node) => {
-                    if (Array.isArray(node)) {
-                      if (node.length >= 8 && node.every((x) => x && typeof x === "object")) seen.push(node);
-                      node.forEach(walk);
-                    } else if (node && typeof node === "object") Object.values(node).forEach(walk);
-                  };
-                  walk(st.json);
-                  return seen.sort((a, b) => b.length - a.length)[0] ?? [];
-                })();
-                if (!rows.length) {
-                  console.log(`  no table found: ${String(st.text).replace(/\s+/g, " ").slice(0, 400)}`);
-                } else {
-                  // One row, verbatim, before anything is read out of it.
-                  //
-                  // The first pass guessed the field names and printed "0 of
-                  // 12 correct" for a table whose points were every one of
-                  // them right - NaN for the goal difference, a wrong field
-                  // for matches played, and Urartu missed because this
-                  // provider still files it under Banants. A probe that
-                  // reports its own parsing as the source's failure is worse
-                  // than no probe. So: show the row, then read it.
-                  console.log(`  one row verbatim: ${JSON.stringify(rows[0])}`);
-                  // The shape, from the row printed above: home and away
-                  // are separate blocks and there is no total anywhere. A
-                  // club's season is the two added together, and the points
-                  // are three a win and one a draw - the provider states
-                  // neither. Reading home.games as the matches played is
-                  // what produced "Noah 18 pts, 4 played" and a table that
-                  // disagreed with itself.
-                  const read = (row) => {
-                    const h = row.home ?? {}, a = row.away ?? {};
-                    const n = (x) => Number(x ?? 0) || 0;
-                    const wins = n(h.wins) + n(a.wins), draws = n(h.draws) + n(a.draws);
-                    return {
-                      team: String(row.team?.name ?? row.name ?? ""),
-                      pld: n(h.games) + n(a.games),
-                      pts: Number.isFinite(Number(row.points)) && row.points !== null && row.points !== undefined ? Number(row.points) : wins * 3 + draws,
-                      gd: (n(h.scoredGoals) + n(a.scoredGoals)) - (n(h.receivedGoals) + n(a.receivedGoals)),
-                    };
-                  };
-                  const parsed = rows.map(read).filter((r) => r.team);
-                  console.log(`  rows: ${parsed.length}`);
-                  for (const r of parsed) console.log(`    ${String(r.team).padEnd(20)} ${String(r.pts).padStart(3)} pts  ${r.pld} played  ${r.gd > 0 ? "+" : ""}${r.gd}`);
-                  let right = 0;
-                  console.log("");
-                  // Matched on the whole name, not on a substring of it.
-                  //
-                  // The pass before this reported eight of twelve, and both
-                  // of the visible failures were mine: "Ararat" found
-                  // Ararat-Armenia, and "Van" found Pyunik YereVAN. Exactly
-                  // the fault that put Lautaro Martinez's name on Emiliano,
-                  // in a different file on the same night.
-                  const ALIAS = { "ararat-armenia": ["ararat-armenia"], ararat: ["ararat", "ararat yerevan"], urartu: ["urartu", "banants", "banants yerevan"], pyunik: ["pyunik", "pyunik yerevan"], shirak: ["shirak", "shirak gyumri"], van: ["van"], noah: ["noah", "noah yerevan"] };
-                  const norm = (t) => String(t).toLowerCase().replace(/\s+fc$|^fc\s+/g, "").trim();
-                  for (const [team, pld, pts, gd] of TRUTH) {
-                    const names = ALIAS[team.toLowerCase()] ?? [team.toLowerCase()];
-                    const mine = parsed.find((x) => names.includes(norm(x.team)));
-                    const ok = mine && mine.pld === pld && mine.pts === pts && mine.gd === gd;
-                    if (ok) right++;
-                    console.log(`    ${String(team).padEnd(16)} real ${String(pts).padStart(3)}/${pld}/${gd > 0 ? "+" : ""}${gd}   theirs ${mine ? `${String(mine.pts).padStart(3)}/${mine.pld}/${mine.gd > 0 ? "+" : ""}${mine.gd}` : "  not found"}   ${ok ? "ok" : "NO"}`);
-                  }
-                  console.log("");
-                  console.log(`  ${right} of ${TRUTH.length} clubs correct`);
-                }
-
-                console.log("");
-                console.log("=== does a footballer come with a photograph ===");
-                // /players?limit=5 returned five men with logo:null, which
-                // says nothing - those were goalkeepers picked at random
-                // from the whole database. Ask for a club's own squad, and
-                // ask by name for men who certainly have a photograph
-                // somewhere, before concluding this source has none.
-                for (const path of [
-                  "/teams?name=Arsenal&limit=2",
-                  "/players?name=Bukayo Saka",
-                  "/players?name=Mohamed Salah",
-                  `/standings?leagueId=${ARM_LEAGUE}&season=${ARM_SEASON}`,
-                ]) {
-                  const t = await ask(`${host}${path}`, headers);
-                  const body = String(t.text).replace(/\s+/g, " ");
-                  const images = (body.match(/https?:\/\/[^"']*\.(?:png|jpg|jpeg|webp)/g) ?? []).length;
-                  console.log(`  ${path}`);
-                  console.log(`      HTTP ${t.status}  ${images} image url(s)  ${body.slice(0, 260)}`);
-                }
-                // And the endpoints this API actually offers, so the next
-                // question is asked of a path that exists rather than one
-                // guessed from another provider's shape.
-                console.log("");
-                for (const path of ["/", "/players", "/teams/1635", "/squads?teamId=1635", "/teams/1635/squad"]) {
-                  const t = await ask(`${host}${path}`, headers);
-                  console.log(`  ${String(path).padEnd(22)} HTTP ${t.status}  ${String(t.text).replace(/\s+/g, " ").slice(0, 160)}`);
-                }
-                process.exit(0);
-              }
-              if (!KEY) break;
-            }
-          }
-          console.log("");
-          console.log("no door opened. The status and the body above say what to sign up for:");
-          console.log("401/403 means the endpoint is right and a key is needed; 404 means the path is wrong.");
-          JS
-          node high.mjs
-
       # The photographs, asked of the provider the site already has a key
       # for. Tigran: "maybe API-Football has photos - we never asked."
       #
@@ -2126,6 +1938,67 @@ jobs:
           if (req) console.log(`\nrequests today: ${req.current} of ${req.limit_day}`);
           JS
           node afphotos.mjs
+
+      # How many of a squad end up with figures, not how many of three.
+      #
+      # Three men were measured and two of them had statistics, and that is
+      # a sample, not an answer. Tigran asked whether it is fixed for every
+      # footballer and the honest reply was that nobody had counted. So
+      # count: two whole squads, every man, both addresses, and say what
+      # share of each ends up with something the page can show.
+      #
+      #   /athletes/{id}/stats            the season table, when it exists
+      #   core /athletes/{id}/statistics  the career total, the fallback
+      #
+      # A man with neither is a man ESPN has no figures for, which the page
+      # is right to say plainly - the point is to know how many that is.
+      - name: How many of a squad have figures
+        if: ${{ github.event.inputs.livescore != 'no' && github.event.inputs.espn == 'no' }}
+        run: |
+          cat > cover.mjs <<'JS'
+          const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+          const WEB = "https://site.web.api.espn.com/apis/site/v2/sports/soccer";
+          const COMMON = "https://site.web.api.espn.com/apis/common/v3/sports/soccer";
+          const CORE = "https://sports.core.api.espn.com/v2/sports/soccer";
+          const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+          const get = async (url) => {
+            try {
+              const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(20000) });
+              return r.ok ? await r.json() : null;
+            } catch { return null; }
+          };
+          // The same test the page applies: a column with a value that is
+          // not zero. A response that parses but holds nothing showable is
+          // an empty page, whatever its status was.
+          const usable = (stats) => (stats ?? []).some((s) => {
+            const v = s.displayValue ?? (s.value === undefined ? "" : String(s.value));
+            return v && v !== "0" && v !== "0.0";
+          });
+
+          for (const [club, slug, id] of [["Arsenal", "eng.1", "359"], ["Paris Saint-Germain", "fra.1", "160"]]) {
+            const roster = await get(`${WEB}/${slug}/teams/${id}/roster`);
+            const men = (roster?.athletes ?? []).filter((a) => a.id && a.displayName);
+            let seasonTable = 0, careerOnly = 0, nothing = [];
+            for (const a of men) {
+              await wait(150);
+              const table = await get(`${COMMON}/athletes/${a.id}/stats`);
+              const blocks = (table?.categories ?? []).flatMap((c) => c.statistics ?? []);
+              if (blocks.some((b) => (b.stats ?? []).some((v) => v && String(v) !== "0"))) { seasonTable++; continue; }
+              const core = await get(`${CORE}/athletes/${a.id}/statistics`);
+              const cats = core?.splits?.categories ?? [];
+              if (cats.some((c) => usable(c.stats))) { careerOnly++; continue; }
+              nothing.push(a.displayName);
+            }
+            console.log("");
+            console.log(`=== ${club}: ${men.length} in the squad ===`);
+            console.log(`  a season table:        ${seasonTable}`);
+            console.log(`  only a career total:   ${careerOnly}`);
+            console.log(`  no figures at all:     ${nothing.length}`);
+            console.log(`  so the page shows something for ${seasonTable + careerOnly} of ${men.length}`);
+            if (nothing.length) console.log(`      without: ${nothing.join(", ")}`);
+          }
+          JS
+          node cover.mjs
 
       - name: What the sources table holds now
         if: ${{ github.event.inputs.livescore == 'all' && github.event.inputs.espn == 'no' }}

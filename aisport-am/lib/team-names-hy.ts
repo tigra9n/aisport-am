@@ -10,6 +10,10 @@ const teamNames: Record<string, string> = {
   // Left as an entry rather than fixed at the reading end, so whichever
   // source sends it, the club is one club on this site.
   banants: "Ուրարտու", "banants yerevan": "Ուրարտու",
+  // Noah was Artsakh until 2019, and the same provider files it that way.
+  // MEASURED: its row is 18 points from 6 with 16:5, which is Noah exactly
+  // as the league has him.
+  artsakh: "Նոա", "artsakh yerevan": "Նոա",
   "shirak gyumri": "Շիրակ", "noah yerevan": "Նոա", "ararat yerevan": "Արարատ",
   "west armenia": "Վեստ Արմենիա",
 

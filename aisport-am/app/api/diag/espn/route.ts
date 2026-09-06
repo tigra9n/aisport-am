@@ -154,6 +154,16 @@ export async function GET(request: Request) {
       // about one footballer in twelve and the rest are put on at read time
       // from TheSportsDB - which rate-limits this Worker. Which of the two
       // is short is the whole question.
+      // The Armenian table, from inside the Worker. Highlightly answered a
+      // GitHub runner with eleven of twelve right; whether it answers a
+      // Cloudflare address is a different question, and one this file exists
+      // to ask - ESPN and TheSportsDB both treat the two differently.
+      const armenian = await import("../../../../lib/highlightly");
+      await say("armenianStandings(HL)", async () => {
+        const rows = await armenian.armenianStandingsHighlightly();
+        if (!rows?.length) return "nothing - the Worker is not getting it";
+        return `${rows.length} clubs, top ${rows[0].team} ${rows[0].points}/${rows[0].played}, bottom ${rows[rows.length - 1].team} ${rows[rows.length - 1].points}/${rows[rows.length - 1].played}`;
+      });
       const squads = await import("../../../../lib/squad-server");
       await say("getSquad(espn-359) faces", async () => {
         const squad = await squads.getSquad("espn-359");

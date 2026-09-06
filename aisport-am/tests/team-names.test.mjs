@@ -66,3 +66,15 @@ test("the Armenian clubs still answer from their own entries", () => {
 test("a national team is a country, not a club", () => {
   assert.equal(armenianTeamName("Spain"), "Իսպանիա");
 });
+
+// Two Armenian clubs are filed under names they dropped in 2019, and the
+// provider that has the only correct free table uses both. Reading them as
+// two different clubs would put twelve rows of a twelve-club league on the
+// page with two of them wrong and two missing.
+test("a club is one club, whichever of its names arrives", () => {
+  assert.equal(armenianTeamName("Banants"), "Ուրարտու");
+  assert.equal(armenianTeamName("Banants Yerevan"), "Ուրարտու");
+  assert.equal(armenianTeamName("Urartu"), "Ուրարտու");
+  assert.equal(armenianTeamName("Artsakh"), "Նոա");
+  assert.equal(armenianTeamName("Noah"), "Նոա");
+});
