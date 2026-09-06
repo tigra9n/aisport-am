@@ -24,9 +24,24 @@
 # gave it rather than being given somebody else's squad.
 name: Squad photos
 
+# One league a day, not all seven on a Monday.
+#
+# MEASURED on 6 September: a full run costs about 155 API-Football
+# requests - one club list and one squad for each of 144 clubs. That fits
+# comfortably inside the Pro plan's 7500 a day and not at all inside the
+# free plan's hundred, and the subscription ends on 23 September. The rest
+# of what this site asks that provider already fits: twelve Armenian
+# squads cached for a day, about twenty-four calls in the window around an
+# Armenian kick-off, a handful of player pages cached for a week - some
+# sixty on a match day.
+#
+# So the run is split by the day of the week. A league costs about
+# twenty-one requests, every club is still refreshed weekly, and nothing
+# has to change on the 23rd.
 on:
   schedule:
-    - cron: "0 4 * * 1"
+    # Monday through Sunday, one league each, at 04:00 UTC.
+    - cron: "0 4 * * *"
   workflow_dispatch:
     inputs:
       league:
@@ -47,7 +62,7 @@ jobs:
 
       - name: Collect the photographs and write them as SQL
         env:
-          ONLY: ${{ github.event.inputs.league || 'all' }}
+          ONLY: ${{ github.event_name == 'schedule' && 'today' || github.event.inputs.league || 'all' }}
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
           cat > photos.mjs <<'JS'
@@ -66,8 +81,15 @@ jobs:
             ["fra.1", 61], ["usa.1", 253], ["ksa.1", 307],
           ];
           const SEASON = new Date().getUTCMonth() + 1 >= 7 ? new Date().getUTCFullYear() : new Date().getUTCFullYear() - 1;
-          const only = process.env.ONLY && process.env.ONLY !== "all"
-            ? LEAGUES.filter(([slug]) => slug === process.env.ONLY) : LEAGUES;
+          // A scheduled run takes the league whose turn it is; a hand-run
+          // takes what it was asked for, "all" included. Seven leagues
+          // against seven days, so Monday is England and Sunday is Saudi
+          // Arabia, and every club is refreshed once a week as before.
+          const only = process.env.ONLY === "today"
+            ? [LEAGUES[new Date().getUTCDay() === 0 ? 6 : new Date().getUTCDay() - 1]]
+            : process.env.ONLY && process.env.ONLY !== "all"
+              ? LEAGUES.filter(([slug]) => slug === process.env.ONLY) : LEAGUES;
+          if (process.env.ONLY === "today") console.log(`today's league: ${only[0][0]}`);
 
           const wait = (ms) => new Promise((r) => setTimeout(r, ms));
           async function espn(url) {
