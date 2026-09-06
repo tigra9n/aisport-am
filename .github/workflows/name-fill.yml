@@ -250,7 +250,10 @@ jobs:
           rm -f name-fill.mts
 
       - name: Prove the file still compiles and the name tests still pass
-        run: npm run typecheck && npm run test:units
+        # The dot reporter, because the default one prints eleven lines per
+        # test and forty-six tests buried the only part of this run worth
+        # reading - which names came back and which were refused.
+        run: npm run typecheck && npm run test:units -- --test-reporter=dot
 
       - name: Commit them
         if: ${{ github.event.inputs.apply == 'yes' }}
