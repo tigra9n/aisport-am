@@ -93,19 +93,22 @@ complexity is scar tissue from platform limits. Read the comments in
    Sonnet 5) behind it, each with a 100s timeout. `CONTENT_MODEL_PROVIDER=gemini` is
    re-pinned on every deploy so the primary provider is a property of `cf-deploy.sh`, not
    of a lingering secret. It was `claude` until 5 September and the site ran on the paid
-   balance. `/api/cron/content` publishes at most one article every 28 minutes
-   inside a 10:00–03:00 Yerevan window.
+   balance; Gemini's free tier allows twenty requests a day, and that number — not an
+   editorial one — is why `/api/cron/content` publishes at most one article an hour
+   inside a 10:00–03:00 Yerevan window. Seventeen a day, three in hand for a retry.
+   Raising the rate means paying for it somewhere.
 
-   That ceiling used to be described here as Gemini's doing — "twenty requests a day,
-   seventeen articles". MEASURED on 6 September, against `cron_invocations`: the site
-   published 43, 41, 40 and 31 articles on the four days to 5 September, and Google has
-   refused it with a 429 **zero** times in the whole table. `gemini-3.6-flash` allows
-   ten requests a minute and 250 a day, which is what the comment in
-   `content-generation.ts` says and what the site's own history shows. The cadence is
-   an editorial choice, not a quota. It was an hour until 6 September, when the owner
-   watched the front page sit still for seventy-three minutes; 28 minutes now, about
-   thirty articles a day. Do not repeat the twenty-a-day figure: it was never
-   measured.
+   That twenty is MEASURED, and it was doubted once. On 6 September the daily article
+   counts — 43, 41, 40 on the 2nd to the 4th, with no 429 anywhere in
+   `cron_invocations` — were read as proof that no such cap existed, and the gap was
+   cut to 28 minutes. Those were **Claude's** days: `CONTENT_MODEL_PROVIDER` only
+   became `gemini` on 5 September. The first full day under Gemini published five
+   articles and then met Google's own words: *"Quota exceeded for metric:
+   generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 20"*.
+   The hour went back the same afternoon. Do not compare one provider's output against
+   another provider's limit; and note that with `CONTENT_MODEL_PROVIDER=gemini` a
+   refusal loses the article outright — the Claude fallback runs the other way, and
+   rescues a Claude billing failure with Gemini.
 5. **Not repeating itself.** Exact source-URL dedup, plus a topic check that compares
    distinctive words in the headline against the last story used for that entity, with an
    entity cooldown — two outlets reporting the same transfer have different URLs.
