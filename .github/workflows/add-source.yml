@@ -970,6 +970,38 @@ jobs:
               const done = past.json?.events;
               say(`  recent results: HTTP ${past.status}, ${Array.isArray(done) ? done.length : 0}`);
               if (Array.isArray(done)) for (const e of done.slice(0, 3)) say(`      ${e.dateEvent} ${e.strEvent} ${e.intHomeScore}:${e.intAwayScore}`);
+              // lookuptable.php has returned five rows for a ten-club league
+              // every time it has been asked, so the site shows half the one
+              // table it exists for. A table is only an accounting of
+              // results, and results are a separate endpoint. Ask whether the
+              // free key will hand over the club list and the season's
+              // played fixtures - if it does, the table can be computed here
+              // and the provider's short one never used again.
+              const clubs = await get(`${db}/lookup_all_teams.php?id=${top.idLeague}`);
+              const teams = clubs.json?.teams;
+              say(`  clubs in the league: HTTP ${clubs.status}, ${Array.isArray(teams) ? teams.length : 0}`);
+              if (Array.isArray(teams)) say(`      ${teams.map((t) => t.strTeam).join(", ")}`);
+              const all = await get(`${db}/eventsseason.php?id=${top.idLeague}&s=${season}`);
+              const fixtures = all.json?.events;
+              say(`  whole season's fixtures: HTTP ${all.status}, ${Array.isArray(fixtures) ? fixtures.length : 0}`);
+              if (Array.isArray(fixtures)) {
+                const played = fixtures.filter((e) => e.intHomeScore !== null && e.intHomeScore !== "" && e.intAwayScore !== null && e.intAwayScore !== "");
+                say(`      of which finished: ${played.length}`);
+                const tally = new Map();
+                const seat = (name) => { if (!tally.has(name)) tally.set(name, { p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0 }); return tally.get(name); };
+                for (const e of played) {
+                  const h = seat(e.strHomeTeam), a = seat(e.strAwayTeam);
+                  const hs = Number(e.intHomeScore), as = Number(e.intAwayScore);
+                  h.p++; a.p++; h.gf += hs; h.ga += as; a.gf += as; a.ga += hs;
+                  if (hs > as) { h.w++; a.l++; } else if (hs < as) { a.w++; h.l++; } else { h.d++; a.d++; }
+                }
+                const computed = [...tally.entries()].map(([name, r]) => ({ name, ...r, pts: r.w * 3 + r.d, gd: r.gf - r.ga }))
+                  .sort((x, y) => y.pts - x.pts || y.gd - x.gd);
+                say(`      the table this produces (${computed.length} clubs):`);
+                for (const [i, r] of computed.entries()) say(`        ${i + 1}. ${r.name}  ${r.pts} pts (${r.p} played, ${r.gd > 0 ? "+" : ""}${r.gd})`);
+              } else {
+                say(`      ${String(all.text ?? "").slice(0, 120).replace(/\s+/g, " ")}`);
+              }
             }
             const live = await get(`${db}/latestsoccer.php`);
             say(`  livescore endpoint on the free key: HTTP ${live.status}, keys ${Object.keys(live.json ?? {}).join(",").slice(0, 80)}`);
