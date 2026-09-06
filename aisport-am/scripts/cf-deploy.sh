@@ -104,6 +104,11 @@ if [ -n "${GEMINI_API_KEY:-}" ]; then
   echo "$GEMINI_API_KEY" | npx wrangler secret put GEMINI_API_KEY --name "$WORKER_NAME"
 fi
 
+if [ -n "${HIGHLIGHTLY_KEY:-}" ]; then
+  echo "== Setting HIGHLIGHTLY_KEY secret on the worker =="
+  echo "$HIGHLIGHTLY_KEY" | npx wrangler secret put HIGHLIGHTLY_KEY --name "$WORKER_NAME"
+fi
+
 # Pinned explicitly rather than left unset. A worker secret survives being
 # removed from this script, so whichever provider is named here has to be
 # named on every deploy; deleting the line would leave the stored secret

@@ -6,6 +6,11 @@ const teamNames: Record<string, string> = {
   bkma: "ԲԿՄԱ", gandzasar: "Գանձասար", noah: "Նոա", pyunik: "Փյունիկ",
   "pyunik yerevan": "Փյունիկ", sardarapat: "Սարդարապատ",
   shirak: "Շիրակ", syunik: "Սյունիք", urartu: "Ուրարտու", van: "Վան",
+  // Urartu was Banants until 2019 and one provider still files it that way.
+  // Left as an entry rather than fixed at the reading end, so whichever
+  // source sends it, the club is one club on this site.
+  banants: "Ուրարտու", "banants yerevan": "Ուրարտու",
+  "shirak gyumri": "Շիրակ", "noah yerevan": "Նոա", "ararat yerevan": "Արարատ",
   "west armenia": "Վեստ Արմենիա",
 
   // England

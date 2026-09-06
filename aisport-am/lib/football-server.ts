@@ -50,7 +50,10 @@ export async function getStandings(code: string): Promise<{ rows: StandingRow[];
   // reach a reader until the cache expires - Տոտտենհամ sat on the board for
   // half an hour after the fix shipped. Bumping the version is how this
   // codebase forces a refetch; the old rows fall out on their own.
-  const cacheKey = `apifootball:v4:standings:${leagueId}:${season}`;
+  // v5 on 6 September, when the Armenian table moved to Highlightly. The
+  // stored row holds the old five-row one and would sit there for six
+  // hours, which is the whole point of this key being versioned.
+  const cacheKey = `apifootball:v5:standings:${leagueId}:${season}`;
 
   if (db) {
     await ensureCacheTable(db);
@@ -86,8 +89,18 @@ export async function getStandings(code: string): Promise<{ rows: StandingRow[];
   // A free source is worth having; it is not worth a blank league page.
   try {
     const { espnStandings, armenianStandings } = await import("./espn");
-    // Armenia has no ESPN league; TheSportsDB carries it on a free key.
-    const rows = code === "ARM" ? await armenianStandings() : await espnStandings(code);
+    // Armenia has no ESPN league. Highlightly does, and it is the only free
+    // source measured against the league's own standings that got them
+    // right: eleven of twelve exactly, the twelfth a naming alias on our
+    // side. TheSportsDB stays behind it - its summary returns five rows of
+    // twelve, which the floor below rejects, and that is the honest
+    // behaviour when the good source is down.
+    const rows = code === "ARM"
+      ? (await (async () => {
+          const { armenianStandingsHighlightly } = await import("./highlightly");
+          return await armenianStandingsHighlightly();
+        })()) ?? await armenianStandings()
+      : await espnStandings(code);
     // A short table is not a table. The Armenian Premier League has ten
     // clubs and plays five matches a week; TheSportsDB's free key answers it
     // with exactly five rows - measured twice on 6 September, Noah down to
