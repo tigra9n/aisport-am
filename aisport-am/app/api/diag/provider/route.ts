@@ -73,5 +73,32 @@ export async function GET(request: Request) {
     probe("players/squads?team=709", `${HOST}/players/squads?team=709`, key),
   ]);
 
-  return Response.json({ key: `present, ${key.length} characters`, season, probes });
+  // And the site's own functions, on the same request, because the raw
+  // call answering is still not the page rendering: /players/profiles
+  // returns Bilal Fofana to this Worker in 184ms and /player/497488 shows
+  // "Այս էջը չկա" in the same minute. Whatever is between those two is
+  // in here, not in the network.
+  const library = await (async () => {
+    try {
+      const [{ getPlayerProfile, getPlayerTransfers }, { knownPlayer }] = await Promise.all([
+        import("../../../../lib/player-server"),
+        import("../../../../lib/entity-cache"),
+      ]);
+      const id = Number(player);
+      const [profile, transfers, known] = await Promise.all([
+        getPlayerProfile(id).catch((err) => ({ threw: String(err).slice(0, 200) })),
+        getPlayerTransfers(id).catch((err) => ({ threw: String(err).slice(0, 200) })),
+        knownPlayer(id).catch((err) => ({ threw: String(err).slice(0, 200) })),
+      ]);
+      return {
+        getPlayerProfile: profile && "name" in profile ? { name: profile.name, statistics: profile.statistics.length } : profile,
+        getPlayerTransfers: Array.isArray(transfers) ? transfers.length : transfers,
+        knownPlayer: known && "name" in known ? known.name : known,
+      };
+    } catch (err) {
+      return { threw: String(err).slice(0, 300) };
+    }
+  })();
+
+  return Response.json({ key: `present, ${key.length} characters`, season, probes, library });
 }
