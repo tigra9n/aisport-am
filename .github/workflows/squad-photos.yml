@@ -139,14 +139,27 @@ jobs:
             "la galaxy": "Los Angeles Galaxy",
             "lafc": "Los Angeles FC",
             "red bull new york": "New York Red Bulls",
-            // Saudi Arabia: hyphenated at API-Football, and several carry
-            // the city as well.
+            // Saudi Arabia: API-Football writes the city as well, where
+            // ESPN gives the club alone. The rest of that league is a
+            // letter of transliteration apart and is handled below.
             "al ahli": "Al-Ahli Jeddah",
             "al hilal": "Al-Hilal Saudi FC",
-            "al hazem": "Al-Hazem",
-            "al khaleej": "Al-Khaleej",
-            "al qadsiah": "Al-Qadsiah",
-            "al taawoun": "Al-Taawoun",
+          };
+
+          // Letters apart, the ordinary Levenshtein. Small strings and a
+          // few dozen comparisons, so the plain table is fast enough.
+          const distance = (a, b) => {
+            const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+            for (let i = 1; i <= a.length; i++) {
+              let previous = row[0];
+              row[0] = i;
+              for (let j = 1; j <= b.length; j++) {
+                const swap = row[j];
+                row[j] = Math.min(row[j] + 1, row[j - 1] + 1, previous + (a[i - 1] === b[j - 1] ? 0 : 1));
+                previous = swap;
+              }
+            }
+            return row[b.length];
           };
 
           const quote = (text) => "'" + String(text).replace(/'/g, "''") + "'";
@@ -214,6 +227,25 @@ jobs:
               const hits = (await af(`/teams?search=${encodeURIComponent(name.slice(0, 40))}`))?.response ?? [];
               const inLeague = [...new Set(hits.map((entry) => entry.team?.id).filter((id) => leagueIds.has(id)))];
               if (inLeague.length === 1) return [inLeague[0], "search"];
+              // A letter or two apart, which is what is left after the
+              // first three. MEASURED, run #5: Al Hazem against Al Hazm,
+              // Al Taawoun against Al Taawon - one provider transliterates
+              // the Arabic where the other does not, and search does not
+              // bridge it because it matches substrings.
+              //
+              // Two letters at most, and only if the second-closest club is
+              // strictly further away. A Saudi league of eighteen clubs all
+              // beginning "Al" is exactly where a loose threshold hands a
+              // club somebody else's squad.
+              const wanted = clubKey(name);
+              const scored = [...byName].map(([k, id]) => [distance(wanted, k), k, id]).sort((a, b) => a[0] - b[0]);
+              if (scored.length && scored[0][0] <= 2 && scored[0][0] * 3 <= wanted.length && (scored.length === 1 || scored[1][0] > scored[0][0])) {
+                return [scored[0][2], `letters (${scored[0][1]}, ${scored[0][0]} apart)`];
+              }
+              // Nothing placed it, so say what the provider does call its
+              // clubs. A name written down here once is a name that never
+              // has to be guessed again.
+              console.log(`  ${name}: no match among ${[...byName.keys()].join(" | ")}`);
               return [null, "none"];
             };
 
