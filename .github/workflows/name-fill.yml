@@ -48,6 +48,10 @@ on:
         type: choice
         options: ['no', 'yes']
         default: 'no'
+      model:
+        description: 'Which model to ask (a lite model has its own, larger free allowance)'
+        required: false
+        default: 'gemini-3.6-flash'
 
 jobs:
   fill:
@@ -92,6 +96,14 @@ jobs:
           # Three on the schedule, sixty by hand. The articles have the
           # rest of the day's twenty.
           MAX_REQUESTS: ${{ github.event_name == 'schedule' && '3' || '60' }}
+          # The articles are written by gemini-3.6-flash and must stay
+          # there: the comment in content-generation.ts says why, and it
+          # names the day a cheaper model returned an opera review instead
+          # of a footballer. Transliterating a name is mechanical and every
+          # answer here is checked to be Armenian script and to be a name
+          # that was asked for, so a lite model is safe for this and only
+          # this - and its free allowance is its own, which is the point.
+          MODEL: ${{ github.event.inputs.model || 'gemini-3.6-flash' }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
@@ -100,6 +112,7 @@ jobs:
           import { espnTeams, espnSquad } from "./lib/espn.ts";
 
           const KEY = process.env.GEMINI_API_KEY || "";
+          const MODEL = process.env.MODEL || "gemini-3.6-flash";
           if (!KEY) { console.log("no GEMINI_API_KEY"); process.exit(1); }
           const SLUGS = ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1", "usa.1", "ksa.1"];
           const only = process.env.ONLY && process.env.ONLY !== "all"
@@ -169,7 +182,7 @@ jobs:
           }
 
           const wanted = [...missing.entries()].slice(0, limit);
-          console.log(`${missing.size} footballers the table does not name; asking for ${wanted.length}`);
+          console.log(`${missing.size} footballers the table does not name; asking ${MODEL} for ${wanted.length}`);
 
           const SYSTEM = [
             "You transliterate footballers' names into Armenian for an Armenian football site.",
@@ -218,7 +231,7 @@ jobs:
               asked++;
               try {
               const response = await fetch(
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" + encodeURIComponent(KEY),
+                `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=` + encodeURIComponent(KEY),
                 {
                   method: "POST",
                   // MEASURED the hard way: a run sat on one batch for an
@@ -252,6 +265,19 @@ jobs:
                 console.log(`  http ${response.status}: ${(await response.text()).replace(/\s+/g, " ").slice(0, 400)}`);
                 await wait(20000);
                 continue;
+              }
+              if (response.status === 404) {
+                // The name was wrong, and guessing a second one costs
+                // another run. Google will say which it has.
+                console.log(`  no model called ${MODEL}. What this key can reach:`);
+                const list = await fetch("https://generativelanguage.googleapis.com/v1beta/models?key=" + encodeURIComponent(KEY));
+                const models = (await list.json() as { models?: { name?: string; supportedGenerationMethods?: string[] }[] }).models ?? [];
+                for (const m of models) {
+                  if (!m.name?.includes("flash")) continue;
+                  if (!m.supportedGenerationMethods?.includes("generateContent")) continue;
+                  console.log(`    ${m.name.replace("models/", "")}`);
+                }
+                break;
               }
               if (!response.ok) { console.log(`  http ${response.status}: ${(await response.text()).slice(0, 300)}`); break; }
               const data = await response.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
