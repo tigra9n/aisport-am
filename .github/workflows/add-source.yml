@@ -1781,6 +1781,97 @@ jobs:
       # burying whatever ran before it. Behind 'all' with the other settled
       # listings; what changes day to day is what the site published, not
       # which feeds are configured.
+      # The Armenian table, asked by date, and printed last so it is not
+      # buried under two hundred club names.
+      #
+      # Rounds were the wrong axis. Tigran: the Armenian league does not play
+      # a symmetric round - clubs are not all on the same number of matches,
+      # so "five fixtures in a round of twelve clubs" is not evidence of a
+      # dropped game, and my reading of it was wrong.
+      #
+      # What survives that correction is a direct comparison: the provider's
+      # own summary has Alashkert on 13 points from 6, the rounds give 7 from
+      # 4 - two matches simply absent. And the other way round, Pyunik has 5
+      # matches in the rounds and 4 in the summary. Both are incomplete, in
+      # different places, so neither can be the table.
+      #
+      # A date has no structure to get wrong. Ask for every day of the season
+      # one at a time, count what comes back, and compare the total against
+      # both. If the days are complete, the table can be counted from them
+      # and the Armenian league leaves the paid provider - the last thing on
+      # the site that has not.
+      - name: The Armenian league, day by day
+        if: ${{ github.event.inputs.livescore != 'no' && github.event.inputs.espn == 'no' }}
+        run: |
+          cat > armdays.mjs <<'JS'
+          const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+          const DB = "https://www.thesportsdb.com/api/v1/json/3";
+          const LEAGUE = "4619";
+          const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+          async function get(url) {
+            for (let a = 0; a < 3; a++) {
+              try {
+                const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(20000) });
+                if (res.status === 429) { await wait(8000); continue; }
+                if (!res.ok) return null;
+                return await res.json();
+              } catch { await wait(2000); }
+            }
+            return null;
+          }
+
+          // The season opened in July. Walk every day from then to today.
+          const days = [];
+          for (let d = new Date("2026-07-01T00:00:00Z"); d <= new Date(); d.setUTCDate(d.getUTCDate() + 1)) {
+            days.push(d.toISOString().slice(0, 10));
+          }
+          console.log(`asking ${days.length} days, one request each`);
+
+          const seen = new Map();
+          let asked = 0, withPlay = 0;
+          for (const day of days) {
+            await wait(2200);
+            asked++;
+            const r = await get(`${DB}/eventsday.php?d=${day}&l=${LEAGUE}`);
+            const events = r?.events;
+            if (!Array.isArray(events) || !events.length) continue;
+            withPlay++;
+            for (const e of events) seen.set(e.idEvent, e);
+            console.log(`  ${day}  ${events.length} fixture(s)`);
+          }
+
+          const played = [...seen.values()].filter((e) => e.intHomeScore !== null && e.intHomeScore !== "" && e.intAwayScore !== null && e.intAwayScore !== "");
+          console.log("");
+          console.log(`${asked} days asked, ${withPlay} had football, ${seen.size} fixtures, ${played.length} finished`);
+
+          const tally = new Map();
+          const seat = (n) => { if (!tally.has(n)) tally.set(n, { p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0 }); return tally.get(n); };
+          for (const e of played) {
+            const h = seat(e.strHomeTeam), a = seat(e.strAwayTeam);
+            const hs = Number(e.intHomeScore), as = Number(e.intAwayScore);
+            h.p++; a.p++; h.gf += hs; h.ga += as; a.gf += as; a.ga += hs;
+            if (hs > as) { h.w++; a.l++; } else if (hs < as) { a.w++; h.l++; } else { h.d++; a.d++; }
+          }
+          const computed = [...tally.entries()].map(([name, r]) => ({ name, ...r, pts: r.w * 3 + r.d, gd: r.gf - r.ga }))
+            .sort((x, y) => y.pts - x.pts || y.gd - x.gd);
+          console.log("");
+          console.log(`the table the days produce (${computed.length} clubs):`);
+          for (const [i, r] of computed.entries()) console.log(`  ${String(i + 1).padStart(2)}. ${String(r.name).padEnd(18)} ${String(r.pts).padStart(3)} pts  ${r.p} played  ${r.gd > 0 ? "+" : ""}${r.gd}`);
+
+          // Beside the provider's own summary, club by club, so a
+          // disagreement is visible rather than inferred.
+          const summary = await get(`${DB}/lookuptable.php?l=${LEAGUE}&s=2026-2027`);
+          const rows = summary?.table ?? [];
+          console.log("");
+          console.log(`the provider's summary (${rows.length} clubs), against the count:`);
+          for (const row of rows) {
+            const mine = tally.get(row.strTeam);
+            const same = mine && Number(row.intPoints) === mine.w * 3 + mine.d && Number(row.intPlayed) === mine.p;
+            console.log(`  ${String(row.strTeam).padEnd(18)} summary ${String(row.intPoints).padStart(3)}/${row.intPlayed}   counted ${mine ? `${String(mine.w * 3 + mine.d).padStart(3)}/${mine.p}` : " -- "}   ${same ? "agree" : "DIFFER"}`);
+          }
+          JS
+          node armdays.mjs
+
       - name: What the sources table holds now
         if: ${{ github.event.inputs.livescore == 'all' && github.event.inputs.espn == 'no' }}
         run: |
