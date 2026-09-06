@@ -169,6 +169,14 @@ jobs:
           await ask(`players?id=${id}&season=${season - 1}`, `/players?id=${id}&season=${season - 1}`);
           await ask(`players/profiles?player=${id}`, `/players/profiles?player=${id}`);
           await ask("status", "/status");
+          // And the page itself, because the provider answering is not the
+          // same fact as the page rendering: /players/profiles answered
+          // for this footballer with results:1 while the page was showing
+          // "Այս էջը չկա", so one of those two has changed since or the
+          // failure was a moment's.
+          const page = await fetch(`https://aifootball.am/player/${id}`, { headers: { "User-Agent": "aifootball-diag" } });
+          const html = await page.text();
+          console.log(`the page: http ${page.status}, ${html.includes("Այս էջը չկա") ? "shows the 404 page" : "renders"}, ${html.length} bytes`);
           JS
           node player-probe.mjs
           rm -f player-probe.mjs
