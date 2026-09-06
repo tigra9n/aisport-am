@@ -148,6 +148,23 @@ jobs:
           done
 
           echo
+          echo "=== Bzzoiro (BSD), which advertises all of this for nothing"
+          # A service offering what API-Football and Sportmonks charge for,
+          # free and without a rate limit, is either very generous or very
+          # short-lived. Neither matters if it does not have the league:
+          # its own material names thirty-four, and every one of them
+          # named is a big one. So the only question asked here is whether
+          # Armenia is in its list at all.
+          for path in /api/leagues /api/v1/leagues /leagues /api/competitions; do
+            body=$(curl -sS --max-time 25 "https://sports.bzzoiro.com$path" || true)
+            code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 25 "https://sports.bzzoiro.com$path" || true)
+            echo "--- $path -> http $code, ${#body} bytes"
+            [ "${#body}" -lt 40 ] && continue
+            echo "    armenia mentioned: $(grep -o -i -c armenia <<<"$body" || true)"
+            echo "    first 300: $(head -c 300 <<<"$body" | tr '\n' ' ')"
+          done
+
+          echo
           echo "=== football-data.org, whose token this site already holds"
           comps=$(curl -sS --max-time 30 -H "X-Auth-Token: $FOOTBALL_DATA_TOKEN" "https://api.football-data.org/v4/competitions" || true)
           echo "    competitions on this plan: $(grep -o '"code":' <<<"$comps" | wc -l)"
