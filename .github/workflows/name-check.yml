@@ -110,6 +110,10 @@ jobs:
       # articles a day and as many as the pipeline can write. A 429 from
       # Google names the limit in its body, and every one the pipeline has
       # ever been given is in cron_invocations.
+      #
+      # The first run of this asked for "429" anywhere in the log and found
+      # only millisecond timings - "4293ms" - so it names the provider and
+      # the word http, and counts the articles a day beside it.
       - name: What Google's refusals say the limit is
         if: ${{ github.event.inputs.quota == 'yes' }}
         env:
@@ -118,6 +122,8 @@ jobs:
         run: |
           npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
           npx wrangler d1 execute aisport-db --remote --json --command \
-            "SELECT ts, substr(log, instr(log,'429'), 400) AS refusal FROM cron_invocations WHERE log LIKE '%429%' ORDER BY id DESC LIMIT 8"
+            "SELECT ts, substr(log, instr(log,'http 429'), 300) AS refusal FROM cron_invocations WHERE log LIKE '%http 429%' ORDER BY id DESC LIMIT 8"
           npx wrangler d1 execute aisport-db --remote --json --command \
-            "SELECT COUNT(*) AS runs, SUM(generated) AS articles, MIN(ts) AS since FROM cron_invocations WHERE ts > date('now','-2 day')"
+            "SELECT COUNT(*) AS refusals FROM cron_invocations WHERE log LIKE '%gemini http 429%'"
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT substr(ts,1,10) AS day, COUNT(*) AS runs, SUM(generated) AS articles FROM cron_invocations GROUP BY day ORDER BY day DESC LIMIT 7"
