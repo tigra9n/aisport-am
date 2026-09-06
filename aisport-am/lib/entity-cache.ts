@@ -50,7 +50,8 @@ export async function knownTeam(teamId: number): Promise<KnownTeam | null> {
     // exist and what is its badge", and an older row is a better answer than
     // a 404 - which is the whole reason this file exists.
     [
-      ...LEAGUE_IDS.map((id) => `apifootball:v5:standings:${id}:${season}`),
+      ...LEAGUE_IDS.map((id) => `apifootball:v6:standings:${id}:${season}`),
+    ...LEAGUE_IDS.map((id) => `apifootball:v5:standings:${id}:${season}`),
     ...LEAGUE_IDS.map((id) => `apifootball:v4:standings:${id}:${season}`),
       ...LEAGUE_IDS.map((id) => `apifootball:v3:standings:${id}:${season}`),
     ],
