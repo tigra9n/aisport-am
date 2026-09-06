@@ -1939,66 +1939,39 @@ jobs:
           JS
           node afphotos.mjs
 
-      # How many of a squad end up with figures, not how many of three.
+      # The Armenian clubs' numbers at API-Football, so the table can link
+      # to a club page again.
       #
-      # Three men were measured and two of them had statistics, and that is
-      # a sample, not an answer. Tigran asked whether it is fixed for every
-      # footballer and the honest reply was that nobody had counted. So
-      # count: two whole squads, every man, both addresses, and say what
-      # share of each ends up with something the page can show.
+      # The table moved to Highlightly and the rows lost their links with
+      # it: Highlightly numbers clubs its own way and the site's club pages
+      # do not run on those numbers, so no link was drawn at all. Before the
+      # move the table came from API-Football and every club name opened its
+      # page. That is a working thing this repo broke.
       #
-      #   /athletes/{id}/stats            the season table, when it exists
-      #   core /athletes/{id}/statistics  the career total, the fallback
-      #
-      # A man with neither is a man ESPN has no figures for, which the page
-      # is right to say plainly - the point is to know how many that is.
-      - name: How many of a squad have figures
+      # API-Football is what /team/<number> already answers on for a club
+      # that is not ESPN's, and its Armenian squads carry a photograph each
+      # - Pyunik 29 of 29, measured. So the fix is a name to number table,
+      # and this prints it.
+      - name: The Armenian clubs at API-Football
         if: ${{ github.event.inputs.livescore != 'no' && github.event.inputs.espn == 'no' }}
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
-          cat > cover.mjs <<'JS'
-          const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
-          const WEB = "https://site.web.api.espn.com/apis/site/v2/sports/soccer";
-          const COMMON = "https://site.web.api.espn.com/apis/common/v3/sports/soccer";
-          const CORE = "https://sports.core.api.espn.com/v2/sports/soccer";
-          const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-          const get = async (url) => {
-            try {
-              const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(20000) });
-              return r.ok ? await r.json() : null;
-            } catch { return null; }
-          };
-          // The same test the page applies: a column with a value that is
-          // not zero. A response that parses but holds nothing showable is
-          // an empty page, whatever its status was.
-          const usable = (stats) => (stats ?? []).some((s) => {
-            const v = s.displayValue ?? (s.value === undefined ? "" : String(s.value));
-            return v && v !== "0" && v !== "0.0";
+          cat > armteams.mjs <<'JS'
+          const KEY = process.env.API_FOOTBALL_KEY || "";
+          if (!KEY) { console.log("no key"); process.exit(0); }
+          const season = new Date().getUTCMonth() + 1 >= 7 ? new Date().getUTCFullYear() : new Date().getUTCFullYear() - 1;
+          const r = await fetch(`https://v3.football.api-sports.io/teams?league=342&season=${season}`, {
+            headers: { "x-apisports-key": KEY, Accept: "application/json" },
           });
-
-          for (const [club, slug, id] of [["Arsenal", "eng.1", "359"], ["Paris Saint-Germain", "fra.1", "160"]]) {
-            const roster = await get(`${WEB}/${slug}/teams/${id}/roster`);
-            const men = (roster?.athletes ?? []).filter((a) => a.id && a.displayName);
-            let seasonTable = 0, careerOnly = 0, nothing = [];
-            for (const a of men) {
-              await wait(150);
-              const table = await get(`${COMMON}/athletes/${a.id}/stats`);
-              const blocks = (table?.categories ?? []).flatMap((c) => c.statistics ?? []);
-              if (blocks.some((b) => (b.stats ?? []).some((v) => v && String(v) !== "0"))) { seasonTable++; continue; }
-              const core = await get(`${CORE}/athletes/${a.id}/statistics`);
-              const cats = core?.splits?.categories ?? [];
-              if (cats.some((c) => usable(c.stats))) { careerOnly++; continue; }
-              nothing.push(a.displayName);
-            }
-            console.log("");
-            console.log(`=== ${club}: ${men.length} in the squad ===`);
-            console.log(`  a season table:        ${seasonTable}`);
-            console.log(`  only a career total:   ${careerOnly}`);
-            console.log(`  no figures at all:     ${nothing.length}`);
-            console.log(`  so the page shows something for ${seasonTable + careerOnly} of ${men.length}`);
-            if (nothing.length) console.log(`      without: ${nothing.join(", ")}`);
+          const j = await r.json();
+          const teams = j?.response ?? [];
+          console.log(`league 342, season ${season}: HTTP ${r.status}, ${teams.length} clubs`);
+          for (const entry of teams) {
+            console.log(`  ${String(entry.team?.id).padStart(6)}  ${entry.team?.name}`);
           }
           JS
-          node cover.mjs
+          node armteams.mjs
 
       - name: What the sources table holds now
         if: ${{ github.event.inputs.livescore == 'all' && github.event.inputs.espn == 'no' }}
