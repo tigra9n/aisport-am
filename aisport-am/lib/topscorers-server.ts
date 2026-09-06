@@ -130,7 +130,10 @@ export async function getTopScorers(code: string): Promise<{ rows: TopScorer[]; 
 
   const db = (env as unknown as { DB?: D1Database }).DB;
   const season = currentSeasonYear();
-  const cacheKey = `apifootball:v6:topscorers:${leagueId}:${season}`;
+  // v7 on 6 September, with the name tables. The chart stores the Armenian
+  // spelling rather than the Latin one, so a corrected name waits an hour
+  // for the row to expire - and the owner is looking at the page now.
+  const cacheKey = `apifootball:v7:topscorers:${leagueId}:${season}`;
 
   if (db) {
     await ensureCacheTable(db);
