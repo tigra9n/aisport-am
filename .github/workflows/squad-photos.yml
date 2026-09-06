@@ -98,6 +98,70 @@ jobs:
             .replace(/\b(fc|cf|sc|ac|afc|ss|as|rc|cd|ud|sv|vfb|vfl|tsg|fk|club|calcio|futbol|football)\b/g, " ")
             .replace(/\s+/g, " ").trim();
 
+          // Names no normaliser can bridge, ESPN's on the left and
+          // API-Football's on the right.
+          //
+          // MEASURED, run #4 on 6 September: 118 of 144 clubs matched and
+          // every one of the twenty-six misses was spelling rather than an
+          // absent club - "Internazionale" against "Inter", "FC Cologne"
+          // against "FC Koln", "Red Bull New York" against "New York Red
+          // Bulls". A club that fails to match keeps whatever ESPN gave it,
+          // which is a squad page of grey outlines, so the ones that can be
+          // written down are written down here and the rest are asked of
+          // the provider by name.
+          const ALIASES = {
+            // England: ESPN writes the full registered name, API-Football
+            // the short one.
+            "brighton hove albion": "Brighton",
+            "tottenham hotspur": "Tottenham",
+            "newcastle united": "Newcastle",
+            "leeds united": "Leeds",
+            "ipswich town": "Ipswich",
+            "coventry city": "Coventry",
+            "wolverhampton wanderers": "Wolves",
+            "west ham united": "West Ham",
+            // Spain
+            "deportivo": "Deportivo La Coruna",
+            // Italy
+            "internazionale": "Inter",
+            // Germany: the umlaut survives at API-Football and is spelled
+            // out in English at ESPN, which no accent-stripping can undo.
+            "bayern munich": "Bayern Munchen",
+            "fc cologne": "FC Koln",
+            "hamburg sv": "Hamburger SV",
+            "mainz": "FSV Mainz 05",
+            // France
+            "aj auxerre": "Auxerre",
+            "brest": "Stade Brestois 29",
+            "stade rennais": "Rennes",
+            // United States: the abbreviations are ESPN's habit.
+            "d c united": "DC United",
+            "la galaxy": "Los Angeles Galaxy",
+            "lafc": "Los Angeles FC",
+            "red bull new york": "New York Red Bulls",
+            // Saudi Arabia: API-Football writes the city as well, where
+            // ESPN gives the club alone. The rest of that league is a
+            // letter of transliteration apart and is handled below.
+            "al ahli": "Al-Ahli Jeddah",
+            "al hilal": "Al-Hilal Saudi FC",
+          };
+
+          // Letters apart, the ordinary Levenshtein. Small strings and a
+          // few dozen comparisons, so the plain table is fast enough.
+          const distance = (a, b) => {
+            const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+            for (let i = 1; i <= a.length; i++) {
+              let previous = row[0];
+              row[0] = i;
+              for (let j = 1; j <= b.length; j++) {
+                const swap = row[j];
+                row[j] = Math.min(row[j] + 1, row[j - 1] + 1, previous + (a[i - 1] === b[j - 1] ? 0 : 1));
+                previous = swap;
+              }
+            }
+            return row[b.length];
+          };
+
           const quote = (text) => "'" + String(text).replace(/'/g, "''") + "'";
           // Content-Length only: the outline has to be told from a
           // photograph, and its length is enough to do that without
@@ -133,12 +197,63 @@ jobs:
             const list = espnTeams.map((t) => t.team).filter((t) => t?.id && t?.displayName);
             const afTeams = (await af(`/teams?league=${leagueId}&season=${SEASON}`))?.response ?? [];
             const byName = new Map(afTeams.map((entry) => [clubKey(entry.team?.name ?? ""), entry.team?.id]).filter(([k, v]) => k && v));
+            const leagueIds = new Set(afTeams.map((entry) => entry.team?.id).filter(Boolean));
             console.log(`${slug}: ${list.length} clubs at ESPN, ${afTeams.length} at API-Football`);
+
+            // Three tries, cheapest first, and every one of them has to be
+            // unique before it counts: an ambiguous match hands a club
+            // somebody else's squad, which is worse than no photographs.
+            const resolveClub = async (name) => {
+              const named = [ALIASES[key(name)], name].filter(Boolean);
+              for (const candidate of named) {
+                const found = byName.get(clubKey(candidate));
+                if (found) return [found, candidate === name ? "name" : "alias"];
+              }
+              // One club's words inside the other's: "Tottenham" is all of
+              // "Tottenham Hotspur" minus the part only ESPN writes, and
+              // "Al Hilal" all of "Al-Hilal Saudi FC" minus the country.
+              for (const candidate of named) {
+                const words = clubKey(candidate).split(" ").filter(Boolean);
+                if (!words.length) continue;
+                const near = [...byName].filter(([k]) => {
+                  const other = k.split(" ");
+                  return words.every((w) => other.includes(w)) || other.every((w) => words.includes(w));
+                });
+                if (near.length === 1) return [near[0][1], "words"];
+              }
+              // The provider's own search, which is what it is for. One
+              // request, and only for a club nothing else could place.
+              await wait(400);
+              const hits = (await af(`/teams?search=${encodeURIComponent(name.slice(0, 40))}`))?.response ?? [];
+              const inLeague = [...new Set(hits.map((entry) => entry.team?.id).filter((id) => leagueIds.has(id)))];
+              if (inLeague.length === 1) return [inLeague[0], "search"];
+              // A letter or two apart, which is what is left after the
+              // first three. MEASURED, run #5: Al Hazem against Al Hazm,
+              // Al Taawoun against Al Taawon - one provider transliterates
+              // the Arabic where the other does not, and search does not
+              // bridge it because it matches substrings.
+              //
+              // Two letters at most, and only if the second-closest club is
+              // strictly further away. A Saudi league of eighteen clubs all
+              // beginning "Al" is exactly where a loose threshold hands a
+              // club somebody else's squad.
+              const wanted = clubKey(name);
+              const scored = [...byName].map(([k, id]) => [distance(wanted, k), k, id]).sort((a, b) => a[0] - b[0]);
+              if (scored.length && scored[0][0] <= 2 && scored[0][0] * 3 <= wanted.length && (scored.length === 1 || scored[1][0] > scored[0][0])) {
+                return [scored[0][2], `letters (${scored[0][1]}, ${scored[0][0]} apart)`];
+              }
+              // Nothing placed it, so say what the provider does call its
+              // clubs. A name written down here once is a name that never
+              // has to be guessed again.
+              console.log(`  ${name}: no match among ${[...byName.keys()].join(" | ")}`);
+              return [null, "none"];
+            };
 
             for (const club of list) {
               clubs++;
-              const afId = byName.get(clubKey(club.displayName));
+              const [afId, how] = await resolveClub(club.displayName);
               if (!afId) { unmatched.push(`${slug} ${club.displayName}`); continue; }
+              if (how !== "name") console.log(`  ${club.displayName} matched by ${how}`);
               matched++;
               await wait(400);
               const squad = (await af(`/players/squads?team=${afId}`))?.response?.[0]?.players ?? [];
