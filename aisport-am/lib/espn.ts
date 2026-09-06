@@ -821,9 +821,22 @@ export async function armenianMatchesForDate(date: string): Promise<ArmenianMatc
     .map((e) => {
       const played = e.intHomeScore !== null && e.intHomeScore !== undefined && e.intHomeScore !== "";
       const kickoff = e.strTimestamp ? new Date(e.strTimestamp.replace(" ", "T") + "Z") : null;
+      // A score here does not mean the match is over. MEASURED on the
+      // deployed board at 15:38 on 6 September, thirty-eight minutes into
+      // Shirak against Sardarapat: this provider already had the fixture
+      // in eventspastleague with 1-0, and the site printed "Ավարտված
+      // Շիրակ 1 : 0 Սարդարապատ" while the second half had not started.
+      // Telling a reader a match has ended when it has not is worse than
+      // telling them nothing, so a match whose kick-off is inside the two
+      // and a quarter hours a football match takes is called what it is.
+      //
+      // Marked live with no minute rather than with a wrong one: this
+      // provider's free tier has no clock, and inventing one is how the
+      // last wrong thing on this board got there.
+      const tooEarlyToBeOver = played && kickoff !== null && Date.now() < kickoff.getTime() + 135 * 60_000;
       return {
         id: `sdb-${e.idEvent}`,
-        status: played ? "Ավարտված" : kickoff ? formatTimeYerevan(kickoff.toISOString()) : "",
+        status: tooEarlyToBeOver ? "Ընթացքում" : played ? "Ավարտված" : kickoff ? formatTimeYerevan(kickoff.toISOString()) : "",
         competition: "Հայաստանի Պրեմիեր լիգա",
         home: armenianTeamName(e.strHomeTeam ?? ""),
         away: armenianTeamName(e.strAwayTeam ?? ""),
@@ -833,13 +846,13 @@ export async function armenianMatchesForDate(date: string): Promise<ArmenianMatc
         awayLogo: e.strAwayTeamBadge ?? null,
         homeScore: played ? Number(e.intHomeScore) : null,
         awayScore: played ? Number(e.intAwayScore) : null,
-        // TheSportsDB's free tier has no live feed, so nothing from it is
-        // ever marked live. Claiming otherwise would put a "LIVE" badge on
-        // a score that is not moving. This is now only the fallback behind
-        // Highlightly, which does carry the minute; armenianMatchWindow,
-        // which used to decide when to spend an API-Football request on
-        // top, went with that provider.
-        isLive: false,
+        // Live only in the sense above - a match that has started and has
+        // not had time to finish. This provider has no clock and no live
+        // feed, so the badge carries no minute; it is the fallback behind
+        // Highlightly, which does carry one. armenianMatchWindow, which
+        // used to decide when to spend an API-Football request on top,
+        // went with that provider.
+        isLive: tooEarlyToBeOver,
         kickoffMs: kickoff ? kickoff.getTime() : null,
       };
     })
