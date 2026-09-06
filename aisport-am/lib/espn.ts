@@ -1383,19 +1383,44 @@ type SportsDbPlayers = {
 const photoKey = (name: string) =>
   name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z ]/g, " ").trim().replace(/\s+/g, " ");
 
-export async function sportsDbSquadPhotos(clubName: string): Promise<Record<string, string>> {
+// Two maps, not one, because a squad should look like one photo session.
+//
+// The provider carries three kinds of picture and they do not sit together
+// on a page: strCutout is a head-and-shoulders on a transparent ground,
+// strThumb is a photograph taken during a match, strRender something else
+// again. Collapsing them into one field - which this did - gave a squad
+// where some men were studio portraits and their team-mates were caught
+// mid-stride against a crowd.
+//
+// So the cutouts are kept apart from the rest. The page fills every place
+// it can from `cut` first, and only reaches into `alt` for a footballer no
+// cutout exists for anywhere.
+export type SportsDbPhotos = { cut: Record<string, string>; alt: Record<string, string> };
+
+export async function sportsDbSquadPhotos(clubName: string): Promise<SportsDbPhotos> {
   const found = await sportsDb<SportsDbTeamSearch>(`/searchteams.php?t=${encodeURIComponent(clubName)}`);
   const teamId = found?.teams?.[0]?.idTeam;
-  if (!teamId) return {};
+  if (!teamId) return { cut: {}, alt: {} };
   const squad = await sportsDb<SportsDbPlayers>(`/lookup_all_players.php?id=${teamId}`);
-  const photos: Record<string, string> = {};
+  const photos: SportsDbPhotos = { cut: {}, alt: {} };
   for (const player of squad?.player ?? []) {
-    // The cutout is a transparent head-and-shoulders and is what the card
-    // wants; the thumbnail is a match photograph and is the fallback.
-    const url = player.strCutout || player.strThumb || player.strRender;
-    if (player.strPlayer && url) photos[photoKey(player.strPlayer)] = url;
+    if (!player.strPlayer) continue;
+    const key = photoKey(player.strPlayer);
+    if (player.strCutout) photos.cut[key] = player.strCutout;
+    else if (player.strThumb || player.strRender) photos.alt[key] = (player.strThumb || player.strRender) as string;
   }
   return photos;
+}
+
+// A stored map is either the current shape or the flat one this used to
+// write. Reading both means the weekly run's rows keep working through the
+// deploy that changes the shape, instead of a day with no faces at all.
+export function readPhotoMaps(payload: unknown): SportsDbPhotos {
+  const value = payload as Partial<SportsDbPhotos> & Record<string, unknown>;
+  if (value && typeof value === "object" && (value.cut || value.alt)) {
+    return { cut: (value.cut as Record<string, string>) ?? {}, alt: (value.alt as Record<string, string>) ?? {} };
+  }
+  return { cut: (payload as Record<string, string>) ?? {}, alt: {} };
 }
 
 export const squadPhotoKey = photoKey;

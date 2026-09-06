@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { pickPhoto, squadPhotoKey } from "../lib/espn.ts";
+import { pickPhoto, squadPhotoKey, readPhotoMaps } from "../lib/espn.ts";
 
 // A Chelsea squad as the two providers spell it. ESPN's roster is on the
 // left, TheSportsDB's photo list on the right; every pair below is a real
@@ -41,4 +41,18 @@ test("the surname and the first initial, when only one man fits", () => {
 test("a name nobody carries stays without a face", () => {
   assert.equal(pickPhoto(photos, "Cole Palmer"), null);
   assert.equal(pickPhoto(photos, ""), null);
+});
+
+// A squad of cards should read as one photo session. The provider carries
+// portraits on a transparent ground and photographs taken during a match,
+// and the two do not sit together - so a stored map keeps them apart, and
+// an older flat map is read as portraits, which is what it mostly held.
+test("a stored map is read whichever shape it is in", () => {
+  const shaped = readPhotoMaps({ cut: { a: "cut.png" }, alt: { b: "match.jpg" } });
+  assert.deepEqual(shaped, { cut: { a: "cut.png" }, alt: { b: "match.jpg" } });
+
+  const flat = readPhotoMaps({ a: "old.png" });
+  assert.deepEqual(flat, { cut: { a: "old.png" }, alt: {} });
+
+  assert.deepEqual(readPhotoMaps({ cut: { a: "c.png" } }), { cut: { a: "c.png" }, alt: {} });
 });

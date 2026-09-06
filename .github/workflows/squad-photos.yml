@@ -85,15 +85,27 @@ jobs:
               if (!teamId) { console.log(`  ${club.displayName}: not in TheSportsDB`); continue; }
               await wait(1200);
               const squad = await get(`${SDB}/lookup_all_players.php?id=${teamId}`);
-              const photos = {};
+              // Two maps, so a squad page can read as one photo session.
+              // strCutout is a head-and-shoulders on a transparent ground
+              // and sits beside ESPN's headshots; strThumb is a photograph
+              // taken during a match and does not. The page fills from cut
+              // first and only reaches into alt for a footballer no cutout
+              // exists for. Collapsing them into one field gave squads
+              // where some men were portraits and their team-mates were
+              // caught mid-stride against a crowd.
+              const photos = { cut: {}, alt: {} };
               for (const player of squad?.player ?? []) {
-                const url = player.strCutout || player.strThumb || player.strRender;
-                if (player.strPlayer && url) photos[key(player.strPlayer)] = url;
+                if (!player.strPlayer) continue;
+                const k = key(player.strPlayer);
+                if (player.strCutout) photos.cut[k] = player.strCutout;
+                else if (player.strThumb || player.strRender) photos.alt[k] = player.strThumb || player.strRender;
               }
-              const n = Object.keys(photos).length;
-              console.log(`  ${String(club.displayName).padEnd(28)} ${n} photograph(s)`);
+              const cut = Object.keys(photos.cut).length;
+              const alt = Object.keys(photos.alt).length;
+              const n = cut + alt;
+              console.log(`  ${String(club.displayName).padEnd(28)} ${cut} portrait(s), ${alt} match photo(s)`);
               if (!n) continue;
-              withPhotos++; faces += n;
+              withPhotos++; faces += cut;
               // saved_at is now, and the Worker keeps a club's map for
               // thirty days - so a weekly run is three refreshes inside
               // every window and a missed run costs nothing.
@@ -104,7 +116,7 @@ jobs:
           }
 
           console.log("");
-          console.log(`${clubs} clubs asked, ${withPhotos} answered, ${faces} photographs in total`);
+          console.log(`${clubs} clubs asked, ${withPhotos} answered, ${faces} portraits in total`);
           writeFileSync("photos.sql", statements.join("\n") + "\n");
           if (!statements.length) { console.log("nothing to write"); process.exit(1); }
           JS
