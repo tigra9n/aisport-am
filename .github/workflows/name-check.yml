@@ -64,8 +64,15 @@ jobs:
           // The table's own keys, read out of the file rather than exported:
           // the module hands back a spelling, not a verdict on where it came
           // from, and the whole question here is where it came from.
+          //
+          // Every key in the object, not every key that starts a line: the
+          // table packs several names per line, so a line-anchored pattern
+          // saw 116 of its 229 entries and reported the other 113 as
+          // unnamed. A value can never match, because it is followed by a
+          // comma and this wants a colon.
           const source = readFileSync("lib/player-names-hy.ts", "utf8");
-          const table = new Set([...source.matchAll(/^\s*"([^"]+)":/gm)].map((m) => m[1]));
+          const region = source.slice(source.indexOf("const playerNames"), source.indexOf("\n};\n\nfunction lookupKey"));
+          const table = new Set([...region.matchAll(/"([^"]+)"\s*:/g)].map((m) => m[1]));
           const key = (name: string) => name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z ]/g, " ").trim().replace(/\s+/g, " ");
 
           let named = 0, spelled = 0;

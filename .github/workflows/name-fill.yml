@@ -66,7 +66,13 @@ jobs:
 
           const FILE = "lib/player-names-hy.ts";
           const source = readFileSync(FILE, "utf8");
-          const table = new Set([...source.matchAll(/^\s*"([^"]+)":/gm)].map((m) => m[1]));
+          // Every key in the object, not every key that starts a line. The
+          // first run of this asked for 113 names the table already had,
+          // wrote them in a second time, and the file stopped compiling:
+          // "An object literal cannot have multiple properties with the
+          // same name." The table packs several names per line.
+          const region = source.slice(source.indexOf("const playerNames"), source.indexOf("\n};\n\nfunction lookupKey"));
+          const table = new Set([...region.matchAll(/"([^"]+)"\s*:/g)].map((m) => m[1]));
           // The same key the module itself builds, so a name this run adds
           // is a name the site will actually find.
           const key = (name: string) => name.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[’‘`]/g, "'").replace(/\s+/g, " ").trim().toLowerCase();
@@ -112,6 +118,7 @@ jobs:
           const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
           const armenianOnly = /^[Ա-֏\s'’.\-]+$/;
           const accepted: [string, string][] = [];
+          const written = new Set<string>();
           let asked = 0, refused = 0;
 
           for (let start = 0; start < wanted.length; start += 60) {
@@ -149,6 +156,11 @@ jobs:
               // letters in it, is dropped rather than written down: this
               // file is the one place the site trusts completely.
               if (!k || !row.hy || !armenianOnly.test(row.hy)) { refused++; continue; }
+              // Belt as well as braces: a batch that answers for the same
+              // man twice would write the key twice and break the file the
+              // same way.
+              if (written.has(k)) { refused++; continue; }
+              written.add(k);
               accepted.push([k, row.hy.trim()]);
             }
             console.log(`  batch ${start / 60 + 1}: ${rows.length} back, ${accepted.length} kept so far`);
