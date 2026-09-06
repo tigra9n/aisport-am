@@ -74,7 +74,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
       {squad.teamName}
     </h1>
     <p className="page-intro">Ակումբի ամբողջական խաղացողների կազմը՝ ըստ դիրքի, համարով և տարիքով։ Սեղմիր խաղացողի վրա՝ պրոֆիլն ու տրանսֆերները տեսնելու համար։</p>
-    {coach ? (
+    {coach && (
       <Link href={`/coach/${coach.id}`} className="coach-card">
         {coach.photo ? <img src={sizedImage(coach.photo, 64)} alt="" className="squad-photo" loading="lazy" /> : <div className="squad-photo squad-photo-placeholder">{coach.name.slice(0, 1)}</div>}
         <div>
@@ -83,24 +83,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
           <small>{coach.nationality ?? ""}{coach.age ? ` · ${coach.age} տարեկան` : ""}</small>
         </div>
       </Link>
-    ) : squad.coachName ? (
-      // The free manager: a name, and no link.
-      //
-      // The paid lookup above runs on API-Football's numbering, so it is
-      // skipped for an ESPN-keyed club and those pages have been showing
-      // no manager at all. ESPN's roster carries one, but only his name -
-      // no photograph, no nationality, no career - so there is no coach
-      // page to send a reader to, and a link to an empty one would be
-      // worse than no link. Named, not linked, until there is something
-      // behind it.
-      <div className="coach-card">
-        <div className="squad-photo squad-photo-placeholder">{squad.coachName.slice(0, 1)}</div>
-        <div>
-          <span>Գլխավոր մարզիչ</span>
-          <strong>{squad.coachName}</strong>
-        </div>
-      </div>
-    ) : null}
+)}
     <div className="squad-groups">
       {groups.map((group) => (
         <section className="squad-group" key={group.position}>

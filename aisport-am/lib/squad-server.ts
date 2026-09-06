@@ -10,12 +10,7 @@ import { armenianTeamName } from "./team-names-hy";
 // can be matched on it. The card renders name, which is Armenian, and an
 // Armenian name has no letters in common with "Gabriel Magalhaes".
 export type SquadPlayer = { id: number; key?: string | null; name: string; latin?: string; number: number | null; position: string; age: number | null; photo: string | null };
-// coachName is ESPN's manager, carried on the squad because that is the
-// one request that has him. A name only - no photograph, no nationality,
-// no career, which is all ESPN publishes - and it is what a club page
-// keyed by ESPN shows instead of nothing: the paid lookup beside it runs
-// on API-Football's numbering and is skipped for those clubs entirely.
-export type Squad = { teamName: string; teamLogo: string | null; players: SquadPlayer[]; coachName?: string | null };
+export type Squad = { teamName: string; teamLogo: string | null; players: SquadPlayer[] };
 
 const POSITION_LABEL: Record<string, string> = {
   Goalkeeper: "Դարպասապահներ",
@@ -370,7 +365,6 @@ export async function getSquad(teamId: number | string): Promise<Squad | null> {
           const squad: Squad = {
             teamName: fetched.teamName,
             teamLogo: fetched.teamLogo,
-            coachName: fetched.coach?.name ?? null,
             players: fetched.players.map((p) => ({
               id: Number(p.id),
               key: `espn-${p.id}`,
