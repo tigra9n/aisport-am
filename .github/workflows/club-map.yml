@@ -314,14 +314,28 @@ jobs:
           show that is absent, and its page keeps what the entity cache
           already holds instead of being pointed at a different club."
           git push origin HEAD:"$TARGET"
+          # The pull request, and the truth about whether it was opened.
+          #
+          # This used to send the request with its output on /dev/null and
+          # then print "opened a pull request" whatever came back. It never
+          # opened one: a workflow's GITHUB_TOKEN cannot create a pull
+          # request unless "Allow GitHub Actions to create and approve pull
+          # requests" is turned on for the repository, and it is not. Three
+          # runs reported success at the one step that had done nothing,
+          # which is worse than failing.
           open=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" \
             "https://api.github.com/repos/${{ github.repository }}/pulls?head=${{ github.repository_owner }}:$TARGET&state=open" \
             | grep -c '"number"' || true)
-          if [ "$open" = "0" ]; then
-            curl -sS -X POST -H "Authorization: Bearer $GH_TOKEN" \
-              "https://api.github.com/repos/${{ github.repository }}/pulls" \
-              -d "{\"title\":\"Map the two providers' club numbers to each other\",\"head\":\"$TARGET\",\"base\":\"main\",\"body\":\"Built while both providers still answer, which is the only time it can be built: the paid plan ends on 23 September and after that there is nothing to compare against.\\n\\nEvery row was proved by squad overlap, not by name. The two clubs' published squads share at least four surnames and no other club in the league shares as many; two different clubs do not share four players. The rule is in lib/club-match.ts and is unit-tested. A club that could not prove itself is absent from the file and is named in the run log, to be resolved by hand.\\n\\nThis file changes nothing on its own - nothing reads it yet.\"}" >/dev/null
+          if [ "$open" != "0" ]; then echo "a pull request on $TARGET is already open"; exit 0; fi
+          code=$(curl -sS -o /tmp/pr.json -w "%{http_code}" -X POST -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls" \
+            -d "{\"title\":\"Map the two providers' club numbers to each other\",\"head\":\"$TARGET\",\"base\":\"main\",\"body\":\"Built while both providers still answer, which is the only time it can be built: the paid plan ends on 23 September and after that there is nothing to compare against.\\n\\nEvery row was proved by squad overlap, not by name. The two clubs' published squads share at least four surnames and no other club in the league shares as many; two different clubs do not share four players. The rule is in lib/club-match.ts and is unit-tested. A club that could not prove itself is absent from the file and is named in the run log, to be resolved by hand.\\n\\nThis file changes nothing on its own - nothing reads it yet.\"}")
+          if [ "$code" = "201" ]; then
             echo "opened a pull request on $TARGET"
+          else
+            echo "could NOT open a pull request (http $code). The rows are pushed and safe on $TARGET:"
+            head -c 400 /tmp/pr.json; echo
+            echo "open it by hand: https://github.com/${{ github.repository }}/compare/main...$TARGET?expand=1"
           fi
 
       # Last, so it is the part of the log that is actually read.
