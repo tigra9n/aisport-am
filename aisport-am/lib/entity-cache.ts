@@ -158,11 +158,31 @@ export async function espnTwinUrl(legacyId: number): Promise<string | null> {
 
   let url: string | null = null;
   try {
-    const known = await knownTeam(legacyId);
-    if (known?.name) {
-      const { findEspnTeamByName, espnKey } = await import("./espn");
-      const team = await findEspnTeamByName(known.name);
-      url = team ? `/team/${espnKey(team.id)}` : null;
+    // The proved map first.
+    //
+    // What follows it resolves the old number to a club NAME and then
+    // looks that name up among ESPN's clubs, which is a guess: two clubs
+    // whose names look alike send a reader who clicked on one to the
+    // other, permanently, with a 301. lib/team-map.ts holds two hundred
+    // and seven pairs that were not guessed - both providers' squads were
+    // fetched and share at least four surnames - so those are answered
+    // from the table and never reach the name matcher.
+    //
+    // It is also free and instant: no fetch, no seventeen ESPN league
+    // lists, which is what made the Armenian club page slow enough to be
+    // reported by a reader.
+    const { espnTeamFor } = await import("./team-map");
+    const proved = espnTeamFor(legacyId);
+    if (proved) {
+      const { espnKey } = await import("./espn");
+      url = `/team/${espnKey(proved)}`;
+    } else {
+      const known = await knownTeam(legacyId);
+      if (known?.name) {
+        const { findEspnTeamByName, espnKey } = await import("./espn");
+        const team = await findEspnTeamByName(known.name);
+        url = team ? `/team/${espnKey(team.id)}` : null;
+      }
     }
   } catch { /* remembered as a miss, and asked again tomorrow */ }
 
