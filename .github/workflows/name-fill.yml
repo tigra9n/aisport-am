@@ -250,10 +250,17 @@ jobs:
           rm -f name-fill.mts
 
       - name: Prove the file still compiles and the name tests still pass
-        # The dot reporter, because the default one prints eleven lines per
-        # test and forty-six tests buried the only part of this run worth
-        # reading - which names came back and which were refused.
-        run: npm run typecheck && npm run test:units -- --test-reporter=dot
+        # Quietly unless something breaks. The default reporter prints
+        # eleven lines per test, and forty-six of those buried the only
+        # part of this run worth reading - which names came back and which
+        # were refused. Passing --test-reporter through npm does not work:
+        # the flag lands after the file arguments and is ignored. So the
+        # output goes to a file and is printed only on a failure.
+        run: |
+          npm run typecheck
+          npm run test:units > test-output.txt 2>&1 || { cat test-output.txt; exit 1; }
+          grep -E "^# (tests|pass|fail)" test-output.txt
+          rm -f test-output.txt
 
       - name: Commit them
         if: ${{ github.event.inputs.apply == 'yes' }}
