@@ -9,17 +9,33 @@
 # the weekly photograph refresh. The cheapest paid plan is $19 a month,
 # $228 a year, and the owner wants the site to cost nothing.
 #
-# Highlightly is the only free candidate left, and it already carries the
-# one thing measured against the league's own table: the standings, all
-# twelve clubs. What it carries besides that has never been asked.
+# Highlightly is the only free candidate left. Two rounds have been run:
 #
-# This asks. It tries the paths a football API plausibly uses, prints
-# what each answers and the shape of it, and spends about a dozen of the
-# free plan's hundred a day. Nothing is written anywhere.
+#   round 1 (6 Sep) - /standings works, /matches?leagueId=&date= works
+#     and carries state.clock and state.score, /teams and /players
+#     answered 400 "property X should not exist" (so they exist, asked
+#     wrongly), /squads, /teams/{id}/squad, /top-scorers, /statistics
+#     answered 404.
+#   round 2 (6 Sep) - /teams?name=, /teams/{id}, /players?name= all 200
+#     but carry nothing beyond id, name, logo. /matches/{id},
+#     /lineups/{id}, /events/{id}, /statistics/{id} all 200 - the
+#     endpoints are real - but every array in them was empty, because
+#     the probe ran eleven minutes BEFORE kick-off. Then the day's
+#     hundred requests ran out mid-run.
+#
+# So the one question that decides the 23 September cutover is still
+# open: does Highlightly fill lineups, events and statistics once a
+# match has actually been played? This round asks exactly that, on a
+# FINISHED match, and nothing else - eight requests, not thirty.
 name: Armenia for free
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Match day to read (YYYY-MM-DD). Empty = yesterday."
+        required: false
+        default: ""
 
 jobs:
   probe:
@@ -28,9 +44,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '22' }
-      - name: What Highlightly holds for the Armenian league
+      - name: Does Highlightly fill a finished Armenian match?
         env:
           HIGHLIGHTLY_KEY: ${{ secrets.HIGHLIGHTLY_KEY }}
+          DAY: ${{ inputs.date }}
         run: |
           cat > probe.mjs <<'JS'
           const KEY = process.env.HIGHLIGHTLY_KEY || "";
@@ -41,77 +58,66 @@ jobs:
           const H = { "x-rapidapi-key": KEY, Accept: "application/json" };
           const HOST = "https://sports.highlightly.net/football";
           const LEAGUE = "291826";
-          const SEASON = new Date().getUTCMonth() + 1 >= 7 ? new Date().getUTCFullYear() : new Date().getUTCFullYear() - 1;
-          const today = new Date().toISOString().slice(0, 10);
+          const day = process.env.DAY || new Date(Date.now() - 864e5).toISOString().slice(0, 10);
 
-          // The shape, not the values: field names with one example each,
-          // two levels deep. Reading the values is what buried the answer
-          // the last three times a provider was judged from here.
+          const get = async (path) => {
+            const r = await fetch(`${HOST}${path}`, { headers: H, signal: AbortSignal.timeout(20000) });
+            const text = await r.text();
+            let json = null;
+            try { json = JSON.parse(text); } catch { /* not json */ }
+            return { status: r.status, json, text };
+          };
+
+          // Print the shape, and for the arrays that decide this, the
+          // first row whole. Round two printed shapes only and could
+          // not tell "empty because not started" from "empty always".
           const shape = (v, depth = 0) => {
             const pad = "    ".repeat(depth + 1);
-            if (Array.isArray(v)) return v.length ? `[${v.length}] of\n${shape(v[0], depth)}` : "[]";
+            if (Array.isArray(v)) return v.length ? `[${v.length}] of\n${shape(v[0], depth)}` : "[] EMPTY";
             if (v && typeof v === "object") {
               if (depth >= 2) return "{...}";
-              return "\n" + Object.entries(v).slice(0, 14).map(([k, val]) => `${pad}${k}: ${shape(val, depth + 1)}`).join("\n");
+              return "\n" + Object.entries(v).slice(0, 16).map(([k, val]) => `${pad}${k}: ${shape(val, depth + 1)}`).join("\n");
             }
-            return JSON.stringify(v)?.slice(0, 60) ?? String(v);
+            return JSON.stringify(v)?.slice(0, 70) ?? String(v);
           };
 
-          const ask = async (label, path) => {
+          const ask = async (label, path, whole) => {
             try {
-              const r = await fetch(`${HOST}${path}`, { headers: H, signal: AbortSignal.timeout(20000) });
-              const text = await r.text();
-              let json = null;
-              try { json = JSON.parse(text); } catch { /* not json */ }
-              console.log(`\n=== ${label}\n    ${path}\n    http ${r.status}`);
-              if (!json) { console.log(`    ${text.slice(0, 200)}`); return; }
+              const { status, json, text } = await get(path);
+              console.log(`\n=== ${label}\n    ${path}\n    http ${status}`);
+              if (!json) { console.log(`    ${text.slice(0, 200)}`); return null; }
               const body = Array.isArray(json) ? json : (json.data ?? json.response ?? json);
               console.log(`    ${shape(body)}`);
-            } catch (e) { console.log(`\n=== ${label}\n    ${path}\n    ${String(e).slice(0, 150)}`); }
+              if (whole) console.log(`    FIRST ROW WHOLE: ${JSON.stringify(whole(body))?.slice(0, 1200)}`);
+              return body;
+            } catch (e) { console.log(`\n=== ${label}\n    ${path}\n    ${String(e).slice(0, 150)}`); return null; }
           };
 
-          // The standings are the control: this one is known to work, so
-          // if it fails the key or the host is the problem and nothing
-          // below means anything.
-          await ask("standings (the control)", `/standings?leagueId=${LEAGUE}&season=${SEASON}`);
+          // 1. Find a match that has actually been played. Guessing an
+          // id is what wasted round two.
+          const fixtures = await ask(`the matches of ${day}`, `/matches?leagueId=${LEAGUE}&date=${day}`);
+          const played = (Array.isArray(fixtures) ? fixtures : []).find((m) => {
+            const d = String(m?.state?.description || "").toLowerCase();
+            return d.includes("finish") || d.includes("ended") || d.includes("ft");
+          });
+          if (!played) {
+            console.log(`\nno finished match on ${day}. states: ${(fixtures || []).map((m) => m?.state?.description).join(", ") || "none"}`);
+            console.log("re-run with a date that has one.");
+            process.exit(0);
+          }
+          const ID = played.id;
+          console.log(`\nreading ${played.homeTeam?.name} - ${played.awayTeam?.name}, id ${ID}, state ${played.state?.description}, score ${JSON.stringify(played.state?.score)}`);
 
-          // The six the subscription is paying for, in the order they
-          // matter to a reader.
-          await ask("teams in the league", `/teams?leagueId=${LEAGUE}&season=${SEASON}`);
-          await ask("a club's squad", `/teams/582/squad`);
-          await ask("a club's squad, the other spelling", `/squads?teamId=582`);
-          await ask("players of a club", `/players?teamId=582`);
-          await ask("today's matches", `/matches?leagueId=${LEAGUE}&date=${today}`);
-          await ask("live matches", `/matches?leagueId=${LEAGUE}&live=true`);
-          await ask("one match, for lineups and events", `/matches/${LEAGUE}`);
-          await ask("top scorers", `/top-scorers?leagueId=${LEAGUE}&season=${SEASON}`);
-          await ask("statistics", `/statistics?leagueId=${LEAGUE}&season=${SEASON}`);
-          // Round two, guided by what the first round's errors said.
-          //
-          // /teams and /players answered 400 "property leagueId should
-          // not exist" and "property teamId should not exist" - which is
-          // not a 404. Those endpoints are there and were asked with the
-          // wrong parameter names, so the squads question is still open
-          // and this tries the names an API of this shape would use.
-          //
-          // And /matches/{id} was given the league's number instead of a
-          // match's. This gives it a real one, taken from the fixture the
-          // first round found: Shirak against Sardarapat, today.
-          const MATCH = "1345873453";
-          const HOME = "3137570";
-          console.log("\n\n---- round two: the parameters the errors asked for ----");
-          await ask("teams by country", `/teams?countryCode=AM`);
-          await ask("teams by name", `/teams?name=Shirak`);
-          await ask("one team by id", `/teams/${HOME}`);
-          await ask("players by name", `/players?name=Spertsyan`);
-          await ask("one player by id", `/players/1`);
-          await ask("the match itself", `/matches/${MATCH}`);
-          await ask("lineups for the match", `/lineups/${MATCH}`);
-          await ask("events for the match", `/events/${MATCH}`);
-          await ask("statistics for the match", `/statistics/${MATCH}`);
+          // 2. The three that decide it.
+          await ask("lineups", `/lineups/${ID}`, (b) => b?.homeTeam);
+          await ask("events", `/events/${ID}`, (b) => (Array.isArray(b) ? b.slice(0, 4) : b));
+          await ask("statistics", `/statistics/${ID}`, (b) => (Array.isArray(b) ? b[0] : b));
+          await ask("the match itself", `/matches/${ID}`, (b) => (Array.isArray(b) ? b[0]?.events?.slice(0, 3) : null));
+
+          // 3. The three the daily limit cut off last time.
           await ask("the leagues of a country", `/leagues?countryCode=AM`);
-          await ask("last five games", `/last-five-games?teamId=${HOME}`);
-          await ask("head to head", `/head-2-head?teamIdOne=${HOME}&teamIdTwo=22295282`);
+          await ask("last five games", `/last-five-games?teamId=${played.homeTeam?.id}`);
+          await ask("a real player by id", `/players/7014119`, (b) => b);
           JS
           node probe.mjs
           rm -f probe.mjs
