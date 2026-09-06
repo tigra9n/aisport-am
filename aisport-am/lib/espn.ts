@@ -1288,6 +1288,58 @@ export type EspnPlayer = {
   seasons: EspnPlayerSeason[];
 };
 
+// The core API's career total, for a footballer the other address has no
+// table for.
+//
+// MEASURED on 6 September, three men, five addresses each:
+//
+//   Isak     /athletes/{id}/stats            PASS, one category, two blocks
+//   Barcola  /athletes/{id}/stats            nothing the page could show
+//            core /athletes/{id}/statistics  PASS, splits with categories
+//   Ferreira core and common both            404 - he no longer plays
+//
+// So ESPN has Bradley Barcola's figures and this file was asking the one
+// address that does not carry them. What the core gives is a single total
+// across every competition rather than a season-by-season table, so it is
+// the fallback and not the source: one row, labelled for what it is.
+type EspnCoreStats = {
+  splits?: {
+    categories?: {
+      name?: string;
+      displayName?: string;
+      stats?: { name?: string; displayName?: string; shortDisplayName?: string; description?: string; value?: number; displayValue?: string }[];
+    }[];
+  };
+};
+
+async function espnCareerTotal(athleteId: string): Promise<EspnPlayerSeason[]> {
+  const data = await espnUrl<EspnCoreStats>(`https://sports.core.api.espn.com/v2/sports/soccer/athletes/${athleteId}/statistics`);
+  const categories = data?.splits?.categories ?? [];
+  const columns: { label: string; value: string; note: string | null }[] = [];
+  for (const category of categories) {
+    for (const stat of category.stats ?? []) {
+      const english = (stat.displayName ?? stat.name ?? "").toLowerCase();
+      const label = COLUMN_HY[english] ?? stat.displayName ?? stat.name ?? "";
+      const value = stat.displayValue ?? (stat.value === undefined ? "" : String(stat.value));
+      // Zero is not worth a column: a defender with no goals should not
+      // have a goals column reading 0 next to his tackles.
+      if (!label || !value || value === "0" || value === "0.0") continue;
+      if (columns.some((existing) => existing.label === label)) continue;
+      columns.push({ label, value, note: stat.description ?? null });
+    }
+  }
+  if (!columns.length) return [];
+  return [{
+    // Not a season, and the heading says so rather than inventing a year.
+    season: "Կարիերա",
+    league: "",
+    leagueLogo: null,
+    team: "",
+    teamLogo: null,
+    columns,
+  }];
+}
+
 export async function espnPlayer(athleteId: string): Promise<EspnPlayer | null> {
   const [profile, stats] = await Promise.all([
     espnUrl<EspnAthleteResponse>(`${ATHLETE_HOST}/athletes/${athleteId}`),
@@ -1302,7 +1354,8 @@ export async function espnPlayer(athleteId: string): Promise<EspnPlayer | null> 
   }
   const leaguesBySlug = stats?.leagues ?? {};
 
-  const seasons: EspnPlayerSeason[] = [];
+  const named: EspnPlayerSeason[] = [];
+  const seasons = named;
   for (const category of stats?.categories ?? []) {
     const labels = category.displayNames ?? category.names ?? [];
     const notes = category.descriptions ?? [];
@@ -1361,7 +1414,17 @@ export async function espnPlayer(athleteId: string): Promise<EspnPlayer | null> 
     // career in the order it happened rather than a transfer list we would
     // have to buy.
     clubs: (clubFilter?.options ?? []).map((option) => armenianTeamName(option.displayValue ?? "")).filter(Boolean),
-    seasons: seasons.filter((season) => season.season),
+    // The season table when there is one, the career total when there is
+    // not. Barcola's page carried his photograph, his club and his height
+    // and then said his statistics were unavailable, because this file
+    // asked one address and ESPN keeps his figures at another.
+    seasons: await (async () => {
+      // A block with no season named is not a row - that filter was here
+      // before and stays, or the table grows a heading with nothing above
+      // it.
+      const dated = named.filter((season) => season.season);
+      return dated.length ? dated : await espnCareerTotal(athleteId);
+    })(),
   };
 }
 
