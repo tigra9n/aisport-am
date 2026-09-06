@@ -93,17 +93,19 @@ complexity is scar tissue from platform limits. Read the comments in
    Sonnet 5) behind it, each with a 100s timeout. `CONTENT_MODEL_PROVIDER=gemini` is
    re-pinned on every deploy so the primary provider is a property of `cf-deploy.sh`, not
    of a lingering secret. It was `claude` until 5 September and the site ran on the paid
-   balance. `/api/cron/content` publishes at most one article an hour inside a
-   10:00–03:00 Yerevan window.
+   balance. `/api/cron/content` publishes at most one article every 28 minutes
+   inside a 10:00–03:00 Yerevan window.
 
    That ceiling used to be described here as Gemini's doing — "twenty requests a day,
    seventeen articles". MEASURED on 6 September, against `cron_invocations`: the site
    published 43, 41, 40 and 31 articles on the four days to 5 September, and Google has
    refused it with a 429 **zero** times in the whole table. `gemini-3.6-flash` allows
    ten requests a minute and 250 a day, which is what the comment in
-   `content-generation.ts` says and what the site's own history shows. The hourly
-   cadence is an editorial choice, not a quota, and there is room to raise it without
-   paying anyone. Do not repeat the twenty-a-day figure: it was never measured.
+   `content-generation.ts` says and what the site's own history shows. The cadence is
+   an editorial choice, not a quota. It was an hour until 6 September, when the owner
+   watched the front page sit still for seventy-three minutes; 28 minutes now, about
+   thirty articles a day. Do not repeat the twenty-a-day figure: it was never
+   measured.
 5. **Not repeating itself.** Exact source-URL dedup, plus a topic check that compares
    distinctive words in the headline against the last story used for that entity, with an
    entity cooldown — two outlets reporting the same transfer have different URLs.

@@ -147,6 +147,55 @@ jobs:
       # come back empty, so the question is which of them answered what.
       # Guessing at that from here is how the last three wrong verdicts
       # about a provider were reached; this asks it.
+      # What api-sports gives away, in their own words.
+      #
+      # The Pro subscription ends on 23 September and the owner wants the
+      # site to cost nothing. When a paid plan lapses the account does not
+      # stop working - it falls back to the free one - so the only question
+      # that matters is what the free plan still answers, and specifically
+      # whether it is limited to old seasons. Six of this site's surfaces
+      # depend on the answer: the Armenian squads, the Armenian live
+      # minute, the Armenian scoring chart, the player pages, the Armenian
+      # match centre and the weekly photograph refresh.
+      #
+      # Reading it needs no second account and no waiting for the 23rd:
+      # their own pricing and documentation pages say it. A runner can
+      # reach them where this session cannot.
+      - name: What the free plan says it gives
+        if: ${{ github.event.inputs.quota == 'yes' }}
+        run: |
+          cat > plan-probe.mjs <<'JS'
+          const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+          for (const url of [
+            "https://www.api-football.com/pricing",
+            "https://www.api-football.com/documentation-v3",
+            "https://dashboard.api-football.com/register",
+          ]) {
+            try {
+              const r = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(20000) });
+              const html = await r.text();
+              const text = html.replace(/<script[\s\S]*?<\/script>/g, " ").replace(/<style[\s\S]*?<\/style>/g, " ").replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ");
+              console.log(`\n=== ${url}: http ${r.status}, ${text.length} chars of text ===`);
+              // Only the sentences that carry the answer, so the log is
+              // readable: the word free beside a number of requests, and
+              // anything that names the seasons a plan may ask for.
+              const wanted = /(free[^.]{0,200}(request|call|season|coverage)[^.]{0,200}\.)|((request|season|coverage)[^.]{0,200}free[^.]{0,200}\.)|(\b20(1|2)\d\s*(-|to|–)\s*20\d\d[^.]{0,160}\.)/gi;
+              const seen = new Set();
+              for (const m of text.match(wanted) ?? []) {
+                const line = m.trim();
+                if (line.length < 20 || seen.has(line)) continue;
+                seen.add(line);
+                console.log(`  ${line}`);
+                if (seen.size >= 12) break;
+              }
+              if (!seen.size) console.log("  nothing matched - first 500 chars follow");
+              if (!seen.size) console.log(`  ${text.slice(0, 500)}`);
+            } catch (e) { console.log(`\n=== ${url}: ${String(e)} ===`); }
+          }
+          JS
+          node plan-probe.mjs
+          rm -f plan-probe.mjs
+
       - name: What API-Football holds for one player
         if: ${{ github.event.inputs.player_id != '' }}
         env:
