@@ -147,6 +147,25 @@ jobs:
       # come back empty, so the question is which of them answered what.
       # Guessing at that from here is how the last three wrong verdicts
       # about a provider were reached; this asks it.
+      # And the same three calls from inside the Worker.
+      #
+      # The provider answering a runner is not the provider answering the
+      # site: a Worker leaves from Cloudflare's addresses, and this
+      # codebase has already met one provider that treats them differently
+      # - site.api.espn.com answers 403 to a Worker at every signature
+      # while site.web.api.espn.com answers 200. If api-sports does the
+      # same it is not one player page that is broken but the Armenian
+      # squads, the live minute and every player page.
+      - name: Does API-Football answer the Worker itself
+        if: ${{ github.event.inputs.player_id != '' }}
+        env:
+          CRON_TOKEN: ${{ secrets.CRON_TOKEN }}
+          PLAYER: ${{ github.event.inputs.player_id }}
+        run: |
+          curl -sS --max-time 60 \
+            "https://aifootball.am/api/diag/provider?token=$CRON_TOKEN&player=$PLAYER" \
+            | python3 -m json.tool || echo "the diagnostic endpoint did not answer"
+
       # What api-sports gives away, in their own words.
       #
       # The Pro subscription ends on 23 September and the owner wants the
