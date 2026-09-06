@@ -1,0 +1,123 @@
+# What the site actually calls the footballers.
+#
+# The Armenian spelling comes from two places: the hand-written table in
+# lib/player-names-hy.ts, which is right by construction, and the rules in
+# lib/translit-hy.ts, which spell out whatever the table does not carry.
+# Nobody has ever counted how much of the site is the second kind, so the
+# answer has been guesswork - "the names are mostly fine" against "the
+# names are wrong", with no number between them.
+#
+# This counts. It reads the same rosters the site reads, runs the same two
+# functions the site runs, and prints how many footballers each one names,
+# with a sample of the rules' own work so the quality can be judged rather
+# than assumed. It writes nothing and costs nothing: ESPN publishes no
+# quota and this asks it about a hundred and fifty times.
+name: Name check
+
+on:
+  workflow_dispatch:
+    inputs:
+      league:
+        description: 'One league slug, or all'
+        type: choice
+        options: ['all', 'eng.1', 'esp.1', 'ita.1', 'ger.1', 'fra.1', 'usa.1', 'ksa.1']
+        default: 'all'
+      sample:
+        description: 'How many rule-spelled names to print per league'
+        required: false
+        default: '30'
+      quota:
+        description: "Also ask D1 what Google's own refusals say the daily limit is"
+        type: choice
+        options: ['no', 'yes']
+        default: 'no'
+
+jobs:
+  names:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: aisport-am
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - run: npm ci
+      - name: Count who the tables name and who the rules name
+        env:
+          ONLY: ${{ github.event.inputs.league || 'all' }}
+          SAMPLE: ${{ github.event.inputs.sample || '30' }}
+        run: |
+          cat > name-check.mts <<'TS'
+          import { readFileSync } from "node:fs";
+          import { espnTeams, espnSquad } from "./lib/espn.ts";
+          import { armenianPlayerName } from "./lib/player-names-hy.ts";
+
+          const SLUGS = ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1", "usa.1", "ksa.1"];
+          const only = process.env.ONLY && process.env.ONLY !== "all" ? [process.env.ONLY] : SLUGS;
+          const sampleSize = Number(process.env.SAMPLE) || 30;
+
+          // The table's own keys, read out of the file rather than exported:
+          // the module hands back a spelling, not a verdict on where it came
+          // from, and the whole question here is where it came from.
+          const source = readFileSync("lib/player-names-hy.ts", "utf8");
+          const table = new Set([...source.matchAll(/^\s*"([^"]+)":/gm)].map((m) => m[1]));
+          const key = (name: string) => name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z ]/g, " ").trim().replace(/\s+/g, " ");
+
+          let named = 0, spelled = 0;
+          const everyRuleName: string[] = [];
+
+          for (const slug of only) {
+            const clubs = await espnTeams(slug);
+            const seen = new Set<string>();
+            const fromRules: string[] = [];
+            let fromTable = 0;
+            for (let start = 0; start < clubs.length; start += 5) {
+              const batch = clubs.slice(start, start + 5);
+              const rosters = await Promise.all(batch.map((club) => espnSquad(slug, club.id).catch(() => null)));
+              for (const roster of rosters) {
+                for (const player of roster?.players ?? []) {
+                  if (seen.has(player.id)) continue;
+                  seen.add(player.id);
+                  if (table.has(key(player.name))) fromTable++;
+                  else fromRules.push(`${player.name}  ->  ${armenianPlayerName(player.name)}`);
+                }
+              }
+            }
+            named += fromTable;
+            spelled += fromRules.length;
+            everyRuleName.push(...fromRules);
+            const total = fromTable + fromRules.length;
+            console.log(`${slug}: ${total} footballers, ${fromTable} named by the table, ${fromRules.length} spelled by the rules`);
+            // Evenly across the list rather than the first N, so the sample
+            // is not all one club's goalkeepers.
+            const step = Math.max(1, Math.floor(fromRules.length / sampleSize));
+            for (let i = 0; i < fromRules.length && i / step < sampleSize; i += step) console.log(`    ${fromRules[i]}`);
+          }
+
+          const total = named + spelled;
+          console.log(`\n${total} footballers: ${named} from the table (${Math.round((named / total) * 100)}%), ${spelled} from the rules (${Math.round((spelled / total) * 100)}%)`);
+          TS
+          npx tsx name-check.mts
+
+      # What the free tier actually allows, from Google's own refusals
+      # rather than from either number written down.
+      #
+      # CLAUDE.md says twenty requests a day and that is why the site
+      # publishes at most one article an hour; the comment in
+      # content-generation.ts says two hundred and fifty. They cannot both
+      # be right, and the difference is the difference between seventeen
+      # articles a day and as many as the pipeline can write. A 429 from
+      # Google names the limit in its body, and every one the pipeline has
+      # ever been given is in cron_invocations.
+      - name: What Google's refusals say the limit is
+        if: ${{ github.event.inputs.quota == 'yes' }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT ts, substr(log, instr(log,'429'), 400) AS refusal FROM cron_invocations WHERE log LIKE '%429%' ORDER BY id DESC LIMIT 8"
+          npx wrangler d1 execute aisport-db --remote --json --command \
+            "SELECT COUNT(*) AS runs, SUM(generated) AS articles, MIN(ts) AS since FROM cron_invocations WHERE ts > date('now','-2 day')"
