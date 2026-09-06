@@ -155,6 +155,16 @@ jobs:
           # its own material names thirty-four, and every one of them
           # named is a big one. So the only question asked here is whether
           # Armenia is in its list at all.
+          # The coverage page itself, which is the one that answers this.
+          # Guessing endpoint paths got 301s and 404s; the page a human
+          # would read is right there and needs no key.
+          cov=$(curl -sSL --max-time 30 "https://sports.bzzoiro.com/football-coverage/" || true)
+          echo "--- coverage page: ${#cov} bytes, armenia mentioned $(grep -o -i -c armenia <<<"$cov" || true) times"
+          grep -o -i '[^<>]\{0,80\}armenia[^<>]\{0,80\}' <<<"$cov" | head -5 | sed 's/^/    /'
+          echo "--- the leagues it does name:"
+          grep -o -i '[A-ZÀ-Ý][A-Za-zÀ-ÿ. ]\{3,30\}\(League\|Liga\|Serie\|Bundesliga\|Ligue\|Premier\|Eredivisie\|Championship\|Cup\)' <<<"$cov" \
+            | sed 's/^ *//' | sort -u | head -45 | sed 's/^/    /'
+
           for path in /api/leagues /api/v1/leagues /leagues /api/competitions; do
             body=$(curl -sS --max-time 25 "https://sports.bzzoiro.com$path" || true)
             code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 25 "https://sports.bzzoiro.com$path" || true)
