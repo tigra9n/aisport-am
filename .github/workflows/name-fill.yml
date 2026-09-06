@@ -141,7 +141,16 @@ jobs:
                   }),
                 },
               );
-              if (response.status === 429) { console.log("  429, waiting"); await wait(20000); continue; }
+              // 429 is the rate limit and 503 is "this model is currently
+              // experiencing high demand", which is what the first run met
+              // on its first batch - and it gave up on that batch and lost
+              // sixty names to a refusal that says "try again later" in
+              // its own body. Both are a pause.
+              if (response.status === 429 || response.status >= 500) {
+                console.log(`  http ${response.status}, waiting`);
+                await wait(20000);
+                continue;
+              }
               if (!response.ok) { console.log(`  http ${response.status}: ${(await response.text()).slice(0, 300)}`); break; }
               const data = await response.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
               text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") || null;
