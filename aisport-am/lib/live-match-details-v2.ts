@@ -310,8 +310,26 @@ export async function getLiveMatchDetailsV2(id:string):Promise<LiveMatchDetail|n
   // because ESPN does not carry that league.
   if(id.startsWith("espn-")){
     try{
-      const {espnLiveMatchDetail}=await import("./espn");
-      return await espnLiveMatchDetail(id);
+      const {espnLiveMatchDetail,espnCodeForSlug}=await import("./espn");
+      const detail=await espnLiveMatchDetail(id);
+      if(!detail)return null;
+      // The scoring chart is filled here rather than inside espn.ts. That
+      // file used to ask topscorers-server for it directly, and the two
+      // reached each other only through `await import(...)` - a cycle
+      // between two lazily loaded chunks, which cost the modal its
+      // Ռմբարկուներ tab while the standings beside it, set on the next line
+      // of the same object, had twenty rows. Here the import is the same one
+      // the paid path below already makes.
+      const slug=/^espn-(.+)-\d+$/.exec(id)?.[1];
+      const code=slug?espnCodeForSlug(slug):"";
+      if(code){
+        try{
+          const {getTopScorers}=await import("./topscorers-server");
+          const chart=await getTopScorers(code);
+          if(chart.rows.length)detail.topScorers=chart.rows.slice(0,10);
+        }catch{/* the tab hides itself when the chart is empty */}
+      }
+      return detail;
     }catch{return null}
   }
   const fixtureId=id.replace(/^af-/,"").replace(/^fd-/,"");

@@ -92,11 +92,12 @@ async function teamIndex(db: D1Database | undefined): Promise<Record<string, { s
 // does not change on a Tuesday, and that source rate-limits Cloudflare's
 // addresses hard enough that asking it per page view is how it starts
 // answering 429 to everything.
-const photoKeyOf = (name: string) =>
-  name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z]/g, "");
-
+// v2 on 6 September: the stored map is keyed by the name with its word
+// breaks kept, so pickPhoto can compare a two-name spelling against a
+// four-name one. The v1 rows are keyed the old way and would match nothing,
+// so they are left to expire rather than read.
 async function clubPhotos(db: D1Database | undefined, espnId: string, clubName: string): Promise<Record<string, string>> {
-  const cacheKey = `sportsdb:photos:${espnId}`;
+  const cacheKey = `sportsdb:photos:v2:${espnId}`;
   if (db) {
     await ensureCacheTable(db);
     const row = await db.prepare("SELECT payload,saved_at AS savedAt FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{ payload: string; savedAt: number }>();
@@ -125,9 +126,10 @@ async function withFaces(squad: Squad, db: D1Database | undefined, espnId: strin
   if (missing <= squad.players.length / 3) return squad;
   const photos = await clubPhotos(db, espnId, clubName);
   if (!Object.keys(photos).length) return squad;
+  const { pickPhoto } = await import("./espn");
   return {
     ...squad,
-    players: squad.players.map((p) => ({ ...p, photo: p.photo ?? photos[photoKeyOf(p.latin ?? "")] ?? null })),
+    players: squad.players.map((p) => ({ ...p, photo: p.photo ?? pickPhoto(photos, p.latin ?? "") })),
   };
 }
 

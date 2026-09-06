@@ -434,8 +434,11 @@ export async function espnMatchDetail(eventId: string, leagueSlug: string): Prom
     events: (data.keyEvents ?? []).map((e) => ({
       minute: e.clock?.displayValue ?? "",
       team: armenianTeamName(e.team?.displayName ?? ""),
-      player: e.athletesInvolved?.[0]?.displayName ?? "",
-      assist: e.athletesInvolved?.[1]?.displayName ?? "",
+      // Armenian, like every other name on the page. The timeline was the
+      // one place a footballer kept his English spelling, next to an
+      // Armenian club name and an Armenian label.
+      player: armenianPlayerName(e.athletesInvolved?.[0]?.displayName ?? ""),
+      assist: armenianPlayerName(e.athletesInvolved?.[1]?.displayName ?? ""),
       label: eventLabel(e.type?.text ?? e.text ?? ""),
     })).filter((e) => e.label),
     lineups: (data.rosters ?? []).map((r) => ({
@@ -615,20 +618,23 @@ export async function espnLiveMatchDetail(id: string): Promise<import("./live-fo
     // The table belongs on a match page and ESPN has it, so the section
     // that would otherwise have gone missing comes back.
     standings: league ? await espnStandings(codeForSlug(slug)) : null,
-    // Left empty while the scoring chart had no source at all. It has one
-    // now - the core API's list, named from the league's own rosters - and
-    // both are behind a cache, so the tab costs a lookup rather than a
-    // round trip. Imported here rather than at the top because
-    // topscorers-server imports this file.
-    topScorers: league ? await (async () => {
-      try {
-        const { getTopScorers } = await import("./topscorers-server");
-        const chart = await getTopScorers(codeForSlug(slug));
-        return chart.rows.length ? chart.rows.slice(0, 10) : null;
-      } catch {
-        return null;
-      }
-    })() : null,
+    // Filled by the caller, not here.
+    //
+    // This asked topscorers-server for the chart directly, and MEASURED on
+    // 6 September the match modal's own JSON came back with twenty rows of
+    // standings and topScorers null - the two set on adjacent lines of this
+    // object, from the same league, at the same moment. The difference is
+    // that espnStandings lives in this file while getTopScorers is reached
+    // by `await import("./topscorers-server")` - and that file reaches back
+    // here the same way. Two chunks, each loaded lazily, each importing the
+    // other: what one of them sees of the other is not finished, the call
+    // throws, and the try/catch around it turned a broken import into a
+    // missing tab.
+    //
+    // So this file stays a client for ESPN and nothing else, and
+    // live-match-details-v2 - which already asks for the chart on the paid
+    // path - fills this one too.
+    topScorers: null,
     formGuide: [],
     // What the old layout had no room for.
     statRows: statRowsFrom(detail),
@@ -638,8 +644,13 @@ export async function espnLiveMatchDetail(id: string): Promise<import("./live-fo
   };
 }
 
-// The site's league codes are keyed the other way round; this is the only
-// place that needs the reverse.
+// The site's league codes are keyed the other way round. Exported because
+// the match path now fills its scoring chart from live-match-details-v2,
+// which holds the id ("espn-eng.1-401879288") and needs the code.
+export function espnCodeForSlug(slug: string): string {
+  return codeForSlug(slug);
+}
+
 function codeForSlug(slug: string): string {
   const found = Object.entries(ESPN_SLUG_BY_CODE).find(([, s]) => s === slug);
   return found?.[0] ?? "";
@@ -1326,11 +1337,16 @@ type SportsDbPlayers = {
   player?: { strPlayer?: string; strCutout?: string | null; strThumb?: string | null; strRender?: string | null }[];
 };
 
-// Compared on letters alone: the two providers punctuate differently
-// ("Gabriel Magalhães" against "Gabriel Magalhaes") and one of them will
-// write a middle name the other leaves out.
+// Compared with the accents removed and the punctuation dropped, but the
+// word breaks KEPT: the first version of this joined the letters into one
+// string and demanded an exact match, which is why half a squad came back
+// faceless. The two providers agree on the letters and disagree on how many
+// names a footballer has - ESPN writes "Pedro Neto" where TheSportsDB
+// writes "Pedro Lomba Neto", "Joao Pedro" against "Joao Pedro Junqueira de
+// Jesus", "Estevao" against "Estevao Willian". Keeping the spaces is what
+// lets pickPhoto below compare them word by word.
 const photoKey = (name: string) =>
-  name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z]/g, "");
+  name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z ]/g, " ").trim().replace(/\s+/g, " ");
 
 export async function sportsDbSquadPhotos(clubName: string): Promise<Record<string, string>> {
   const found = await sportsDb<SportsDbTeamSearch>(`/searchteams.php?t=${encodeURIComponent(clubName)}`);
@@ -1348,6 +1364,50 @@ export async function sportsDbSquadPhotos(clubName: string): Promise<Record<stri
 }
 
 export const squadPhotoKey = photoKey;
+
+// One footballer's face out of a club's photographs, tried three ways and
+// never guessed. Each step is required to land on exactly one player: a
+// squad holds brothers, and two Silvas with one photograph between them is
+// worse than no photograph at all.
+//
+//   1. the same name, letter for letter
+//   2. every word of the shorter name inside the longer one, in order -
+//      "pedro neto" within "pedro lomba neto"
+//   3. the last word plus the first letter of the first - "S. Ramos"
+//
+// Written after a squad page came back with a third of its faces: the
+// exact-match rule was throwing away every footballer whose two providers
+// counted his names differently, which in a Premier League squad is most
+// of the Brazilians and half the Portuguese.
+export function pickPhoto(photos: Record<string, string>, name: string): string | null {
+  const key = photoKey(name);
+  if (!key) return null;
+  if (photos[key]) return photos[key];
+
+  const words = key.split(" ");
+  const entries = Object.entries(photos).map(([k, url]) => ({ words: k.split(" "), url }));
+
+  const inOrder = (few: string[], many: string[]) => {
+    let at = 0;
+    for (const word of few) {
+      const found = many.indexOf(word, at);
+      if (found < 0) return false;
+      at = found + 1;
+    }
+    return true;
+  };
+  const contained = entries.filter((entry) =>
+    entry.words.length >= words.length ? inOrder(words, entry.words) : inOrder(entry.words, words));
+  if (contained.length === 1) return contained[0].url;
+
+  const surname = words[words.length - 1];
+  const initial = words[0][0];
+  const bySurname = entries.filter((entry) =>
+    entry.words[entry.words.length - 1] === surname && entry.words[0][0] === initial);
+  if (bySurname.length === 1) return bySurname[0].url;
+
+  return null;
+}
 
 // ---------------------------------------------------------------------
 // The scoring chart, after ESPN took the named list away

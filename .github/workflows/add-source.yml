@@ -970,6 +970,68 @@ jobs:
               const done = past.json?.events;
               say(`  recent results: HTTP ${past.status}, ${Array.isArray(done) ? done.length : 0}`);
               if (Array.isArray(done)) for (const e of done.slice(0, 3)) say(`      ${e.dateEvent} ${e.strEvent} ${e.intHomeScore}:${e.intAwayScore}`);
+              // lookuptable.php has returned five rows for a ten-club league
+              // every time it has been asked, so the site shows half the one
+              // table it exists for. A table is only an accounting of
+              // results, and results are a separate endpoint. Ask whether the
+              // free key will hand over the club list and the season's
+              // played fixtures - if it does, the table can be computed here
+              // and the provider's short one never used again.
+              const clubs = await get(`${db}/lookup_all_teams.php?id=${top.idLeague}`);
+              const teams = clubs.json?.teams;
+              say(`  clubs in the league: HTTP ${clubs.status}, ${Array.isArray(teams) ? teams.length : 0}`);
+              if (Array.isArray(teams)) say(`      ${teams.map((t) => t.strTeam).join(", ")}`);
+              const all = await get(`${db}/eventsseason.php?id=${top.idLeague}&s=${season}`);
+              const fixtures = all.json?.events;
+              say(`  whole season's fixtures: HTTP ${all.status}, ${Array.isArray(fixtures) ? fixtures.length : 0}`);
+              if (Array.isArray(fixtures)) {
+                const played = fixtures.filter((e) => e.intHomeScore !== null && e.intHomeScore !== "" && e.intAwayScore !== null && e.intAwayScore !== "");
+                say(`      of which finished: ${played.length}`);
+                const tally = new Map();
+                const seat = (name) => { if (!tally.has(name)) tally.set(name, { p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0 }); return tally.get(name); };
+                for (const e of played) {
+                  const h = seat(e.strHomeTeam), a = seat(e.strAwayTeam);
+                  const hs = Number(e.intHomeScore), as = Number(e.intAwayScore);
+                  h.p++; a.p++; h.gf += hs; h.ga += as; a.gf += as; a.ga += hs;
+                  if (hs > as) { h.w++; a.l++; } else if (hs < as) { a.w++; h.l++; } else { h.d++; a.d++; }
+                }
+                const computed = [...tally.entries()].map(([name, r]) => ({ name, ...r, pts: r.w * 3 + r.d, gd: r.gf - r.ga }))
+                  .sort((x, y) => y.pts - x.pts || y.gd - x.gd);
+                say(`      the table this produces (${computed.length} clubs):`);
+                for (const [i, r] of computed.entries()) say(`        ${i + 1}. ${r.name}  ${r.pts} pts (${r.p} played, ${r.gd > 0 ? "+" : ""}${r.gd})`);
+              } else {
+                say(`      ${String(all.text ?? "").slice(0, 120).replace(/\s+/g, " ")}`);
+              }
+              // eventsseason.php answered with exactly five fixtures - one
+              // matchday - while the provider's own table has Alashkert on
+              // six played. So the season endpoint is truncated, not empty,
+              // and the clubs it names are all ten. Rounds are a separate
+              // endpoint: ask for them one at a time and see how far back
+              // the free key will go. Ten rounds is ten requests, cached for
+              // a day, against a league that plays five matches a week.
+              const byRound = new Map();
+              for (let round = 1; round <= 10; round++) {
+                const r = await get(`${db}/eventsround.php?id=${top.idLeague}&r=${round}&s=${season}`);
+                const es = r.json?.events;
+                if (!Array.isArray(es) || !es.length) { say(`  round ${round}: HTTP ${r.status}, nothing`); continue; }
+                const done = es.filter((e) => e.intHomeScore !== null && e.intHomeScore !== "" && e.intAwayScore !== null && e.intAwayScore !== "");
+                say(`  round ${round}: ${es.length} fixtures, ${done.length} finished`);
+                for (const e of done) byRound.set(e.idEvent, e);
+              }
+              if (byRound.size) {
+                const tally = new Map();
+                const seat = (name) => { if (!tally.has(name)) tally.set(name, { p: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0 }); return tally.get(name); };
+                for (const e of byRound.values()) {
+                  const h = seat(e.strHomeTeam), a = seat(e.strAwayTeam);
+                  const hs = Number(e.intHomeScore), as = Number(e.intAwayScore);
+                  h.p++; a.p++; h.gf += hs; h.ga += as; a.gf += as; a.ga += hs;
+                  if (hs > as) { h.w++; a.l++; } else if (hs < as) { a.w++; h.l++; } else { h.d++; a.d++; }
+                }
+                const computed = [...tally.entries()].map(([name, r]) => ({ name, ...r, pts: r.w * 3 + r.d, gd: r.gf - r.ga }))
+                  .sort((x, y) => y.pts - x.pts || y.gd - x.gd);
+                say(`  the table the rounds produce (${computed.length} clubs, ${byRound.size} results):`);
+                for (const [i, r] of computed.entries()) say(`        ${i + 1}. ${r.name}  ${r.pts} pts (${r.p} played, ${r.gd > 0 ? "+" : ""}${r.gd})`);
+              }
             }
             const live = await get(`${db}/latestsoccer.php`);
             say(`  livescore endpoint on the free key: HTTP ${live.status}, keys ${Object.keys(live.json ?? {}).join(",").slice(0, 80)}`);
@@ -1271,6 +1333,40 @@ jobs:
             }
           } else {
             say("  !! ESPN reported no finished match in the last day and a half");
+          }
+
+          // What the modal itself receives. The tab row is drawn from this
+          // JSON, not from the page's HTML, so a missing Ռմբարկուներ tab is
+          // a missing key here - and this is the same request the browser
+          // makes, so no deploy is needed to read it.
+          say("");
+          const api = await get(`https://aifootball.am/api/live/match/espn-eng.1-401879288`);
+          say(`=== the modal's own request -> HTTP ${api.status} ===`);
+          try {
+            const d = JSON.parse(api.html);
+            for (const key of ["events", "lineups", "statistics", "h2h", "commentary", "standings", "topScorers", "statRows", "playerLines"]) {
+              const v = d[key];
+              say(`  ${String(key).padEnd(12)} ${v === null || v === undefined ? "MISSING" : Array.isArray(v) ? `${v.length} row(s)` : "present"}`);
+            }
+            const first = Array.isArray(d.topScorers) ? d.topScorers[0] : null;
+            if (first) say(`  first scorer: ${first.name} (${first.team}) ${first.goals}`);
+            // The goal lines in the timeline read "Գոլ" with nobody's name
+            // beside them, so print what our own events carry - the field is
+            // "label", which the first version of this check got wrong and
+            // then reported zero goals for a 0:2.
+            const goals = (d.events ?? []).filter((e) => /Գոլ/.test(String(e.label ?? "")));
+            say(`  goal events: ${goals.length} of ${(d.events ?? []).length}`);
+            for (const g of goals.slice(0, 3)) say(`      ${JSON.stringify(g)}`);
+            // And what ESPN sent, so a missing name can be told apart from
+            // a name we threw away.
+            const raw = await get("https://site.web.api.espn.com/apis/site/v2/sports/soccer/eng.1/summary?event=401879288");
+            try {
+              const ke = JSON.parse(raw.html).keyEvents ?? [];
+              say(`  ESPN keyEvents: ${ke.length}`);
+              for (const e of ke.slice(0, 3)) say(`      ${JSON.stringify(e).slice(0, 300)}`);
+            } catch { say("  ESPN summary did not parse"); }
+          } catch {
+            say(`  not json: ${api.html.slice(0, 200).replace(/\s+/g, " ")}`);
           }
 
           say("");
