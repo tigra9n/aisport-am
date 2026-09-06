@@ -82,8 +82,11 @@ jobs:
           # page that used to work.
           echo "--- legacy /player/<number>:"
           for pid in 306 1100 497488 154; do
-            read -r code loc < <(curl -s -o /dev/null -w "%{http_code} %{redirect_url}" "https://aifootball.am/player/$pid")
-            echo "  player/$pid -> $code ${loc:-(no redirect)}"
+            # One line, no process substitution: curl's -w output has no
+            # trailing newline, so `read` returns non-zero at EOF and
+            # `bash -e` killed the step before it printed anything.
+            out=$(curl -s -o /dev/null -w "%{http_code} %{redirect_url}" "https://aifootball.am/player/$pid" || true)
+            echo "  player/$pid -> ${out:-no answer}"
           done
 
           first=$(grep -o 'hl-[0-9]*' <<<"$board" | head -1)
