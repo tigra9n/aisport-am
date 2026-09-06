@@ -18,14 +18,17 @@
 name: Name fill
 
 on:
-  # Every morning, three requests' worth.
+  # Every morning, as much of the day's allowance as publishing is not
+  # using.
   #
   # MEASURED, in Google's own words: the free tier allows twenty requests
-  # a day. Seventeen of those are the articles, at one an hour inside the
-  # 10:00-03:00 window, and that is what this site is for. Three are
-  # enough for three hundred names at a hundred a request, so the four
-  # thousand the table still lacks are covered in a fortnight without an
-  # article ever being lost to a name.
+  # a day, and they are one pool shared with the articles. While
+  # PAUSED_FOR_NAMES is set in app/api/cron/content/route.ts the articles
+  # are not using them, so this takes eighteen - two thousand names a
+  # morning at a hundred a request, and the four thousand the table lacks
+  # are done in two or three days rather than the fortnight that three a
+  # day would take. When publishing resumes, both numbers go back: three
+  # requests, three hundred names.
   #
   # 07:30 UTC because Google's day turns over at midnight Pacific: this
   # asks just after the reset, when the allowance is whole, and leaves
@@ -92,10 +95,14 @@ jobs:
       - name: Ask for the names and check every answer
         env:
           ONLY: ${{ github.event.inputs.league || 'all' }}
-          LIMIT: ${{ github.event_name == 'schedule' && '300' || github.event.inputs.limit || '400' }}
+          LIMIT: ${{ github.event_name == 'schedule' && '1800' || github.event.inputs.limit || '400' }}
           # Three on the schedule, sixty by hand. The articles have the
           # rest of the day's twenty.
-          MAX_REQUESTS: ${{ github.event_name == 'schedule' && '3' || '60' }}
+          # Eighteen of the day's twenty while publishing is paused - see
+          # PAUSED_FOR_NAMES in app/api/cron/content/route.ts. Two are
+          # left over so a forced generation can still be tested. When
+          # publishing resumes this goes back to three.
+          MAX_REQUESTS: ${{ github.event_name == 'schedule' && '18' || '60' }}
           # The articles are written by gemini-3.6-flash and must stay
           # there: the comment in content-generation.ts says why, and it
           # names the day a cheaper model returned an opera review instead

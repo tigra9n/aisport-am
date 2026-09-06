@@ -650,6 +650,27 @@ export async function GET(request: Request) {
 
   const forcedMode = url.searchParams.get("mode");
 
+  // Publishing is paused while the name table is being filled.
+  //
+  // The day's twenty model requests are one pool, and the owner asked for
+  // them to go to names for a few days: at a hundred names a request that
+  // is two thousand a day, so the four thousand the table lacks are done
+  // in two or three mornings instead of the fortnight that three requests
+  // a day would take. An article postponed is an article; a footballer
+  // called Բեն Վհիտե is on every page he appears on until somebody fixes
+  // him.
+  //
+  // To start publishing again, set this to false. That is the whole
+  // switch - no secret to set, no workflow to re-enable - and the skip is
+  // written into cron_invocations so a quiet front page is never a
+  // mystery to whoever looks next. A forced ?mode= call still runs, so
+  // the pipeline can be tested while it is paused.
+  const PAUSED_FOR_NAMES = true;
+  if (PAUSED_FOR_NAMES && !forcedMode) {
+    await logInvocation({ forced: forcedMode, mode: "skipped", generated: 0, reason: "paused: the day's model requests are going to the name table" });
+    return Response.json({ ok: true, mode: "skipped", reason: "publishing is paused while the name table is filled", generated: 0, log: [] });
+  }
+
   // Publishing window: 10:00-03:00 Yerevan time (UTC+4, no DST). Manual
   // ?mode= calls bypass the window so testing works any time of day.
   //
