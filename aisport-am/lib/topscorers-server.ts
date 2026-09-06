@@ -184,6 +184,9 @@ export async function getTopScorers(code: string): Promise<{ rows: TopScorer[]; 
     });
     if (!response.ok) throw new Error(`http ${response.status}`);
     const data = await response.json() as { response?: ApiFootballTopScorer[] };
+    const { providerRefusal } = await import("./api-sports");
+    const refusal = providerRefusal(data);
+    if (refusal) throw new Error(refusal);
     const rows: TopScorer[] = (data.response ?? []).slice(0, 20).map((entry, index) => ({
       rank: index + 1,
       id: entry.player.id,
