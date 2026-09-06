@@ -1939,39 +1939,67 @@ jobs:
           JS
           node afphotos.mjs
 
-      # The Armenian clubs' numbers at API-Football, so the table can link
-      # to a club page again.
+      # Is every photograph a photograph of that man, or is some of it one
+      # silhouette served many times?
       #
-      # The table moved to Highlightly and the rows lost their links with
-      # it: Highlightly numbers clubs its own way and the site's club pages
-      # do not run on those numbers, so no link was drawn at all. Before the
-      # move the table came from API-Football and every club name opened its
-      # page. That is a working thing this repo broke.
+      # Tigran: you said Pyunik has all of them and it does not. The earlier
+      # measurement said "29 of 29 have a photo url and the url returns
+      # something over two kilobytes", and that is not the same claim. A
+      # provider that has no picture of a footballer usually answers with a
+      # default outline, which is also over two kilobytes.
       #
-      # API-Football is what /team/<number> already answers on for a club
-      # that is not ESPN's, and its Armenian squads carry a photograph each
-      # - Pyunik 29 of 29, measured. So the fix is a name to number table,
-      # and this prints it.
-      - name: The Armenian clubs at API-Football
+      # So compare the bytes. Photographs of different men differ; a
+      # placeholder served twice is the same file twice. This counts the
+      # distinct sizes in a squad and names the repeats - and reads the club
+      # page beside it, because what the reader sees is the only number that
+      # settles the question.
+      - name: Are the squad photographs distinct
         if: ${{ github.event.inputs.livescore != 'no' && github.event.inputs.espn == 'no' }}
         env:
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
-          cat > armteams.mjs <<'JS'
+          cat > distinct.mjs <<'JS'
+          import { createHash } from "node:crypto";
           const KEY = process.env.API_FOOTBALL_KEY || "";
           if (!KEY) { console.log("no key"); process.exit(0); }
-          const season = new Date().getUTCMonth() + 1 >= 7 ? new Date().getUTCFullYear() : new Date().getUTCFullYear() - 1;
-          const r = await fetch(`https://v3.football.api-sports.io/teams?league=342&season=${season}`, {
-            headers: { "x-apisports-key": KEY, Accept: "application/json" },
-          });
-          const j = await r.json();
-          const teams = j?.response ?? [];
-          console.log(`league 342, season ${season}: HTTP ${r.status}, ${teams.length} clubs`);
-          for (const entry of teams) {
-            console.log(`  ${String(entry.team?.id).padStart(6)}  ${entry.team?.name}`);
+          const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+
+          for (const [club, team, page] of [["Pyunik", 709, "https://aifootball.am/team/709"], ["Arsenal", 42, null]]) {
+            const r = await fetch(`https://v3.football.api-sports.io/players/squads?team=${team}`, {
+              headers: { "x-apisports-key": KEY, Accept: "application/json" },
+            });
+            const players = (await r.json())?.response?.[0]?.players ?? [];
+            const seen = new Map();
+            for (const p of players) {
+              if (!p.photo) continue;
+              try {
+                const img = await fetch(p.photo, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(15000) });
+                if (!img.ok) { continue; }
+                const buf = Buffer.from(await img.arrayBuffer());
+                const hash = createHash("sha1").update(buf).digest("hex").slice(0, 12);
+                if (!seen.has(hash)) seen.set(hash, { bytes: buf.length, men: [] });
+                seen.get(hash).men.push(p.name);
+              } catch { /* counted as missing */ }
+            }
+            const repeated = [...seen.values()].filter((e) => e.men.length > 1);
+            console.log("");
+            console.log(`=== ${club}: ${players.length} in the squad ===`);
+            console.log(`  distinct images: ${seen.size}`);
+            for (const e of repeated) {
+              console.log(`  the same ${e.bytes} bytes for ${e.men.length}: ${e.men.join(", ")}`);
+            }
+            const real = [...seen.values()].filter((e) => e.men.length === 1).length;
+            console.log(`  a picture of that man: ${real} of ${players.length}`);
+
+            if (page) {
+              const html = await (await fetch(page, { headers: { "User-Agent": UA } })).text();
+              const shown = (html.match(/class="squad-photo"/g) ?? []).length;
+              const blank = (html.match(/squad-photo-placeholder/g) ?? []).length;
+              console.log(`  the club page draws: ${shown} photographs, ${blank} lettered placeholders`);
+            }
           }
           JS
-          node armteams.mjs
+          node distinct.mjs
 
       - name: What the sources table holds now
         if: ${{ github.event.inputs.livescore == 'all' && github.event.inputs.espn == 'no' }}
