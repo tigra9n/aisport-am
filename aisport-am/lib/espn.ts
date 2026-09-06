@@ -186,6 +186,13 @@ export async function espnMatchesForDate(date: string): Promise<LiveMatch[]> {
 // purpose: ESPN has no Armenian league, so the Armenian table keeps its
 // existing source rather than silently showing nothing.
 export const ESPN_SLUG_BY_CODE: Record<string, string> = {
+  // The European competitions, which the live board has always carried -
+  // they are the first three entries of ESPN_LEAGUES - but which had no
+  // table and no scoring chart, because this map is what those two read
+  // and it only ever held the domestic leagues.
+  CL: "uefa.champions",
+  EL: "uefa.europa",
+  ECL: "uefa.europa.conf",
   PL: "eng.1",
   PD: "esp.1",
   SA: "ita.1",

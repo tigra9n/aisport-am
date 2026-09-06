@@ -8,6 +8,9 @@ import { armenianTeamName } from "./team-names-hy";
 export type TopScorer = { rank: number; id: number; key?: string | null; teamKey?: string | null; name: string; team: string; teamId: number | null; teamLogo: string | null; photo: string | null; goals: number; assists: number; appearances: number };
 
 const LEAGUE_ID_BY_CODE: Record<string, number> = {
+  CL: 2,
+  EL: 3,
+  ECL: 848,
   PL: 39,
   PD: 140,
   SA: 135,
@@ -124,16 +127,19 @@ export async function getTopScorers(code: string): Promise<{ rows: TopScorer[]; 
   const key = runtime.API_FOOTBALL_KEY;
   const leagueId = LEAGUE_ID_BY_CODE[code];
   // The cache key is the paid provider's league number because that is what
-  // it has always been; ESPN fills the same row. A code neither provider
-  // knows has no page to fill.
-  if (!leagueId) return { rows: [], unavailable: true };
+  // it has always been; ESPN fills the same row, and for the European
+  // competitions - which ESPN serves and this map now also numbers - the
+  // code stands in when there is no number. A code neither provider knows
+  // has no page to fill.
+  const { ESPN_SLUG_BY_CODE } = await import("./espn");
+  if (!leagueId && !ESPN_SLUG_BY_CODE[code]) return { rows: [], unavailable: true };
 
   const db = (env as unknown as { DB?: D1Database }).DB;
   const season = currentSeasonYear();
   // v7 on 6 September, with the name tables. The chart stores the Armenian
   // spelling rather than the Latin one, so a corrected name waits an hour
   // for the row to expire - and the owner is looking at the page now.
-  const cacheKey = `apifootball:v7:topscorers:${leagueId}:${season}`;
+  const cacheKey = `apifootball:v8:topscorers:${leagueId ?? code}:${season}`;
 
   if (db) {
     await ensureCacheTable(db);
@@ -172,7 +178,7 @@ export async function getTopScorers(code: string): Promise<{ rows: TopScorer[]; 
   } catch { /* the paid provider below is the fallback */ }
 
   try {
-    if (!key) throw new Error("no key");
+    if (!key || !leagueId) throw new Error("nothing to ask");
     const response = await fetch(`https://v3.football.api-sports.io/players/topscorers?league=${leagueId}&season=${season}`, {
       headers: { "x-apisports-key": key, Accept: "application/json" },
     });

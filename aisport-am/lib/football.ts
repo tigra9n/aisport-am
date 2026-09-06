@@ -17,6 +17,9 @@ export type StandingRow = {
 };
 
 export const leagues = [
+  { code: "CL", short: "ՉԼ", name: "Չեմպիոնների լիգա", country: "Եվրոպա" },
+  { code: "EL", short: "ԵԼ", name: "Եվրոպա լիգա", country: "Եվրոպա" },
+  { code: "ECL", short: "Կոնֆերենցիա", name: "Կոնֆերենցիայի լիգա", country: "Եվրոպա" },
   { code: "PL", short: "ԱՊԼ", name: "Պրեմիեր լիգա", country: "Անգլիա" },
   { code: "PD", short: "Լա Լիգա", name: "Լա Լիգա", country: "Իսպանիա" },
   { code: "SA", short: "Սերիա Ա", name: "Սերիա Ա", country: "Իտալիա" },
@@ -36,6 +39,13 @@ const teams: Record<string, string[]> = {
 };
 
 export function demoStandings(code: string): StandingRow[] {
+  // Only for a league this file has clubs for. It used to fall back to the
+  // Premier League's twenty, so any competition without a list of its own -
+  // the Saudi league, MLS, Armenia, and now the European cups - would have
+  // shown Arsenal and Manchester City under its own name the moment the
+  // real table could not be fetched. An empty table says "not now"; that
+  // one said something false.
+  if (!teams[code]) return [];
   return (teams[code] ?? teams.PL).map((team, index) => ({
     position: index + 1,
     team,

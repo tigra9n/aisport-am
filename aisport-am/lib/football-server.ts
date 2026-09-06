@@ -2,6 +2,9 @@ import { demoStandings, type StandingRow } from "./football";
 import { armenianTeamName } from "./team-names-hy";
 
 const LEAGUE_ID_BY_CODE: Record<string, number> = {
+  CL: 2,
+  EL: 3,
+  ECL: 848,
   PL: 39,
   PD: 140,
   SA: 135,
@@ -41,7 +44,13 @@ export async function getStandings(code: string): Promise<{ rows: StandingRow[];
   const runtime = env as unknown as Record<string, string | undefined>;
   const key = runtime.API_FOOTBALL_KEY;
   const leagueId = LEAGUE_ID_BY_CODE[code];
-  if (!key || !leagueId) return { rows: demoStandings(code), demo: true };
+  // No early exit on a missing key any more. ESPN serves every table on
+  // this site except the Armenian one and costs nothing, and this line used
+  // to hand a reader a made-up Premier League table the moment the paid
+  // key was absent - which is what would have happened to every league here
+  // the day the subscription lapsed. The paid provider is checked where it
+  // is actually used, further down.
+  if (!key && !leagueId) return { rows: demoStandings(code), demo: true };
 
   const db = (env as unknown as { DB?: D1Database }).DB;
   const season = currentSeasonYear();
@@ -56,7 +65,10 @@ export async function getStandings(code: string): Promise<{ rows: StandingRow[];
   // v6 on 6 September, when the Armenian rows got their club numbers back.
   // The stored v5 row holds them as null and would sit there six hours,
   // with every club name on the table leading nowhere.
-  const cacheKey = `apifootball:v6:standings:${leagueId}:${season}`;
+  // v7 on 6 September, when the European competitions arrived: they have no
+  // stored rows yet, and the code is the key for anything the paid provider
+  // does not number.
+  const cacheKey = `apifootball:v7:standings:${leagueId ?? code}:${season}`;
 
   if (db) {
     await ensureCacheTable(db);
@@ -126,6 +138,7 @@ export async function getStandings(code: string): Promise<{ rows: StandingRow[];
   } catch { /* the paid provider below is the fallback */ }
 
   try {
+    if (!key || !leagueId) throw new Error("nothing to ask");
     const response = await fetch(`https://v3.football.api-sports.io/standings?league=${leagueId}&season=${season}`, {
       headers: { "x-apisports-key": key, Accept: "application/json" },
     });
