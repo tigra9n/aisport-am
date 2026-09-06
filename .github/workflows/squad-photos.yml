@@ -35,7 +35,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: '20' }
+        # 22, not 20: wrangler refuses anything older, and the first run
+        # collected 972 photographs and then could not write one of them.
+        with: { node-version: '22' }
 
       - name: Collect the photographs and write them as SQL
         env:
@@ -51,16 +53,31 @@ jobs:
           const only = process.env.ONLY && process.env.ONLY !== "all" ? [process.env.ONLY] : SLUGS;
 
           const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+          // MEASURED on the first run: at 1.2 seconds between calls - fifty a
+          // minute - the key started refusing in bursts, and four or five
+          // clubs in a row lost all three attempts. Manchester United, Real
+          // Madrid and Paris Saint-Germain were among them, and the log said
+          // "not in TheSportsDB", which was simply untrue. The free key
+          // allows about thirty a minute, so 2.5 seconds it is: slower than
+          // the run needs to be, and it finishes.
+          const SPACING = 2500;
+
+          // A refusal and an absence are different things and the log has to
+          // say which. The first run reported thirty-one clubs missing from a
+          // database that has all of them.
+          const RATE_LIMITED = Symbol("rate limited");
           async function get(url) {
-            for (let attempt = 0; attempt < 3; attempt++) {
+            let refused = false;
+            for (let attempt = 0; attempt < 4; attempt++) {
               try {
                 const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(20000) });
-                if (res.status === 429) { await wait(5000 * (attempt + 1)); continue; }
+                if (res.status === 429) { refused = true; await wait(10000 * (attempt + 1)); continue; }
                 if (!res.ok) return null;
                 return await res.json();
-              } catch { await wait(2000); }
+              } catch { await wait(3000); }
             }
-            return null;
+            return refused ? RATE_LIMITED : null;
           }
 
           // The same normalisation the site uses, and it must stay the same:
@@ -71,7 +88,7 @@ jobs:
           const quote = (text) => "'" + String(text).replace(/'/g, "''") + "'";
 
           const statements = [];
-          let clubs = 0, withPhotos = 0, faces = 0;
+          let clubs = 0, withPhotos = 0, faces = 0, refused = 0;
 
           for (const slug of only) {
             const teams = await get(`${ESPN}/${slug}/teams`);
@@ -79,12 +96,14 @@ jobs:
             console.log(`${slug}: ${list.length} clubs`);
             for (const club of list) {
               clubs++;
-              await wait(1200);
+              await wait(SPACING);
               const found = await get(`${SDB}/searchteams.php?t=${encodeURIComponent(club.displayName)}`);
+              if (found === RATE_LIMITED) { refused++; console.log(`  ${club.displayName}: refused, not asked again this run`); continue; }
               const teamId = found?.teams?.[0]?.idTeam;
               if (!teamId) { console.log(`  ${club.displayName}: not in TheSportsDB`); continue; }
-              await wait(1200);
+              await wait(SPACING);
               const squad = await get(`${SDB}/lookup_all_players.php?id=${teamId}`);
+              if (squad === RATE_LIMITED) { refused++; console.log(`  ${club.displayName}: squad refused`); continue; }
               // Two maps, so a squad page can read as one photo session.
               // strCutout is a head-and-shoulders on a transparent ground
               // and sits beside ESPN's headshots; strThumb is a photograph
@@ -116,7 +135,12 @@ jobs:
           }
 
           console.log("");
-          console.log(`${clubs} clubs asked, ${withPhotos} answered, ${faces} portraits in total`);
+          console.log(`${clubs} clubs asked, ${withPhotos} answered, ${refused} refused, ${faces} portraits in total`);
+          // The free key hands back at most ten players per club - every
+          // club that answered the first run returned ten or fewer, never
+          // eleven. So a twenty-five man squad gets about ten faces from
+          // here and two or three from ESPN, and the rest keep their letter.
+          // That is the ceiling of the free tier, not a fault in this.
           writeFileSync("photos.sql", statements.join("\n") + "\n");
           if (!statements.length) { console.log("nothing to write"); process.exit(1); }
           JS
