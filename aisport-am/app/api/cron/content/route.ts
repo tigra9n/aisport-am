@@ -696,27 +696,31 @@ export async function GET(request: Request) {
   // real spacing at roughly 19-21 minutes instead of oscillating between
   // 20 and 25. The cost is an occasional 19-minute gap where the brief
   // said 20; the benefit is that the rhythm stops visibly stalling.
-  // Twenty-eight minutes, and the reason it is no longer sixty:
+  // Sixty minutes, and it is a quota and not a preference. MEASURED twice
+  // on 6 September, the second time correctly:
   //
-  // Sixty was chosen to ration a daily cap of twenty model requests, and
-  // MEASURED on 6 September that cap does not exist. The site published
-  // 43, 41, 40 and 31 articles on the four days to the 5th, and Google
-  // has refused it with a 429 exactly zero times in the whole of
-  // cron_invocations. gemini-3.6-flash allows ten requests a minute and
-  // 250 a day; the articles use about forty of them.
+  // Google's own refusal reads "Quota exceeded for metric:
+  // generativelanguage.googleapis.com/generate_content_free_tier_requests,
+  // limit: 20". Twenty requests a day, which is exactly what CLAUDE.md
+  // has always said. Sixty minutes inside the 10:00-03:00 window is
+  // seventeen articles, with three in hand for a retry.
   //
-  // So the gap is an editorial choice about how often a reader should
-  // find something new, and an hour is too long: the owner watched the
-  // front page sit still for seventy-three minutes - sixty of them this
-  // rule refusing to try, and the rest the feeds having nothing.
+  // This was briefly changed to 28 minutes on the strength of a wrong
+  // reading: the site published 43, 41 and 40 articles on 2-4 September
+  // with no refusals, which looked like proof that no such cap existed.
+  // Those were Claude's days. CONTENT_MODEL_PROVIDER only became gemini
+  // on 5 September, and the first full day under it - the 6th - published
+  // five articles and then met the wall. Comparing one provider's output
+  // against another provider's limit is how an hour became half an hour
+  // and would have left the site silent from lunchtime.
   //
-  // Twenty-eight rather than thirty for the same reason the number above
-  // is 18 and not 20: the dispatcher cannot hit a threshold exactly, so
-  // the first tick past 28 lands at 28-33 minutes and the rhythm stops
-  // visibly stalling. Inside the 10:00-03:00 window that is about thirty
-  // articles a day, well under both the model's allowance and what the
-  // site was already doing at the beginning of the month.
-  const MIN_PUBLISH_GAP_MS = 28 * 60 * 1000;
+  // A round 60, unlike the 18-not-20 above, and deliberately so. The
+  // dispatcher cannot hit an exact threshold, so the first tick past 60
+  // lands at 60-65 minutes and the day comes up a little short of
+  // seventeen. Under a daily cap that is the right way to be wrong:
+  // sixteen articles is a quiet day, twenty-one is a site that stops
+  // publishing before midnight.
+  const MIN_PUBLISH_GAP_MS = 60 * 60 * 1000;
   const nowForSlot = new Date();
   let slotClaimKey: string | null = null;
   let claimDb: D1Database | null = null;
