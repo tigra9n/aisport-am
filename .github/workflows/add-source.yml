@@ -2002,9 +2002,18 @@ jobs:
                   for (const r of parsed) console.log(`    ${String(r.team).padEnd(20)} ${String(r.pts).padStart(3)} pts  ${r.pld} played  ${r.gd > 0 ? "+" : ""}${r.gd}`);
                   let right = 0;
                   console.log("");
+                  // Matched on the whole name, not on a substring of it.
+                  //
+                  // The pass before this reported eight of twelve, and both
+                  // of the visible failures were mine: "Ararat" found
+                  // Ararat-Armenia, and "Van" found Pyunik YereVAN. Exactly
+                  // the fault that put Lautaro Martinez's name on Emiliano,
+                  // in a different file on the same night.
+                  const ALIAS = { "ararat-armenia": ["ararat-armenia"], ararat: ["ararat", "ararat yerevan"], urartu: ["urartu", "banants", "banants yerevan"], pyunik: ["pyunik", "pyunik yerevan"], shirak: ["shirak", "shirak gyumri"], van: ["van"], noah: ["noah", "noah yerevan"] };
+                  const norm = (t) => String(t).toLowerCase().replace(/\s+fc$|^fc\s+/g, "").trim();
                   for (const [team, pld, pts, gd] of TRUTH) {
-                    const key = team.toLowerCase().split(/[ -]/)[0];
-                    const mine = parsed.find((x) => x.team.toLowerCase().includes(key));
+                    const names = ALIAS[team.toLowerCase()] ?? [team.toLowerCase()];
+                    const mine = parsed.find((x) => names.includes(norm(x.team)));
                     const ok = mine && mine.pld === pld && mine.pts === pts && mine.gd === gd;
                     if (ok) right++;
                     console.log(`    ${String(team).padEnd(16)} real ${String(pts).padStart(3)}/${pld}/${gd > 0 ? "+" : ""}${gd}   theirs ${mine ? `${String(mine.pts).padStart(3)}/${mine.pld}/${mine.gd > 0 ? "+" : ""}${mine.gd}` : "  not found"}   ${ok ? "ok" : "NO"}`);
@@ -2050,6 +2059,73 @@ jobs:
           console.log("401/403 means the endpoint is right and a key is needed; 404 means the path is wrong.");
           JS
           node high.mjs
+
+      # The photographs, asked of the provider the site already has a key
+      # for. Tigran: "maybe API-Football has photos - we never asked."
+      #
+      # He is right that it was never asked, and a comment in this codebase
+      # says "the photos API-Football charged for", so it very likely does.
+      # It matters because every other door is now shut: ESPN has a face for
+      # one footballer in twelve and the CDN confirms it, Highlightly returns
+      # logo:null for Saka and Salah and has no squad endpoint at all, and
+      # TheSportsDB's free key stops at ten players a club.
+      #
+      # One request returns a whole squad with a photograph each, so 144
+      # clubs is 144 requests - two days of the free hundred, or one league a
+      # day for a week, cached for a month. That is affordable if the
+      # photographs are real.
+      - name: Does API-Football have a face for every footballer
+        if: ${{ github.event.inputs.livescore != 'no' && github.event.inputs.espn == 'no' }}
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+        run: |
+          cat > afphotos.mjs <<'JS'
+          const KEY = process.env.API_FOOTBALL_KEY || "";
+          if (!KEY) { console.log("no API_FOOTBALL_KEY on this runner"); process.exit(0); }
+          const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
+          const ask = async (url) => {
+            const r = await fetch(url, { headers: { "x-apisports-key": KEY, Accept: "application/json" }, signal: AbortSignal.timeout(20000) });
+            const t = await r.text();
+            let j = null; try { j = JSON.parse(t) } catch {}
+            return { status: r.status, json: j, text: t };
+          };
+          // A url is not a photograph. Fetch it and reject anything too
+          // small to be one - the same test ESPN's placeholders failed.
+          const real = async (url) => {
+            try {
+              const r = await fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(15000) });
+              if (!r.ok) return 0;
+              return (await r.arrayBuffer()).byteLength;
+            } catch { return 0; }
+          };
+
+          // Arsenal is 42 here, and the Armenian clubs matter as much: the
+          // one league nothing else covers.
+          for (const [club, team] of [["Arsenal", 42], ["Pyunik", 856], ["Noah", 11048]]) {
+            const r = await ask(`https://v3.football.api-sports.io/players/squads?team=${team}`);
+            const squad = r.json?.response?.[0];
+            const players = squad?.players ?? [];
+            console.log("");
+            console.log(`=== ${club} (team ${team}): HTTP ${r.status}, ${players.length} players ===`);
+            if (r.json?.errors && Object.keys(r.json.errors).length) console.log(`  errors: ${JSON.stringify(r.json.errors).slice(0, 200)}`);
+            if (!players.length) { console.log(`  ${String(r.text).replace(/\s+/g, " ").slice(0, 200)}`); continue; }
+            let withUrl = 0, withPhoto = 0;
+            for (const p of players) {
+              if (!p.photo) continue;
+              withUrl++;
+              const bytes = await real(p.photo);
+              if (bytes > 2000) withPhoto++;
+            }
+            console.log(`  a photo url:        ${withUrl} of ${players.length}`);
+            console.log(`  the url is a photo: ${withPhoto} of ${players.length}`);
+            console.log(`  first: ${players[0]?.name} -> ${players[0]?.photo}`);
+          }
+          // What the day's allowance looks like after that.
+          const status = await ask("https://v3.football.api-sports.io/status");
+          const req = status.json?.response?.requests;
+          if (req) console.log(`\nrequests today: ${req.current} of ${req.limit_day}`);
+          JS
+          node afphotos.mjs
 
       - name: What the sources table holds now
         if: ${{ github.event.inputs.livescore == 'all' && github.event.inputs.espn == 'no' }}
