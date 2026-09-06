@@ -153,6 +153,14 @@ jobs:
           // rather than seventy - inside a day's allowance either way, but
           // half the wall clock.
           const BATCH = 100;
+          // A fill may never spend more than this many requests, however
+          // many names are missing. MEASURED on 6 September: a day of fill
+          // runs - two of them cancelled mid-flight, which does not undo
+          // what they had already asked - used enough of the allowance
+          // that Google began refusing, and a refused article is an
+          // article the site does not publish. The names are a
+          // convenience; the articles are the site.
+          const MAX_REQUESTS = 60;
           const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
           const armenianOnly = /^[Ա-֏\s'’.\-]+$/;
           const accepted: [string, string][] = [];
@@ -160,6 +168,7 @@ jobs:
           let asked = 0, refused = 0;
 
           for (let start = 0; start < wanted.length; start += BATCH) {
+            if (asked >= MAX_REQUESTS) { console.log(`  stopping at ${asked} requests, the ceiling for one run`); break; }
             const batch = wanted.slice(start, start + BATCH);
             const payload = batch.map(([, v]) => ({ latin: v.name, club: v.club, league: v.league }));
             let text: string | null = null;
@@ -194,7 +203,13 @@ jobs:
               // sixty names to a refusal that says "try again later" in
               // its own body. Both are a pause.
               if (response.status === 429 || response.status >= 500) {
-                console.log(`  http ${response.status}, waiting`);
+                // The body, not just the number. Google names which limit
+                // was hit - requests a minute against requests a day - and
+                // those two mean completely different things here: a
+                // minute is a pause, a day is the articles' allowance
+                // spent on names, which is not a trade this site should
+                // ever make silently.
+                console.log(`  http ${response.status}: ${(await response.text()).replace(/\s+/g, " ").slice(0, 400)}`);
                 await wait(20000);
                 continue;
               }
