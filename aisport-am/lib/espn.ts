@@ -293,6 +293,7 @@ type EspnSummary = {
     team?: { displayName?: string };
     athletesInvolved?: EspnAthlete[];
     text?: string;
+    shortText?: string;
   }[];
   seasonseries?: { events?: { date?: string; competitors?: EspnCompetitor[] }[] }[];
   gameInfo?: { venue?: { fullName?: string }; officials?: { displayName?: string }[]; attendance?: number };
@@ -373,6 +374,28 @@ function eventLabel(text: string) {
   return text;
 }
 
+// "Alexander Isak Goal" -> "Alexander Isak". ESPN puts the event's own word
+// at the end of shortText, so removing it leaves the man. Anything that does
+// not end that way is left alone rather than guessed at: a line reading
+// "Second Half begins" has no footballer in it and must not produce one.
+function scorerFrom(shortText: string | undefined, type: string | undefined): string | null {
+  if (!shortText || !type) return null;
+  const suffix = new RegExp(`\\s+${type.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
+  if (!suffix.test(shortText)) return null;
+  const name = shortText.replace(suffix, "").trim();
+  // A scoreline, a club, or a sentence is not a name. Two or three words,
+  // each starting with a capital, is.
+  const words = name.split(/\s+/);
+  if (words.length < 2 || words.length > 4) return null;
+  return words.every((w) => /^[\p{Lu}]/u.test(w)) ? name : null;
+}
+
+// "... Assisted by Cody Gakpo with a through ball." -> "Cody Gakpo".
+function assistFrom(text: string | undefined): string | null {
+  const found = text?.match(/Assisted by ([^.,]+?)(?: with | after |[.,]|$)/i);
+  return found ? found[1].trim() : null;
+}
+
 export type EspnPlayerLine = {
   id: null;
   name: string;
@@ -434,11 +457,23 @@ export async function espnMatchDetail(eventId: string, leagueSlug: string): Prom
     events: (data.keyEvents ?? []).map((e) => ({
       minute: e.clock?.displayValue ?? "",
       team: armenianTeamName(e.team?.displayName ?? ""),
-      // Armenian, like every other name on the page. The timeline was the
-      // one place a footballer kept his English spelling, next to an
-      // Armenian club name and an Armenian label.
-      player: armenianPlayerName(e.athletesInvolved?.[0]?.displayName ?? ""),
-      assist: armenianPlayerName(e.athletesInvolved?.[1]?.displayName ?? ""),
+      // MEASURED on the Ipswich-Liverpool summary: ESPN's keyEvents carry
+      // no athletesInvolved at all for a goal, which is why the timeline
+      // read "Գոլ" twice with nobody beside it for a match Isak scored both
+      // of. The names are in the prose:
+      //
+      //   shortText  "Alexander Isak Goal"
+      //   text       "Goal! Ipswich Town 0, Liverpool 1. Alexander Isak
+      //               (Liverpool) right footed shot ... Assisted by Cody
+      //               Gakpo with a through ball."
+      //
+      // shortText is the scorer and the event and nothing else, so it gives
+      // the name; the assist only exists in the long text, after "Assisted
+      // by". Armenian, like every other name on the page - the timeline was
+      // the one place a footballer kept his English spelling, standing next
+      // to an Armenian club and an Armenian label.
+      player: armenianPlayerName(e.athletesInvolved?.[0]?.displayName ?? scorerFrom(e.shortText, e.type?.text) ?? ""),
+      assist: armenianPlayerName(e.athletesInvolved?.[1]?.displayName ?? assistFrom(e.text) ?? ""),
       label: eventLabel(e.type?.text ?? e.text ?? ""),
     })).filter((e) => e.label),
     lineups: (data.rosters ?? []).map((r) => ({
