@@ -1351,11 +1351,20 @@ jobs:
             const first = Array.isArray(d.topScorers) ? d.topScorers[0] : null;
             if (first) say(`  first scorer: ${first.name} (${first.team}) ${first.goals}`);
             // The goal lines in the timeline read "Գոլ" with nobody's name
-            // beside them in the screenshot, so print what the events
-            // actually carry.
-            const goals = (d.events ?? []).filter((e) => /Գոլ/.test(String(e.type ?? e.detail ?? "")));
-            say(`  goal events: ${goals.length}`);
-            for (const g of goals.slice(0, 3)) say(`      ${JSON.stringify(g).slice(0, 160)}`);
+            // beside them, so print what our own events carry - the field is
+            // "label", which the first version of this check got wrong and
+            // then reported zero goals for a 0:2.
+            const goals = (d.events ?? []).filter((e) => /Գոլ/.test(String(e.label ?? "")));
+            say(`  goal events: ${goals.length} of ${(d.events ?? []).length}`);
+            for (const g of goals.slice(0, 3)) say(`      ${JSON.stringify(g)}`);
+            // And what ESPN sent, so a missing name can be told apart from
+            // a name we threw away.
+            const raw = await get("https://site.web.api.espn.com/apis/site/v2/sports/soccer/eng.1/summary?event=401879288");
+            try {
+              const ke = JSON.parse(raw.html).keyEvents ?? [];
+              say(`  ESPN keyEvents: ${ke.length}`);
+              for (const e of ke.slice(0, 3)) say(`      ${JSON.stringify(e).slice(0, 300)}`);
+            } catch { say("  ESPN summary did not parse"); }
           } catch {
             say(`  not json: ${api.html.slice(0, 200).replace(/\s+/g, " ")}`);
           }

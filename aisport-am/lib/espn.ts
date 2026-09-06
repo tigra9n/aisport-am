@@ -434,8 +434,11 @@ export async function espnMatchDetail(eventId: string, leagueSlug: string): Prom
     events: (data.keyEvents ?? []).map((e) => ({
       minute: e.clock?.displayValue ?? "",
       team: armenianTeamName(e.team?.displayName ?? ""),
-      player: e.athletesInvolved?.[0]?.displayName ?? "",
-      assist: e.athletesInvolved?.[1]?.displayName ?? "",
+      // Armenian, like every other name on the page. The timeline was the
+      // one place a footballer kept his English spelling, next to an
+      // Armenian club name and an Armenian label.
+      player: armenianPlayerName(e.athletesInvolved?.[0]?.displayName ?? ""),
+      assist: armenianPlayerName(e.athletesInvolved?.[1]?.displayName ?? ""),
       label: eventLabel(e.type?.text ?? e.text ?? ""),
     })).filter((e) => e.label),
     lineups: (data.rosters ?? []).map((r) => ({
@@ -615,20 +618,23 @@ export async function espnLiveMatchDetail(id: string): Promise<import("./live-fo
     // The table belongs on a match page and ESPN has it, so the section
     // that would otherwise have gone missing comes back.
     standings: league ? await espnStandings(codeForSlug(slug)) : null,
-    // Left empty while the scoring chart had no source at all. It has one
-    // now - the core API's list, named from the league's own rosters - and
-    // both are behind a cache, so the tab costs a lookup rather than a
-    // round trip. Imported here rather than at the top because
-    // topscorers-server imports this file.
-    topScorers: league ? await (async () => {
-      try {
-        const { getTopScorers } = await import("./topscorers-server");
-        const chart = await getTopScorers(codeForSlug(slug));
-        return chart.rows.length ? chart.rows.slice(0, 10) : null;
-      } catch {
-        return null;
-      }
-    })() : null,
+    // Filled by the caller, not here.
+    //
+    // This asked topscorers-server for the chart directly, and MEASURED on
+    // 6 September the match modal's own JSON came back with twenty rows of
+    // standings and topScorers null - the two set on adjacent lines of this
+    // object, from the same league, at the same moment. The difference is
+    // that espnStandings lives in this file while getTopScorers is reached
+    // by `await import("./topscorers-server")` - and that file reaches back
+    // here the same way. Two chunks, each loaded lazily, each importing the
+    // other: what one of them sees of the other is not finished, the call
+    // throws, and the try/catch around it turned a broken import into a
+    // missing tab.
+    //
+    // So this file stays a client for ESPN and nothing else, and
+    // live-match-details-v2 - which already asks for the chart on the paid
+    // path - fills this one too.
+    topScorers: null,
     formGuide: [],
     // What the old layout had no room for.
     statRows: statRowsFrom(detail),
@@ -638,8 +644,13 @@ export async function espnLiveMatchDetail(id: string): Promise<import("./live-fo
   };
 }
 
-// The site's league codes are keyed the other way round; this is the only
-// place that needs the reverse.
+// The site's league codes are keyed the other way round. Exported because
+// the match path now fills its scoring chart from live-match-details-v2,
+// which holds the id ("espn-eng.1-401879288") and needs the code.
+export function espnCodeForSlug(slug: string): string {
+  return codeForSlug(slug);
+}
+
 function codeForSlug(slug: string): string {
   const found = Object.entries(ESPN_SLUG_BY_CODE).find(([, s]) => s === slug);
   return found?.[0] ?? "";
