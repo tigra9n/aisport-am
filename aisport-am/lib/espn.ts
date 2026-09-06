@@ -1013,6 +1013,17 @@ type EspnRosterResponse = {
     position?: { name?: string; displayName?: string };
     items?: unknown[];
   }[];
+  // This field is here to be ignored, and the reason is worth keeping.
+  //
+  // MEASURED on 6 September: eng.1 team 359 - Arsenal - answers
+  // {"id":"5","firstName":"Arsene","lastName":"Wenger"}. Wenger left
+  // Arsenal in 2018. ESPN's roster carries a manager who has not managed
+  // the club for years, so this is not a free replacement for the paid
+  // coach lookup; it is a wrong fact with a name attached, which is worse
+  // than an empty space where a manager's name would go. It was shipped
+  // for about an hour before the probe that asked for his photograph
+  // printed the object and gave it away. Neither headshot address had a
+  // picture either (both 404), so there was nothing to gain.
   coach?: { id?: string; firstName?: string; lastName?: string }[];
 };
 
@@ -1032,14 +1043,7 @@ export type EspnSquad = {
   teamName: string;
   teamLogo: string | null;
   players: { id: string; name: string; number: number | null; position: string; age: number | null; photo: string | null }[];
-  // The manager, whom this roster carries and API-Football charged for.
-  //
-  // A name and nothing else: no photograph, no nationality, no career.
-  // That is all ESPN publishes here, and it is still the difference
-  // between a club page that names its manager and one that does not -
-  // which is what an ESPN-keyed club page has been showing, because the
-  // paid lookup it used runs on API-Football's numbering and was skipped.
-  coach: { name: string } | null;
+  // No manager here, deliberately. See the note above the roster type.
 };
 
 // One request for the whole squad, with the shirt number, the position,
@@ -1048,13 +1052,9 @@ export async function espnSquad(slug: string, teamId: string): Promise<EspnSquad
   const data = await espnJson<EspnRosterResponse>(`/${slug}/teams/${teamId}/roster`);
   const athletes = data?.athletes ?? [];
   if (!athletes.length) return null;
-  const manager = (data?.coach ?? []).find((person) => person?.firstName || person?.lastName);
   return {
     teamName: armenianTeamName(data?.team?.displayName ?? ""),
     teamLogo: data?.team?.logos?.[0]?.href ?? null,
-    coach: manager
-      ? { name: [manager.firstName, manager.lastName].filter(Boolean).join(" ").trim() }
-      : null,
     players: athletes
       .filter((athlete) => athlete.id && athlete.displayName)
       .map((athlete) => ({
