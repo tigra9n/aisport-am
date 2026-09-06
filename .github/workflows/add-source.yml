@@ -1969,6 +1969,16 @@ jobs:
                 if (!rows.length) {
                   console.log(`  no table found: ${String(st.text).replace(/\s+/g, " ").slice(0, 400)}`);
                 } else {
+                  // One row, verbatim, before anything is read out of it.
+                  //
+                  // The first pass guessed the field names and printed "0 of
+                  // 12 correct" for a table whose points were every one of
+                  // them right - NaN for the goal difference, a wrong field
+                  // for matches played, and Urartu missed because this
+                  // provider still files it under Banants. A probe that
+                  // reports its own parsing as the source's failure is worse
+                  // than no probe. So: show the row, then read it.
+                  console.log(`  one row verbatim: ${JSON.stringify(rows[0])}`);
                   const flat = (o, d = 0) => d > 3 || !o || typeof o !== "object" ? [] : Object.entries(o).flatMap(([k, v]) => (v && typeof v === "object" ? flat(v, d + 1) : [[k, v]]));
                   const read = (row) => {
                     const kv = flat(row);
@@ -1997,12 +2007,31 @@ jobs:
                 }
 
                 console.log("");
-                console.log("=== does a squad come with photographs ===");
-                for (const path of [`/teams?leagueId=${ARM_LEAGUE}&limit=3`, "/players?limit=5", "/teams?limit=3"]) {
+                console.log("=== does a footballer come with a photograph ===");
+                // /players?limit=5 returned five men with logo:null, which
+                // says nothing - those were goalkeepers picked at random
+                // from the whole database. Ask for a club's own squad, and
+                // ask by name for men who certainly have a photograph
+                // somewhere, before concluding this source has none.
+                for (const path of [
+                  "/teams?name=Arsenal&limit=2",
+                  "/players?name=Bukayo Saka",
+                  "/players?name=Mohamed Salah",
+                  `/standings?leagueId=${ARM_LEAGUE}&season=${ARM_SEASON}`,
+                ]) {
                   const t = await ask(`${host}${path}`, headers);
                   const body = String(t.text).replace(/\s+/g, " ");
                   const images = (body.match(/https?:\/\/[^"']*\.(?:png|jpg|jpeg|webp)/g) ?? []).length;
-                  console.log(`  ${path}  HTTP ${t.status}  ${images} image url(s)  ${body.slice(0, 200)}`);
+                  console.log(`  ${path}`);
+                  console.log(`      HTTP ${t.status}  ${images} image url(s)  ${body.slice(0, 260)}`);
+                }
+                // And the endpoints this API actually offers, so the next
+                // question is asked of a path that exists rather than one
+                // guessed from another provider's shape.
+                console.log("");
+                for (const path of ["/", "/players", "/teams/1635", "/squads?teamId=1635", "/teams/1635/squad"]) {
+                  const t = await ask(`${host}${path}`, headers);
+                  console.log(`  ${String(path).padEnd(22)} HTTP ${t.status}  ${String(t.text).replace(/\s+/g, " ").slice(0, 160)}`);
                 }
                 process.exit(0);
               }
