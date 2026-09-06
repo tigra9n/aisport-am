@@ -1335,6 +1335,31 @@ jobs:
             say("  !! ESPN reported no finished match in the last day and a half");
           }
 
+          // What the modal itself receives. The tab row is drawn from this
+          // JSON, not from the page's HTML, so a missing Ռմբարկուներ tab is
+          // a missing key here - and this is the same request the browser
+          // makes, so no deploy is needed to read it.
+          say("");
+          const api = await get(`https://aifootball.am/api/live/match/espn-eng.1-401879288`);
+          say(`=== the modal's own request -> HTTP ${api.status} ===`);
+          try {
+            const d = JSON.parse(api.html);
+            for (const key of ["events", "lineups", "statistics", "h2h", "commentary", "standings", "topScorers", "statRows", "playerLines"]) {
+              const v = d[key];
+              say(`  ${String(key).padEnd(12)} ${v === null || v === undefined ? "MISSING" : Array.isArray(v) ? `${v.length} row(s)` : "present"}`);
+            }
+            const first = Array.isArray(d.topScorers) ? d.topScorers[0] : null;
+            if (first) say(`  first scorer: ${first.name} (${first.team}) ${first.goals}`);
+            // The goal lines in the timeline read "Գոլ" with nobody's name
+            // beside them in the screenshot, so print what the events
+            // actually carry.
+            const goals = (d.events ?? []).filter((e) => /Գոլ/.test(String(e.type ?? e.detail ?? "")));
+            say(`  goal events: ${goals.length}`);
+            for (const g of goals.slice(0, 3)) say(`      ${JSON.stringify(g).slice(0, 160)}`);
+          } catch {
+            say(`  not json: ${api.html.slice(0, 200).replace(/\s+/g, " ")}`);
+          }
+
           say("");
           // The smoke test cannot find a /player/ link on the scoring
           // charts, which means the chart the page opens on is empty rather

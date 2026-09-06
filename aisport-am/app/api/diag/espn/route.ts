@@ -129,6 +129,32 @@ export async function GET(request: Request) {
       await say("espnTeams(eng.1)", () => espn.espnTeams("eng.1"));
       await say("espnSquad(eng.1,359)", () => espn.espnSquad("eng.1", "359"));
       await say("espnPlayer(169532)", () => espn.espnPlayer("169532"));
+      // The match centre lost its scorers tab again while /topscorers itself
+      // renders twenty rows, so the two paths disagree and only one of them
+      // can be asked from a runner. getTopScorers is what the chart page
+      // calls; espnLiveMatchDetail is what the modal calls, and it calls
+      // getTopScorers in turn - if the first has rows and the second has
+      // none, the loss is inside the match path, not in the data.
+      const scorers = await import("../../../../lib/topscorers-server");
+      await say("getTopScorers(PL)", async () => (await scorers.getTopScorers("PL")).rows);
+      await say("matchDetail.topScorers", async () => {
+        const detail = await espn.espnLiveMatchDetail("espn-eng.1-401879288");
+        if (!detail) return "the match itself came back null";
+        return `${detail.topScorers?.length ?? 0} scorer row(s), ${detail.events?.length ?? 0} event(s), standings ${detail.standings?.length ?? 0}`;
+      });
+      // Squad photos: how many of a club's players have a face, asked of
+      // getSquad rather than espnSquad, because ESPN's own headshots cover
+      // about one footballer in twelve and the rest are put on at read time
+      // from TheSportsDB - which rate-limits this Worker. Which of the two
+      // is short is the whole question.
+      const squads = await import("../../../../lib/squad-server");
+      await say("getSquad(espn-359) faces", async () => {
+        const squad = await squads.getSquad("espn-359");
+        const players = squad?.players ?? [];
+        const espnOwn = await espn.espnSquad("eng.1", "359");
+        const raw = espnOwn?.players ?? [];
+        return `${players.filter((p) => p.photo).length} of ${players.length} have a photo (ESPN alone gives ${raw.filter((p) => p.photo).length})`;
+      });
       // Which of the four doors to the scoring chart this Worker can open.
       // The first one answers a GitHub runner with fifty names and this
       // Worker with nothing, in under thirty milliseconds - so each is asked

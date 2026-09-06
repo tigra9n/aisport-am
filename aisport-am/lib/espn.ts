@@ -1326,11 +1326,16 @@ type SportsDbPlayers = {
   player?: { strPlayer?: string; strCutout?: string | null; strThumb?: string | null; strRender?: string | null }[];
 };
 
-// Compared on letters alone: the two providers punctuate differently
-// ("Gabriel Magalhães" against "Gabriel Magalhaes") and one of them will
-// write a middle name the other leaves out.
+// Compared with the accents removed and the punctuation dropped, but the
+// word breaks KEPT: the first version of this joined the letters into one
+// string and demanded an exact match, which is why half a squad came back
+// faceless. The two providers agree on the letters and disagree on how many
+// names a footballer has - ESPN writes "Pedro Neto" where TheSportsDB
+// writes "Pedro Lomba Neto", "Joao Pedro" against "Joao Pedro Junqueira de
+// Jesus", "Estevao" against "Estevao Willian". Keeping the spaces is what
+// lets pickPhoto below compare them word by word.
 const photoKey = (name: string) =>
-  name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z]/g, "");
+  name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z ]/g, " ").trim().replace(/\s+/g, " ");
 
 export async function sportsDbSquadPhotos(clubName: string): Promise<Record<string, string>> {
   const found = await sportsDb<SportsDbTeamSearch>(`/searchteams.php?t=${encodeURIComponent(clubName)}`);
@@ -1348,6 +1353,50 @@ export async function sportsDbSquadPhotos(clubName: string): Promise<Record<stri
 }
 
 export const squadPhotoKey = photoKey;
+
+// One footballer's face out of a club's photographs, tried three ways and
+// never guessed. Each step is required to land on exactly one player: a
+// squad holds brothers, and two Silvas with one photograph between them is
+// worse than no photograph at all.
+//
+//   1. the same name, letter for letter
+//   2. every word of the shorter name inside the longer one, in order -
+//      "pedro neto" within "pedro lomba neto"
+//   3. the last word plus the first letter of the first - "S. Ramos"
+//
+// Written after a squad page came back with a third of its faces: the
+// exact-match rule was throwing away every footballer whose two providers
+// counted his names differently, which in a Premier League squad is most
+// of the Brazilians and half the Portuguese.
+export function pickPhoto(photos: Record<string, string>, name: string): string | null {
+  const key = photoKey(name);
+  if (!key) return null;
+  if (photos[key]) return photos[key];
+
+  const words = key.split(" ");
+  const entries = Object.entries(photos).map(([k, url]) => ({ words: k.split(" "), url }));
+
+  const inOrder = (few: string[], many: string[]) => {
+    let at = 0;
+    for (const word of few) {
+      const found = many.indexOf(word, at);
+      if (found < 0) return false;
+      at = found + 1;
+    }
+    return true;
+  };
+  const contained = entries.filter((entry) =>
+    entry.words.length >= words.length ? inOrder(words, entry.words) : inOrder(entry.words, words));
+  if (contained.length === 1) return contained[0].url;
+
+  const surname = words[words.length - 1];
+  const initial = words[0][0];
+  const bySurname = entries.filter((entry) =>
+    entry.words[entry.words.length - 1] === surname && entry.words[0][0] === initial);
+  if (bySurname.length === 1) return bySurname[0].url;
+
+  return null;
+}
 
 // ---------------------------------------------------------------------
 // The scoring chart, after ESPN took the named list away
