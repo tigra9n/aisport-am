@@ -280,8 +280,20 @@ export function MatchModal() {
 
             <div className="match-modal-tabs">
               <button className={tab === "events" ? "active" : ""} onClick={() => setTab("events")}>Իրադարձություններ</button>
-              <button className={tab === "lineups" ? "active" : ""} onClick={() => setTab("lineups")}>Կազմեր</button>
-              <button className={tab === "stats" ? "active" : ""} onClick={() => setTab("stats")}>Վիճակագրություն</button>
+              {/* Every other tab here has always hidden itself when it holds
+                  nothing; these two did not, and showed a reader two headings
+                  and the sentence that the data is not available yet.
+                  Armenia is why they now do the same. MEASURED on 6 September:
+                  Highlightly, the only free source that has the Armenian
+                  league at all, has no squad endpoint whatsoever - both
+                  spellings answer 404 - so from 23 September, when the paid
+                  plan ends, an Armenian match will arrive with no lineup and
+                  possibly no statistics. Hidden on emptiness rather than on
+                  the country, so the same thing happens for any league whose
+                  provider goes quiet, and nothing changes while the paid one
+                  still answers. */}
+              {details.lineups.length > 0 && <button className={tab === "lineups" ? "active" : ""} onClick={() => setTab("lineups")}>Կազմեր</button>}
+              {(details.statRows?.length ?? 0) > 0 && <button className={tab === "stats" ? "active" : ""} onClick={() => setTab("stats")}>Վիճակագրություն</button>}
               {details.h2h.length > 0 && <button className={tab === "h2h" ? "active" : ""} onClick={() => setTab("h2h")}>H2H</button>}
               {(details.commentary?.length ?? 0) > 0 && <button className={tab === "commentary" ? "active" : ""} onClick={() => setTab("commentary")}>Խաղի ընթացքը</button>}
               {details.formGuide.length > 0 && <button className={tab === "form" ? "active" : ""} onClick={() => setTab("form")}>Մարզավիճակ</button>}

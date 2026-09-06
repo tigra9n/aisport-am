@@ -21,7 +21,19 @@ export function LeagueTabs({ tables, topScorerTables, compact = false }: { table
   // it and nobody is relegated.
   const cup = active === "CL" || active === "EL" || active === "ECL";
   const scorerRows = topScorerTables?.[active]?.rows ?? [];
-  const showToggle = Boolean(topScorerTables);
+  // A "Ռմբարկուներ" button that opens an empty panel is worse than no
+  // button. MEASURED on 6 September: Highlightly, the only free source
+  // that carries the Armenian league at all, has no top-scorers endpoint -
+  // /top-scorers answers 404 - so from 23 September, when the paid plan
+  // ends, the Armenian scoring chart has nowhere to come from. Hidden on
+  // emptiness rather than on the country: nothing changes while the paid
+  // provider still answers, and any league it stops answering for loses
+  // the button by itself.
+  const showToggle = Boolean(topScorerTables) && scorerRows.length > 0;
+  // The league is switched with the toggle already open, and the new
+  // league may have no scorers: fall back to the table rather than render
+  // a panel whose button is no longer on the page.
+  const view = showToggle ? mode : "standings";
 
   return (
     <div className={`league-widget ${compact ? "compact" : ""}`}>
@@ -52,7 +64,7 @@ export function LeagueTabs({ tables, topScorerTables, compact = false }: { table
         )}
       </div>
 
-      {mode === "standings" ? (
+      {view === "standings" ? (
         <div className="standings-scroll">
           <table className="standings-table">
             <thead><tr><th>#</th><th>Թիմ</th><th>Խ</th>{!compact ? <><th>Հ</th><th>Ո</th><th>Պ</th><th>ԳՏ</th></> : null}<th>Մ</th></tr></thead>
@@ -105,7 +117,7 @@ export function LeagueTabs({ tables, topScorerTables, compact = false }: { table
         </div>
       )}
 
-      {!compact && mode === "standings" && !cup ? <div className="zone-legend"><span className="ucl">Չեմպիոնների լիգա</span><span className="europa">Եվրոպա լիգա</span><span className="drop">Իջեցման գոտի</span></div> : null}
+      {!compact && view === "standings" && !cup ? <div className="zone-legend"><span className="ucl">Չեմպիոնների լիգա</span><span className="europa">Եվրոպա լիգա</span><span className="drop">Իջեցման գոտի</span></div> : null}
     </div>
   );
 }
