@@ -37,7 +37,7 @@ on:
         required: false
         default: ""
       mode:
-        description: "provider = ask Highlightly. site = read the deployed board instead."
+        description: "provider = ask Highlightly. site = read the deployed board. sources = look for another free provider."
         required: false
         default: "provider"
 
@@ -116,8 +116,46 @@ jobs:
             grep -o '[^<>]\{0,50\}\(Կազմ\|Իրադարձ\|Վիճակագր\|Մարզադաշտ\|Մրցավար\)[^<>]\{0,50\}' <<<"$page" | sort -u | head -10
           fi
 
+      # Who else has the Armenian league, and how much of it?
+      #
+      # Highlightly has the table, the fixtures and the live minute and
+      # nothing else - no squad endpoint in any spelling, no top scorers.
+      # ESPN's 218 soccer leagues do not include Armenia at all. So the
+      # squads, the scoring chart and the player pages have no free source
+      # YET, and "yet" is the word this step exists to test.
+      #
+      # The first candidate is the one already in the repository. The
+      # photograph workflow pulls Armenian faces from TheSportsDB and has
+      # filled three and a half thousand of them, which means that provider
+      # knows Armenian squads by name. It has never been asked for the rest
+      # of the row - position, shirt number, birth date - and if it has
+      # them, the Armenian squad page comes back for nothing.
+      - name: Who else has the Armenian league
+        if: ${{ inputs.mode == 'sources' }}
+        env:
+          FOOTBALL_DATA_TOKEN: ${{ secrets.FOOTBALL_DATA_TOKEN }}
+        run: |
+          echo "=== TheSportsDB, which already gives this site Armenian faces"
+          for club in Alashkert Pyunik Urartu Noah; do
+            team=$(curl -sS --max-time 30 "https://www.thesportsdb.com/api/v1/json/3/searchteams.php?t=$club" || true)
+            tid=$(grep -o '"idTeam":"[0-9]*"' <<<"$team" | head -1 | grep -o '[0-9]*' || true)
+            echo "--- $club (idTeam ${tid:-none}, country $(grep -o '"strCountry":"[^"]*"' <<<"$team" | head -1))"
+            [ -z "$tid" ] && continue
+            squad=$(curl -sS --max-time 30 "https://www.thesportsdb.com/api/v1/json/3/lookup_all_players.php?id=$tid" || true)
+            echo "    players named: $(grep -o '"strPlayer":' <<<"$squad" | wc -l)"
+            echo "    fields on the first row:"
+            head -c 1200 <<<"$squad" | tr ',' '\n' | grep -E '"(strPlayer|strPosition|strNumber|dateBorn|strNationality|strCutout|strThumb|strTeam)"' | head -10 | sed 's/^/      /'
+          done
+
+          echo
+          echo "=== football-data.org, whose token this site already holds"
+          comps=$(curl -sS --max-time 30 -H "X-Auth-Token: $FOOTBALL_DATA_TOKEN" "https://api.football-data.org/v4/competitions" || true)
+          echo "    competitions on this plan: $(grep -o '"code":' <<<"$comps" | wc -l)"
+          echo "    the plan's list: $(grep -o '"code":"[A-Z0-9]*"' <<<"$comps" | tr '\n' ' ')"
+          echo "    anything Armenian: $(grep -c -i armenia <<<"$comps" || true)"
+
       - name: Does Highlightly fill a finished Armenian match?
-        if: ${{ inputs.mode != 'site' }}
+        if: ${{ inputs.mode != 'site' && inputs.mode != 'sources' }}
         env:
           HIGHLIGHTLY_KEY: ${{ secrets.HIGHLIGHTLY_KEY }}
           DAY: ${{ inputs.date }}
