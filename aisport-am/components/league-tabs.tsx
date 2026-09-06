@@ -15,6 +15,11 @@ export function LeagueTabs({ tables, topScorerTables, compact = false }: { table
   const selected = leagues.find((league) => league.code === active) ?? leagues[0];
   const standingsData = tables[active];
   const rows = standingsData?.rows ?? [];
+  // The colours down the side of a table say "these go to the Champions
+  // League, these go down" - which is a domestic league's idea and means
+  // nothing in a European competition, where the whole table is already in
+  // it and nobody is relegated.
+  const cup = active === "CL" || active === "EL" || active === "ECL";
   const scorerRows = topScorerTables?.[active]?.rows ?? [];
   const showToggle = Boolean(topScorerTables);
 
@@ -53,7 +58,7 @@ export function LeagueTabs({ tables, topScorerTables, compact = false }: { table
             <thead><tr><th>#</th><th>Թիմ</th><th>Խ</th>{!compact ? <><th>Հ</th><th>Ո</th><th>Պ</th><th>ԳՏ</th></> : null}<th>Մ</th></tr></thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.team} className={row.position <= 4 ? "zone-ucl" : row.position === 5 ? "zone-europa" : row.position > rows.length - 3 ? "zone-drop" : ""}>
+                <tr key={row.team} className={cup ? "" : row.position <= 4 ? "zone-ucl" : row.position === 5 ? "zone-europa" : row.position > rows.length - 3 ? "zone-drop" : ""}>
                   <td><span className="position-marker">{row.position}</span></td>
                   <td>{(row.teamKey ?? row.teamId) ? (
                     <Link href={`/team/${row.teamKey ?? row.teamId}`} className="team-cell-link">
@@ -100,7 +105,7 @@ export function LeagueTabs({ tables, topScorerTables, compact = false }: { table
         </div>
       )}
 
-      {!compact && mode === "standings" ? <div className="zone-legend"><span className="ucl">Չեմպիոնների լիգա</span><span className="europa">Եվրոպա լիգա</span><span className="drop">Իջեցման գոտի</span></div> : null}
+      {!compact && mode === "standings" && !cup ? <div className="zone-legend"><span className="ucl">Չեմպիոնների լիգա</span><span className="europa">Եվրոպա լիգա</span><span className="drop">Իջեցման գոտի</span></div> : null}
     </div>
   );
 }

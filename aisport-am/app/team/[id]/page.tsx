@@ -5,7 +5,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
 import { SiteHeader } from "../../../components/site-header";
 import { getCoach, getSquad, positionLabel, POSITION_ORDER } from "../../../lib/squad-server";
-import { knownTeam } from "../../../lib/entity-cache";
+import { espnTwinUrl, knownTeam } from "../../../lib/entity-cache";
 
 export const dynamic = "force-dynamic";
 
@@ -33,23 +33,11 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 const isTeamId = (id: string) => id.startsWith("espn-") ? id.length > 5 : Number.isFinite(Number.parseInt(id, 10));
 const teamId = (id: string) => id.startsWith("espn-") ? id : Number.parseInt(id, 10);
 
-async function espnUrlFor(legacyId: number): Promise<string | null> {
-  try {
-    const known = await knownTeam(legacyId);
-    if (!known?.name) return null;
-    const { findEspnTeamByName, espnKey } = await import("../../../lib/espn");
-    const team = await findEspnTeamByName(known.name);
-    return team ? `/team/${espnKey(team.id)}` : null;
-  } catch {
-    return null;
-  }
-}
-
 export default async function TeamPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   if (!isTeamId(id)) notFound();
   if (!id.startsWith("espn-")) {
-    const moved = await espnUrlFor(Number.parseInt(id, 10));
+    const moved = await espnTwinUrl(Number.parseInt(id, 10));
     if (moved) permanentRedirect(moved);
   }
   const [squad, coach] = await Promise.all([getSquad(teamId(id)), typeof teamId(id) === "number" ? getCoach(teamId(id) as number) : null]);

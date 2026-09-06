@@ -8,8 +8,8 @@ import { getStandings } from "../../lib/football-server";
 import { getTopScorers } from "../../lib/topscorers-server";
 
 export const metadata: Metadata = {
-  title: "Աղյուսակներ — Թոփ 5 առաջնություններ | AIFootball.am",
-  description: "Անգլիայի, Իսպանիայի, Իտալիայի, Գերմանիայի և Ֆրանսիայի ֆուտբոլային առաջնությունների թարմ աղյուսակներն ու ռմբարկուների ցուցակները։",
+  title: "Աղյուսակներ — եվրագավաթներ և առաջնություններ | AIFootball.am",
+  description: "Չեմպիոնների լիգայի, Եվրոպա լիգայի, Կոնֆերենցիայի լիգայի և Եվրոպայի առաջնությունների թարմ աղյուսակներն ու ռմբարկուների ցուցակները։",
   alternates: { canonical: "https://aifootball.am/standings" },
 };
 
@@ -19,7 +19,7 @@ export default async function StandingsPage() {
     Promise.all(leagues.map(async (league) => [league.code, await getTopScorers(league.code)] as const)),
   ]);
   return <main><SiteHeader /><div className="site-shell inner-page">
-    <span className="page-kicker">Եվրոպական ֆուտբոլ</span><h1 className="page-title">Թոփ 5 առաջնություններ</h1><p className="page-intro">Ընտրեք առաջնությունը և անցեք Աղյուսակ/Ռմբարկուներ միջև՝ ուղիղ ներքևի կոճակներով, առանց էջ փոխելու։ <Link href="/topscorers">Ամբողջական ռմբարկուների ցուցակը →</Link></p>
+    <span className="page-kicker">Եվրոպական ֆուտբոլ</span><h1 className="page-title">Աղյուսակներ</h1><p className="page-intro">Ընտրեք առաջնությունը և անցեք Աղյուսակ/Ռմբարկուներ միջև՝ ուղիղ ներքևի կոճակներով, առանց էջ փոխելու։ <Link href="/topscorers">Ամբողջական ռմբարկուների ցուցակը →</Link></p>
     <section className="full-standings-card"><LeagueTabs tables={Object.fromEntries(standingsEntries)} topScorerTables={Object.fromEntries(scorerEntries)} /></section>
   </div><SiteFooter /></main>;
 }

@@ -121,3 +121,55 @@ async function knownFromSquad(playerId: number): Promise<KnownPlayer | null> {
   } catch { /* the table may not exist yet on a cold worker */ }
   return null;
 }
+
+// Does this club also exist at ESPN, and where?
+//
+// MEASURED: an Armenian club's page took seconds to open from the table.
+// The team page redirects a bare API-Football number to the ESPN page when
+// there is one, and it found out by asking findEspnTeamByName - which walks
+// all seventeen ESPN competitions in order, one after another, and for an
+// Armenian club never matches any of them, because ESPN has no Armenian
+// league. Seventeen team lists, on every request, before the page even
+// began loading the squad.
+//
+// Two things fix it. An Armenian club is known here and never searched for:
+// the answer is no, and it will still be no tomorrow. And every other
+// answer is remembered - a hit for a month, because clubs move between
+// competitions twice a year, a miss for a day, because a miss can also mean
+// the standings row that carries the club's name had not been filled yet.
+export async function espnTwinUrl(legacyId: number): Promise<string | null> {
+  const { ARMENIAN_CLUB_IDS } = await import("./highlightly");
+  if (Object.values(ARMENIAN_CLUB_IDS).includes(legacyId)) return null;
+
+  const { env } = await import("cloudflare:workers");
+  const db = (env as unknown as { DB?: D1Database }).DB;
+  const cacheKey = `espn:twin:${legacyId}`;
+  if (db) {
+    try {
+      await db.prepare(`CREATE TABLE IF NOT EXISTS api_cache (cache_key TEXT PRIMARY KEY,payload TEXT NOT NULL DEFAULT '[]',saved_at INTEGER NOT NULL DEFAULT 0,retry_after INTEGER NOT NULL DEFAULT 0)`).run();
+      const row = await db.prepare("SELECT payload,saved_at AS savedAt FROM api_cache WHERE cache_key=?").bind(cacheKey).first<{ payload: string; savedAt: number }>();
+      if (row?.savedAt) {
+        const age = Date.now() - row.savedAt;
+        const ttl = row.payload ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+        if (age < ttl) return row.payload || null;
+      }
+    } catch { /* the table may not exist yet on a cold worker */ }
+  }
+
+  let url: string | null = null;
+  try {
+    const known = await knownTeam(legacyId);
+    if (known?.name) {
+      const { findEspnTeamByName, espnKey } = await import("./espn");
+      const team = await findEspnTeamByName(known.name);
+      url = team ? `/team/${espnKey(team.id)}` : null;
+    }
+  } catch { /* remembered as a miss, and asked again tomorrow */ }
+
+  if (db) {
+    try {
+      await db.prepare(`INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(?,?,?,0) ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0`).bind(cacheKey, url ?? "", Date.now()).run();
+    } catch { /* not being able to remember is not a reason to fail */ }
+  }
+  return url;
+}

@@ -1673,7 +1673,11 @@ jobs:
               const keys = Object.keys(r.json ?? {}).slice(0, 10).join(",");
               console.log(`  ${url.replace(WEB, "web").replace(SITE, "site")}: HTTP ${r.status}, keys ${keys || "(none)"}`);
             }
-            for (const s of ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1", "ksa.1", "usa.1"]) {
+            // The three European competitions are here because the site
+            // now offers a table and a scoring chart for them, and a
+            // knockout round has no table at all - so what ESPN answers
+            // today is the thing to look at rather than assume.
+            for (const s of ["uefa.champions", "uefa.europa", "uefa.europa.conf", "eng.1", "esp.1", "ita.1", "ger.1", "fra.1", "ksa.1", "usa.1"]) {
               const r = await get(`${WEB}/apis/v2/sports/soccer/${s}/standings`);
               const flat = r.json?.standings?.entries?.length ?? 0;
               const grouped = (r.json?.children ?? []).reduce((n, c) => n + (c?.standings?.entries?.length ?? 0), 0);
