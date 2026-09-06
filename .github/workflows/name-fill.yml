@@ -18,6 +18,20 @@
 name: Name fill
 
 on:
+  # Every morning, three requests' worth.
+  #
+  # MEASURED, in Google's own words: the free tier allows twenty requests
+  # a day. Seventeen of those are the articles, at one an hour inside the
+  # 10:00-03:00 window, and that is what this site is for. Three are
+  # enough for three hundred names at a hundred a request, so the four
+  # thousand the table still lacks are covered in a fortnight without an
+  # article ever being lost to a name.
+  #
+  # 07:30 UTC because Google's day turns over at midnight Pacific: this
+  # asks just after the reset, when the allowance is whole, and leaves
+  # the rest of it to the pipeline.
+  schedule:
+    - cron: "30 7 * * *"
   workflow_dispatch:
     inputs:
       league:
@@ -34,24 +48,62 @@ on:
         type: choice
         options: ['no', 'yes']
         default: 'no'
+      model:
+        description: 'Which model to ask (a lite model has its own, larger free allowance)'
+        required: false
+        default: 'gemini-3.6-flash'
 
 jobs:
   fill:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     defaults:
       run:
         working-directory: aisport-am
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      # Yesterday's names, before today's are asked for.
+      #
+      # A scheduled run checks out the default branch, and if it wrote
+      # from there every morning it would start from a table without the
+      # previous mornings in it: three hundred names asked for again, and
+      # the file refusing to compile on the duplicate keys it would then
+      # hold. So the run continues the branch it has been building, and
+      # only starts from main when there is no branch yet.
+      - name: Continue the names branch if there is one
+        if: ${{ github.event_name == 'schedule' }}
+        run: |
+          if git ls-remote --exit-code --heads origin claude/names >/dev/null 2>&1; then
+            git fetch origin claude/names
+            git checkout -B claude/names origin/claude/names
+            git merge --no-edit origin/${{ github.event.repository.default_branch }} || {
+              echo "the names branch has diverged from main; leaving it alone"
+              exit 1
+            }
+          else
+            git checkout -B claude/names
+          fi
       - uses: actions/setup-node@v4
         with: { node-version: '22' }
       - run: npm ci
       - name: Ask for the names and check every answer
         env:
           ONLY: ${{ github.event.inputs.league || 'all' }}
-          LIMIT: ${{ github.event.inputs.limit || '400' }}
+          LIMIT: ${{ github.event_name == 'schedule' && '300' || github.event.inputs.limit || '400' }}
+          # Three on the schedule, sixty by hand. The articles have the
+          # rest of the day's twenty.
+          MAX_REQUESTS: ${{ github.event_name == 'schedule' && '3' || '60' }}
+          # The articles are written by gemini-3.6-flash and must stay
+          # there: the comment in content-generation.ts says why, and it
+          # names the day a cheaper model returned an opera review instead
+          # of a footballer. Transliterating a name is mechanical and every
+          # answer here is checked to be Armenian script and to be a name
+          # that was asked for, so a lite model is safe for this and only
+          # this - and its free allowance is its own, which is the point.
+          MODEL: ${{ github.event.inputs.model || 'gemini-3.6-flash' }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
@@ -60,6 +112,7 @@ jobs:
           import { espnTeams, espnSquad } from "./lib/espn.ts";
 
           const KEY = process.env.GEMINI_API_KEY || "";
+          const MODEL = process.env.MODEL || "gemini-3.6-flash";
           if (!KEY) { console.log("no GEMINI_API_KEY"); process.exit(1); }
           const SLUGS = ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1", "usa.1", "ksa.1"];
           const only = process.env.ONLY && process.env.ONLY !== "all"
@@ -129,7 +182,7 @@ jobs:
           }
 
           const wanted = [...missing.entries()].slice(0, limit);
-          console.log(`${missing.size} footballers the table does not name; asking for ${wanted.length}`);
+          console.log(`${missing.size} footballers the table does not name; asking ${MODEL} for ${wanted.length}`);
 
           const SYSTEM = [
             "You transliterate footballers' names into Armenian for an Armenian football site.",
@@ -160,7 +213,7 @@ jobs:
           // that Google began refusing, and a refused article is an
           // article the site does not publish. The names are a
           // convenience; the articles are the site.
-          const MAX_REQUESTS = 60;
+          const MAX_REQUESTS = Number(process.env.MAX_REQUESTS) || 60;
           const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
           const armenianOnly = /^[Ա-֏\s'’.\-]+$/;
           const accepted: [string, string][] = [];
@@ -178,7 +231,7 @@ jobs:
               asked++;
               try {
               const response = await fetch(
-                "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" + encodeURIComponent(KEY),
+                `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=` + encodeURIComponent(KEY),
                 {
                   method: "POST",
                   // MEASURED the hard way: a run sat on one batch for an
@@ -212,6 +265,19 @@ jobs:
                 console.log(`  http ${response.status}: ${(await response.text()).replace(/\s+/g, " ").slice(0, 400)}`);
                 await wait(20000);
                 continue;
+              }
+              if (response.status === 404) {
+                // The name was wrong, and guessing a second one costs
+                // another run. Google will say which it has.
+                console.log(`  no model called ${MODEL}. What this key can reach:`);
+                const list = await fetch("https://generativelanguage.googleapis.com/v1beta/models?key=" + encodeURIComponent(KEY));
+                const models = (await list.json() as { models?: { name?: string; supportedGenerationMethods?: string[] }[] }).models ?? [];
+                for (const m of models) {
+                  if (!m.name?.includes("flash")) continue;
+                  if (!m.supportedGenerationMethods?.includes("generateContent")) continue;
+                  console.log(`    ${m.name.replace("models/", "")}`);
+                }
+                break;
               }
               if (!response.ok) { console.log(`  http ${response.status}: ${(await response.text()).slice(0, 300)}`); break; }
               const data = await response.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
@@ -278,7 +344,13 @@ jobs:
           rm -f test-output.txt
 
       - name: Commit them
-        if: ${{ github.event.inputs.apply == 'yes' }}
+        if: ${{ github.event_name == 'schedule' || github.event.inputs.apply == 'yes' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Never the branch the schedule runs on. A scheduled run's
+          # ref_name is the default branch, and a push to main here is a
+          # deploy - the names are meant to be read before they are live.
+          TARGET: ${{ github.event_name == 'schedule' && 'claude/names' || github.ref_name }}
         run: |
           cd ..
           git config user.name "github-actions[bot]"
@@ -293,4 +365,18 @@ jobs:
           that writes the articles, every answer checked to be Armenian
           script and to be a name that was asked for, and they go in the
           hand-written table where they can be corrected."
-          git push origin HEAD:${{ github.ref_name }}
+          git push origin HEAD:"$TARGET"
+          # And a pull request to read them in, opened once and then added
+          # to each morning. The table wins over everything the site
+          # computes, so nothing goes in unread.
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            open=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" \
+              "https://api.github.com/repos/${{ github.repository }}/pulls?head=${{ github.repository_owner }}:$TARGET&state=open" \
+              | grep -c '"number"' || true)
+            if [ "$open" = "0" ]; then
+              curl -sS -X POST -H "Authorization: Bearer $GH_TOKEN" \
+                "https://api.github.com/repos/${{ github.repository }}/pulls" \
+                -d "{\"title\":\"The names the rules cannot know\",\"head\":\"$TARGET\",\"base\":\"main\",\"body\":\"Three requests of the day's twenty, spent on the footballers the transliteration rules were spelling letter by letter without knowing what language the name is in. Every answer was checked to be Armenian script and to be a name that was asked for; the file typechecks and the name tests pass. The table wins over everything, so correct any of these by hand.\"}" >/dev/null
+              echo "opened a pull request on $TARGET"
+            fi
+          fi
