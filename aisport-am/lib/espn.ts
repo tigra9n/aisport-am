@@ -1312,21 +1312,67 @@ type EspnCoreStats = {
   };
 };
 
+// What a reader wants to know about a footballer, in the order a reader
+// wants it, and nothing else.
+//
+// The core API sends everything it holds - about forty fields, including
+// "timeStarted 28002", "timeEnded 69519", "didNotPlay 27" and a goal
+// difference for one man. Printed whole, that was twenty-odd columns
+// scrolling sideways under English headings, most of them meaningless.
+// So this is a list rather than a translation table: a field not on it does
+// not appear, which also means no English can leak onto the page.
+const CAREER_COLUMNS: [string, string][] = [
+  ["appearances", "Խաղ"],
+  ["starts", "Մեկնարկային"],
+  ["subIns", "Փոխարինմամբ"],
+  ["totalGoals", "Գոլ"],
+  ["goals", "Գոլ"],
+  ["goalAssists", "Ասիստ"],
+  ["assists", "Ասիստ"],
+  ["totalShots", "Հարված"],
+  ["shotsOnTarget", "Դարպասի ուղղությամբ"],
+  ["gameWinningGoals", "Հաղթական գոլ"],
+  ["penaltyKickGoals", "Պենալտիից գոլ"],
+  ["ownGoals", "Ինքնագոլ"],
+  ["totalPasses", "Փոխանցում"],
+  ["accuratePasses", "Ճշգրիտ փոխանցում"],
+  ["tacklesWon", "Խլում"],
+  ["interceptions", "Ընդհատում"],
+  ["effectiveClearance", "Մաքրում"],
+  ["foulsCommitted", "Խախտում"],
+  ["foulsSuffered", "Իր վրա խախտում"],
+  ["offsides", "Խաղից դուրս"],
+  ["yellowCards", "Դեղին քարտ"],
+  ["redCards", "Կարմիր քարտ"],
+  // A goalkeeper's, which the same response carries for the men who have
+  // them and omits for everyone else.
+  ["saves", "Փրկում"],
+  ["goalsConceded", "Բաց թողած գոլ"],
+  ["cleanSheet", "Չոր խաղ"],
+  ["penaltyKicksSaved", "Փրկած պենալտի"],
+];
+
 async function espnCareerTotal(athleteId: string): Promise<EspnPlayerSeason[]> {
   const data = await espnUrl<EspnCoreStats>(`https://sports.core.api.espn.com/v2/sports/soccer/athletes/${athleteId}/statistics`);
-  const categories = data?.splits?.categories ?? [];
-  const columns: { label: string; value: string; note: string | null }[] = [];
-  for (const category of categories) {
+  const byName = new Map<string, { value: string; note: string | null }>();
+  for (const category of data?.splits?.categories ?? []) {
     for (const stat of category.stats ?? []) {
-      const english = (stat.displayName ?? stat.name ?? "").toLowerCase();
-      const label = COLUMN_HY[english] ?? stat.displayName ?? stat.name ?? "";
+      const name = stat.name ?? "";
+      if (!name || byName.has(name)) continue;
       const value = stat.displayValue ?? (stat.value === undefined ? "" : String(stat.value));
-      // Zero is not worth a column: a defender with no goals should not
-      // have a goals column reading 0 next to his tackles.
-      if (!label || !value || value === "0" || value === "0.0") continue;
-      if (columns.some((existing) => existing.label === label)) continue;
-      columns.push({ label, value, note: stat.description ?? null });
+      byName.set(name, { value, note: stat.description ?? null });
     }
+  }
+
+  const columns: { label: string; value: string; note: string | null }[] = [];
+  for (const [name, label] of CAREER_COLUMNS) {
+    const stat = byName.get(name);
+    // Zero is not worth a column: a defender with no goals should not have
+    // a goals column reading nought beside his tackles. Nor should the same
+    // number appear twice because ESPN names it two ways.
+    if (!stat || !stat.value || stat.value === "0" || stat.value === "0.0") continue;
+    if (columns.some((existing) => existing.label === label)) continue;
+    columns.push({ label, value: stat.value, note: stat.note });
   }
   if (!columns.length) return [];
   return [{
@@ -1364,8 +1410,13 @@ export async function espnPlayer(athleteId: string): Promise<EspnPlayer | null> 
       const league = block.leagueSlug ? leaguesBySlug[block.leagueSlug] : undefined;
       const columns = (block.stats ?? [])
         .map((value, index) => {
-          const english = labels[index] ?? "";
-          return { label: COLUMN_HY[english.toLowerCase()] ?? english, value: String(value ?? ""), note: notes[index] ?? null };
+          const english = (labels[index] ?? "").toLowerCase();
+          // A column this file has no Armenian name for is dropped, not
+          // printed in English. It used to fall back to the provider's own
+          // heading, which put SHOTS BLOCKED and TIME STARTED across a page
+          // that is Armenian everywhere else - and a heading nobody can read
+          // is worth less than the space it takes.
+          return { label: COLUMN_HY[english] ?? "", value: String(value ?? ""), note: notes[index] ?? null };
         })
         .filter((column) => column.label && column.value !== "" && column.value !== "0");
       if (!columns.length) continue;
