@@ -1979,15 +1979,22 @@ jobs:
                   // reports its own parsing as the source's failure is worse
                   // than no probe. So: show the row, then read it.
                   console.log(`  one row verbatim: ${JSON.stringify(rows[0])}`);
-                  const flat = (o, d = 0) => d > 3 || !o || typeof o !== "object" ? [] : Object.entries(o).flatMap(([k, v]) => (v && typeof v === "object" ? flat(v, d + 1) : [[k, v]]));
+                  // The shape, from the row printed above: home and away
+                  // are separate blocks and there is no total anywhere. A
+                  // club's season is the two added together, and the points
+                  // are three a win and one a draw - the provider states
+                  // neither. Reading home.games as the matches played is
+                  // what produced "Noah 18 pts, 4 played" and a table that
+                  // disagreed with itself.
                   const read = (row) => {
-                    const kv = flat(row);
-                    const pick = (re) => { const hit = kv.find(([k]) => re.test(k)); return hit ? hit[1] : undefined; };
+                    const h = row.home ?? {}, a = row.away ?? {};
+                    const n = (x) => Number(x ?? 0) || 0;
+                    const wins = n(h.wins) + n(a.wins), draws = n(h.draws) + n(a.draws);
                     return {
-                      team: String(pick(/^name$|team.*name|^displayName$/i) ?? ""),
-                      pld: Number(pick(/played|^games$|matches/i)),
-                      pts: Number(pick(/points|^pts$/i)),
-                      gd: Number(pick(/goalsDiff|goal.*difference|^gd$/i)),
+                      team: String(row.team?.name ?? row.name ?? ""),
+                      pld: n(h.games) + n(a.games),
+                      pts: Number.isFinite(Number(row.points)) && row.points !== null && row.points !== undefined ? Number(row.points) : wins * 3 + draws,
+                      gd: (n(h.scoredGoals) + n(a.scoredGoals)) - (n(h.receivedGoals) + n(a.receivedGoals)),
                     };
                   };
                   const parsed = rows.map(read).filter((r) => r.team);
