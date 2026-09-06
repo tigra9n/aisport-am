@@ -1,21 +1,27 @@
-# Squad photographs, fetched here rather than by the Worker.
+# Squad photographs, collected here and written into the table the Worker
+# reads.
 #
-# MEASURED on 6 September, from inside the deployed Worker:
+# MEASURED on 6 September, every url fetched rather than trusted:
 #
-#   getSquad(espn-359) faces   2 of 24 have a photo (ESPN alone gives 2)
-#   thesportsdb                HTTP 429
+#   API-Football   Arsenal 36 of 36, Pyunik 29 of 29 - every footballer
+#   TheSportsDB    ten a club, which is the free key's cap, not the data's
+#   ESPN           Chelsea 3 of 30, Real Madrid 1 of 32, and its CDN says
+#                  the same when asked for the address directly
+#   Highlightly    logo:null for Saka and Salah, and no squad endpoint
 #
-# withFaces() had added nothing at all. ESPN carries a headshot for about
-# one footballer in twelve, TheSportsDB carries most of the rest, and
-# TheSportsDB answers a Cloudflare Worker with 429 - Cloudflare's own error
-# 1015 - roughly every other request. The same address answers a GitHub
-# runner with 200 every time. So the photographs are collected here, once a
-# week, and written into the D1 table the Worker already reads; the Worker
-# stops asking for them at all and only looks them up.
+# So this asks API-Football, whose key this repository already holds. One
+# request returns a whole squad with a photograph each, and the map is kept
+# for a month, so a club costs about one request a month.
 #
-# 140 clubs, two requests each, spaced so the free key is not the thing that
-# breaks. About ten minutes, and a club's photographs are then good for a
-# month.
+# It still has to be collected here rather than in the Worker: a hundred and
+# fifty requests is far past what a Worker may make in one render, and the
+# free plan is a hundred a day, so a full run is spread over two days or
+# taken a league at a time.
+#
+# The clubs are ESPN's, because the site's pages are: the row is stored
+# under the ESPN club number, and API-Football is found by matching the
+# club's name. A club whose name does not match keeps whatever faces ESPN
+# gave it rather than being given somebody else's squad.
 name: Squad photos
 
 on:
@@ -42,92 +48,85 @@ jobs:
       - name: Collect the photographs and write them as SQL
         env:
           ONLY: ${{ github.event.inputs.league || 'all' }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
         run: |
           cat > photos.mjs <<'JS'
           import { writeFileSync } from "node:fs";
+          const KEY = process.env.API_FOOTBALL_KEY || "";
+          if (!KEY) { console.log("no API_FOOTBALL_KEY"); process.exit(1); }
 
           const UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
           const ESPN = "https://site.web.api.espn.com/apis/site/v2/sports/soccer";
-          const SDB = "https://www.thesportsdb.com/api/v1/json/3";
-          const SLUGS = ["eng.1", "esp.1", "ita.1", "ger.1", "fra.1", "usa.1", "ksa.1"];
-          const only = process.env.ONLY && process.env.ONLY !== "all" ? [process.env.ONLY] : SLUGS;
+          const AF = "https://v3.football.api-sports.io";
+
+          // ESPN slug against API-Football league number, and the season
+          // they are both in.
+          const LEAGUES = [
+            ["eng.1", 39], ["esp.1", 140], ["ita.1", 135], ["ger.1", 78],
+            ["fra.1", 61], ["usa.1", 253], ["ksa.1", 307],
+          ];
+          const SEASON = new Date().getUTCMonth() + 1 >= 7 ? new Date().getUTCFullYear() : new Date().getUTCFullYear() - 1;
+          const only = process.env.ONLY && process.env.ONLY !== "all"
+            ? LEAGUES.filter(([slug]) => slug === process.env.ONLY) : LEAGUES;
 
           const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-
-          // MEASURED on the first run: at 1.2 seconds between calls - fifty a
-          // minute - the key started refusing in bursts, and four or five
-          // clubs in a row lost all three attempts. Manchester United, Real
-          // Madrid and Paris Saint-Germain were among them, and the log said
-          // "not in TheSportsDB", which was simply untrue. The free key
-          // allows about thirty a minute, so 2.5 seconds it is: slower than
-          // the run needs to be, and it finishes.
-          const SPACING = 2500;
-
-          // A refusal and an absence are different things and the log has to
-          // say which. The first run reported thirty-one clubs missing from a
-          // database that has all of them.
-          const RATE_LIMITED = Symbol("rate limited");
-          async function get(url) {
-            let refused = false;
-            for (let attempt = 0; attempt < 4; attempt++) {
+          async function espn(url) {
+            try {
+              const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(20000) });
+              return r.ok ? await r.json() : null;
+            } catch { return null; }
+          }
+          async function af(path) {
+            for (let attempt = 0; attempt < 3; attempt++) {
               try {
-                const res = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: AbortSignal.timeout(20000) });
-                if (res.status === 429) { refused = true; await wait(10000 * (attempt + 1)); continue; }
-                if (!res.ok) return null;
-                return await res.json();
-              } catch { await wait(3000); }
+                const r = await fetch(`${AF}${path}`, { headers: { "x-apisports-key": KEY, Accept: "application/json" }, signal: AbortSignal.timeout(20000) });
+                if (r.status === 429) { await wait(5000 * (attempt + 1)); continue; }
+                if (!r.ok) return null;
+                return await r.json();
+              } catch { await wait(2000); }
             }
-            return refused ? RATE_LIMITED : null;
+            return null;
           }
 
-          // The same normalisation the site uses, and it must stay the same:
-          // lower case, accents removed, punctuation dropped, word breaks
-          // kept. pickPhoto in lib/espn.ts compares against these keys word
-          // by word, so joining them would silently stop matching.
+          // The same normalisation the site uses, and it has to stay the
+          // same: pickPhoto in lib/espn.ts compares these keys word by word,
+          // so joining them would silently stop matching.
           const key = (name) => name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z ]/g, " ").trim().replace(/\s+/g, " ");
+          // A club is matched on its name with the noise removed. Neither
+          // provider spells "1. FC Union Berlin" the same way twice.
+          const clubKey = (name) => key(name)
+            .replace(/\b(fc|cf|sc|ac|afc|ss|as|rc|cd|ud|sv|vfb|vfl|tsg|fk|club|calcio|futbol|football)\b/g, " ")
+            .replace(/\s+/g, " ").trim();
+
           const quote = (text) => "'" + String(text).replace(/'/g, "''") + "'";
-
           const statements = [];
-          let clubs = 0, withPhotos = 0, faces = 0, refused = 0;
+          let clubs = 0, matched = 0, faces = 0, unmatched = [];
 
-          for (const slug of only) {
-            const teams = await get(`${ESPN}/${slug}/teams`);
-            const list = (teams?.sports?.[0]?.leagues?.[0]?.teams ?? []).map((t) => t.team).filter((t) => t?.id && t?.displayName);
-            console.log(`${slug}: ${list.length} clubs`);
+          for (const [slug, leagueId] of only) {
+            const espnTeams = (await espn(`${ESPN}/${slug}/teams`))?.sports?.[0]?.leagues?.[0]?.teams ?? [];
+            const list = espnTeams.map((t) => t.team).filter((t) => t?.id && t?.displayName);
+            const afTeams = (await af(`/teams?league=${leagueId}&season=${SEASON}`))?.response ?? [];
+            const byName = new Map(afTeams.map((entry) => [clubKey(entry.team?.name ?? ""), entry.team?.id]).filter(([k, v]) => k && v));
+            console.log(`${slug}: ${list.length} clubs at ESPN, ${afTeams.length} at API-Football`);
+
             for (const club of list) {
               clubs++;
-              await wait(SPACING);
-              const found = await get(`${SDB}/searchteams.php?t=${encodeURIComponent(club.displayName)}`);
-              if (found === RATE_LIMITED) { refused++; console.log(`  ${club.displayName}: refused, not asked again this run`); continue; }
-              const teamId = found?.teams?.[0]?.idTeam;
-              if (!teamId) { console.log(`  ${club.displayName}: not in TheSportsDB`); continue; }
-              await wait(SPACING);
-              const squad = await get(`${SDB}/lookup_all_players.php?id=${teamId}`);
-              if (squad === RATE_LIMITED) { refused++; console.log(`  ${club.displayName}: squad refused`); continue; }
-              // Two maps, so a squad page can read as one photo session.
-              // strCutout is a head-and-shoulders on a transparent ground
-              // and sits beside ESPN's headshots; strThumb is a photograph
-              // taken during a match and does not. The page fills from cut
-              // first and only reaches into alt for a footballer no cutout
-              // exists for. Collapsing them into one field gave squads
-              // where some men were portraits and their team-mates were
-              // caught mid-stride against a crowd.
+              const afId = byName.get(clubKey(club.displayName));
+              if (!afId) { unmatched.push(`${slug} ${club.displayName}`); continue; }
+              matched++;
+              await wait(400);
+              const squad = (await af(`/players/squads?team=${afId}`))?.response?.[0]?.players ?? [];
+              // Every photograph here is a head-and-shoulders on the same
+              // ground, which is the whole point: a squad page reads as one
+              // photo session. So they all go in cut, and alt stays empty.
               const photos = { cut: {}, alt: {} };
-              for (const player of squad?.player ?? []) {
-                if (!player.strPlayer) continue;
-                const k = key(player.strPlayer);
-                if (player.strCutout) photos.cut[k] = player.strCutout;
-                else if (player.strThumb || player.strRender) photos.alt[k] = player.strThumb || player.strRender;
+              for (const player of squad) {
+                if (player.name && player.photo) photos.cut[key(player.name)] = player.photo;
               }
-              const cut = Object.keys(photos.cut).length;
-              const alt = Object.keys(photos.alt).length;
-              const n = cut + alt;
-              console.log(`  ${String(club.displayName).padEnd(28)} ${cut} portrait(s), ${alt} match photo(s)`);
+              const n = Object.keys(photos.cut).length;
+              console.log(`  ${String(club.displayName).padEnd(28)} ${n} of ${squad.length}`);
               if (!n) continue;
-              withPhotos++; faces += cut;
-              // saved_at is now, and the Worker keeps a club's map for
-              // thirty days - so a weekly run is three refreshes inside
-              // every window and a missed run costs nothing.
+              faces += n;
               statements.push(
                 `INSERT INTO api_cache(cache_key,payload,saved_at,retry_after) VALUES(${quote(`sportsdb:photos:v2:${club.id}`)},${quote(JSON.stringify(photos))},${Date.now()},0) ` +
                 `ON CONFLICT(cache_key) DO UPDATE SET payload=excluded.payload,saved_at=excluded.saved_at,retry_after=0;`);
@@ -135,12 +134,12 @@ jobs:
           }
 
           console.log("");
-          console.log(`${clubs} clubs asked, ${withPhotos} answered, ${refused} refused, ${faces} portraits in total`);
-          // The free key hands back at most ten players per club - every
-          // club that answered the first run returned ten or fewer, never
-          // eleven. So a twenty-five man squad gets about ten faces from
-          // here and two or three from ESPN, and the rest keep their letter.
-          // That is the ceiling of the free tier, not a fault in this.
+          console.log(`${clubs} clubs, ${matched} matched to API-Football, ${faces} photographs`);
+          if (unmatched.length) console.log(`no match: ${unmatched.join(", ")}`);
+          const status = await af("/status");
+          const req = status?.response?.requests;
+          if (req) console.log(`requests today: ${req.current} of ${req.limit_day}`);
+
           writeFileSync("photos.sql", statements.join("\n") + "\n");
           if (!statements.length) { console.log("nothing to write"); process.exit(1); }
           JS

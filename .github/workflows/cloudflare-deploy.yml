@@ -51,6 +51,7 @@ jobs:
           # CONTENT_MODEL_PROVIDER=gemini, Claude stays primary and Gemini
           # is used solely for that billing-failure fallback.
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          HIGHLIGHTLY_KEY: ${{ secrets.HIGHLIGHTLY_KEY }}
           CLOUDFLARE_PURGE_TOKEN: ${{ secrets.CLOUDFLARE_PURGE_TOKEN }}
           # Absent until the page token is issued; the deploy script skips
           # any secret whose value is empty, so this changes nothing until
