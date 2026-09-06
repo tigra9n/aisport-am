@@ -1,0 +1,72 @@
+# Change the APITube key without it passing through anyone's hands.
+#
+# WHY THIS EXISTS. The APITube key is not a worker secret; it lives
+# INSIDE the sources row's feed_url, because that is how that provider is
+# addressed. The key was shown in a screenshot and has to be replaced,
+# and the two obvious ways of replacing it are both wrong:
+#
+#   a workflow_dispatch input   inputs are displayed in the run's own
+#                               page and stored with the run - a key
+#                               typed there is published, not rotated
+#   pasting it into a chat      the same, with a longer memory
+#
+# So the new address goes into a GitHub repository secret, where it is
+# masked in every log, and this reads it from there and writes it into
+# D1. Nothing prints it, and the run's output says only how many rows
+# changed and which host they now point at.
+name: Rotate the APITube key
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type the word replace to write the new address into D1"
+        required: true
+        default: ""
+
+jobs:
+  rotate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+
+      - name: Replace the row, and say nothing about the key
+        if: ${{ inputs.confirm == 'replace' }}
+        env:
+          APITUBE_FEED_URL: ${{ secrets.APITUBE_FEED_URL }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$APITUBE_FEED_URL" ]; then
+            echo "no APITUBE_FEED_URL secret. Add it first: Settings -> Secrets and variables -> Actions -> New repository secret."
+            exit 1
+          fi
+          case "$APITUBE_FEED_URL" in
+            https://*apitube*) ;;
+            *) echo "that secret does not look like an APITube address; not writing it"; exit 1 ;;
+          esac
+          npm install --no-save wrangler@4.92.0 >/dev/null 2>&1 || true
+
+          # Written through a file rather than on the command line: an
+          # argument is visible in the process list of a shared runner,
+          # and the point of all this is that the key is seen by nothing.
+          printf 'UPDATE sources SET feed_url = %s WHERE feed_url LIKE %s;\n' \
+            "'$(printf %s "$APITUBE_FEED_URL" | sed "s/'/''/g")'" "'%apitube%'" > rotate.sql
+          npx wrangler d1 execute aisport-db --remote --file=rotate.sql 2>&1 | grep -vi apitube | tail -8
+          rm -f rotate.sql
+
+          # And the proof, without the proof being the key: the host only.
+          npx wrangler d1 execute aisport-db --remote --json \
+            --command "SELECT name, enabled, substr(feed_url, 1, instr(feed_url || '?', '?') - 1) AS address FROM sources WHERE feed_url LIKE '%apitube%'" \
+            2>/dev/null | tail -20
+
+      - name: Say what to do instead
+        if: ${{ inputs.confirm != 'replace' }}
+        run: |
+          echo "Nothing was written. To rotate the key:"
+          echo "  1. Get a new key at apitube.io and revoke the old one there."
+          echo "  2. Build the whole feed address with the new key in it."
+          echo "  3. Put it in the repository secret APITUBE_FEED_URL."
+          echo "  4. Run this workflow again with confirm = replace."
