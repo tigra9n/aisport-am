@@ -26,9 +26,9 @@ const playerNames: Record<string, string> = {
   "ollie watkins": "Օլլի Ուոթկինս", "phil foden": "Ֆիլ Ֆոդեն",
   "declan rice": "Դեկլան Ռայս", "martin odegaard": "Մարտին Էդեգոր",
   "anthony elanga": "Էնթոնի Էլանգա", "rodri": "Ռոդրի",
-  "virgil van dijk": "Վիրխիլ վան Դեյք", "william saliba": "Ուիլյամ Սալիբա",
+  "virgil van dijk": "Վիրջիլ վան Դեյք", "william saliba": "Ուիլյամ Սալիբա",
   "kai havertz": "Կայ Հավերց", "darwin nunez": "Դարվին Նունյես",
-  "dominik szoboszlai": "Դոմինիկ Սոբոսլաի", "nicolas jackson": "Նիկոլա Ժակսոն",
+  "dominik szoboszlai": "Դոմինիկ Սոբոսլաի", "nicolas jackson": "Նիկոլա Ջեքսոն",
   "jarrod bowen": "Ջարրոդ Բոուեն", "yoane wissa": "Յոան Վիսսա",
   "jean-philippe mateta": "Ժան-Ֆիլիպ Մատետա", "chris wood": "Քրիս Վուդ",
   // La Liga
@@ -111,6 +111,52 @@ const playerNames: Record<string, string> = {
   "ruben dias": "Ռուբեն Դիաշ", "trent alexander-arnold": "Թրենթ Ալեքսանդր-Առնոլդ",
   "antonio rudiger": "Անտոնիո Ռյուդիգեր",
   "david raya": "Դեյվիդ Ռայա", "andre onana": "Անդրե Օնանա",
+
+  // Added 6 September, after running a Premier League squad list through the
+  // transliterator and reading what came out: Ջամես, Ջոնես, Վհիտե, Պոպե,
+  // Կեանե, Ֆերնանդեզ. The rule spells a name letter by letter, and English
+  // is the language that punishes that hardest - a silent final e, a w that
+  // is a vowel, an "ea" that is not two sounds. None of that can be guessed
+  // without knowing the language, and the roster does not say. So the men
+  // who actually appear on these pages are spelled out.
+  //
+  // Spanish and Portuguese surnames in -ez end in ս, not զ, which the table
+  // already did by hand for Խիմենես and Ալվարես and now does for the rest.
+  "reece james": "Ռիս Ջեյմս", "sean longstaff": "Շոն Լոնգսթաֆ",
+  "nick pope": "Նիկ Փոուփ", "michael keane": "Մայքլ Քին",
+  "emile smith rowe": "Էմիլ Սմիթ Ռոու", "adam wharton": "Ադամ Ուորթոն",
+  "james tarkowski": "Ջեյմս Տարկովսկի", "jarrad branthwaite": "Ջարադ Բրանթուեյթ",
+  "ben white": "Բեն Ուայթ", "curtis jones": "Կերտիս Ջոնս",
+  "andrew robertson": "Էնդրյու Ռոբերտսոն", "rico lewis": "Ռիկո Լյուիս",
+  "dominic calvert-lewin": "Դոմինիկ Կալվերտ-Լյուին", "jacob murphy": "Ջեյքոբ Մերֆի",
+  "dan burn": "Դեն Բըրն", "harvey elliott": "Հարվի Էլիոթ",
+  "trevoh chalobah": "Տրեվո Չալոբա", "wesley fofana": "Ուեսլի Ֆոֆանա",
+  "levi colwill": "Լևի Կոլուիլ", "marc guehi": "Մարկ Գեհի",
+  "tyrick mitchell": "Թայրիկ Միչել", "jordan pickford": "Ջորդան Փիքֆորդ",
+  "kobbie mainoo": "Քոբի Մեյնու", "anthony gordon": "Էնթոնի Գորդոն",
+  "bruno guimaraes": "Բրունո Գիմարաես", "joelinton": "Ժոելինտոն",
+  "micky van de ven": "Միկի վան դե Վեն", "destiny udogie": "Դեստինի Ուդոջի",
+  "guglielmo vicario": "Գուլյելմո Վիկարիո", "yves bissouma": "Իվ Բիսումա",
+  "pedro porro": "Պեդրո Պոռո", "cristian romero": "Կրիստիան Ռոմերո",
+  "savinho": "Սավինյո", "ederson moraes": "Էդերսոն Մորայես",
+  "nathan ake": "Նաթան Աքե", "jeremy doku": "Ժերեմի Դոկու",
+  "bernardo silva": "Բերնարդո Սիլվա", "phil jones": "Ֆիլ Ջոնս",
+  "jarell quansah": "Ջարել Քուանսա", "conor bradley": "Կոնոր Բրեդլի",
+  "noni madueke": "Նոնի Մադուեկե", "christopher nkunku": "Քրիստոֆեր Նկունկու",
+  "gabriel martinelli": "Գաբրիել Մարտինելի", "leandro trossard": "Լեանդրո Տրոսար",
+  "oleksandr zinchenko": "Օլեքսանդր Զինչենկո", "kieran tierney": "Կիերան Տիրնի",
+  "ibrahima konate": "Իբրահիմա Կոնատե", "wataru endo": "Վատարու Էնդո",
+  "ryan gravenberch": "Ռայան Գրավենբերխ", "jeremie frimpong": "Ջերեմի Ֆրիմպոնգ",
+  "rodrigo bentancur": "Ռոդրիգո Բենտանկուր", "pape matar sarr": "Պապ Մատար Սառ",
+  "marcus rashford": "Մարկուս Ռաշֆորդ", "manuel akanji": "Մանուել Ականջի",
+  "stefan ortega": "Շտեֆան Օրտեգա", "malo gusto": "Մալո Գյուստո",
+  "axel disasi": "Աքսել Դիզասի", "takehiro tomiyasu": "Տակեհիրո Տոմիյասու",
+  "jakub kiwior": "Յակուբ Կիվիոր", "sven botman": "Սվեն Բոտման",
+  // The -ez surnames, and the men the table was renaming
+  "emiliano martinez": "Էմիլիանո Մարտինես", "enzo fernandez": "Էնզո Ֆերնանդես",
+  "robert sanchez": "Ռոբերտ Սանչես", "moises caicedo": "Մոիսես Կաիսեդո",
+  "marc cucurella": "Մարկ Կուկուրելյա", "pedro neto": "Պեդրու Նետու",
+  "gabriel magalhaes": "Գաբրիել Մագալյաես", "gabriel": "Գաբրիել",
   // Armenians
   "henrikh mkhitaryan": "Հենրիխ Մխիթարյան", "eduard spertsyan": "Էդուարդ Սպերցյան",
   "grant-leon ranos": "Գրանտ-Լեոն Ռանոս", "tigran barseghyan": "Տիգրան Բարսեղյան",
@@ -137,10 +183,29 @@ export function armenianPlayerName(name: string | null | undefined): string {
   // API-Football often abbreviates a first name ("B. Fernandes", "E.
   // Haaland"). Match on the surname when it is unambiguous, so the table
   // and the articles agree on the spelling.
-  const surname = key.split(" ").pop() ?? "";
-  if (surname.length > 3) {
-    const matches = Object.entries(playerNames).filter(([full]) => full.split(" ").pop() === surname);
-    if (matches.length === 1) return matches[0][1];
+  //
+  // ONLY when the first name really is abbreviated, and only when its
+  // initial matches. This ran on full names too, and the table holds one
+  // Martinez - Lautaro. So Emiliano Martinez, Aston Villa's goalkeeper,
+  // came out of it as "Լաուտարո Մարտինես": not an awkward spelling but a
+  // different footballer, printed as fact on a squad page. Every surname
+  // the table carries exactly once did the same to every other man who
+  // shares it.
+  //
+  // A name that gets this far with its own first name spelled out is not a
+  // name the table knows. It goes to the transliterator, which may spell it
+  // roughly but will not turn him into somebody else.
+  const parts = key.split(" ");
+  const initial = /^([a-z])\.?$/.exec(parts[0] ?? "");
+  if (initial && parts.length > 1) {
+    const surname = parts[parts.length - 1];
+    if (surname.length > 3) {
+      const matches = Object.entries(playerNames).filter(([full]) => {
+        const other = full.split(" ");
+        return other[other.length - 1] === surname && other[0]?.[0] === initial[1];
+      });
+      if (matches.length === 1) return matches[0][1];
+    }
   }
 
   return transliterateName(name) ?? name;
