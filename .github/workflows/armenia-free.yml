@@ -190,19 +190,92 @@ jobs:
       # back. Events name only the men who did something; a lineup names
       # eleven and the bench. This asks that alone, in one request, and
       # prints it whole.
+      # Is the empty lineup this match's, this league's, or the plan's?
+      #
+      # MEASURED on 7 September: /lineups/1345873453 - Shirak 1:0
+      # Sardarapat, a match that had certainly been played, because its
+      # /events answer named eight things that happened in it - came back
+      # 283 bytes with formation "Unknown" and both initialLineup arrays
+      # empty. One match is not a finding. Three questions separate the
+      # three explanations, and only the third one closes the squads:
+      #
+      #   1. other finished Armenian matches - is it every Armenian match?
+      #   2. a finished match in a league everyone covers - does Highlightly
+      #      ever fill a lineup on the free plan, for anybody?
+      #   3. the match object itself - does /matches/{id} carry the names
+      #      that /lineups/{id} does not?
+      #
+      # If the big league's lineup is full and Armenia's is empty, the
+      # answer is coverage and no amount of asking will change it. If both
+      # are empty, it is the free plan, and the paid tier would be worth
+      # pricing.
       - name: Does a played match have its lineups?
         if: ${{ inputs.mode == 'lineups' }}
         env:
           HIGHLIGHTLY_KEY: ${{ secrets.HIGHLIGHTLY_KEY }}
-          MATCH: ${{ inputs.date }}
         run: |
-          id="${MATCH:-1345873453}"
-          out=$(curl -sS --max-time 25 -H "x-rapidapi-key: $HIGHLIGHTLY_KEY" -H "Accept: application/json"             "https://sports.highlightly.net/football/lineups/$id" || true)
-          echo "bytes: ${#out}"
-          echo "starters named: $(grep -o '"initialLineup"' <<<"$out" | wc -l) blocks"
-          echo "--- whole answer, first 3000 characters:"
-          head -c 3000 <<<"$out"
+          hl() { curl -sS --max-time 25 -H "x-rapidapi-key: $HIGHLIGHTLY_KEY" -H "Accept: application/json" "https://sports.highlightly.net/football$1" || true; }
+          rows() { jq -c '(.data // .)[]?' 2>/dev/null; }
+          # A lineup answer read the same way every time it is printed, so
+          # "empty" always means the same thing: how many men each side named.
+          verdict() {
+            local body="$1"
+            echo "      bytes ${#body}  home named $(jq -r '(.homeTeam.initialLineup // [])|length' <<<"$body" 2>/dev/null)  away named $(jq -r '(.awayTeam.initialLineup // [])|length' <<<"$body" 2>/dev/null)  formation $(jq -r '.homeTeam.formation // "-"' <<<"$body" 2>/dev/null)"
+          }
+
+          echo "=== 1. finished Armenian matches, walking back from yesterday"
+          ids=""
+          for d in $(seq 1 14); do
+            day=$(date -u -d "-$d day" +%F)
+            body=$(hl "/matches?leagueId=291826&date=$day")
+            got=$(rows <<<"$body" | jq -r 'select((.state.description // "") | test("fin|ended|ft";"i")) | "\(.id)\t\(.homeTeam.name) - \(.awayTeam.name)"' 2>/dev/null)
+            [ -z "$got" ] && continue
+            echo "  $day"
+            echo "$got" | sed 's/^/    /'
+            ids="$ids $(awk -F'\t' '{print $1}' <<<"$got" | tr '\n' ' ')"
+            [ "$(wc -w <<<"$ids")" -ge 3 ] && break
+          done
+          echo "  --- their lineups:"
+          for id in $(tr ' ' '\n' <<<"$ids" | grep -v '^$' | head -3); do
+            echo "    match $id"
+            verdict "$(hl "/lineups/$id")"
+          done
+
           echo
+          echo "=== 2. the same question in a league nobody neglects"
+          big=$(hl "/leagues?leagueName=Premier%20League&limit=5")
+          echo "  leagues answered: $(head -c 400 <<<"$big")"
+          bigid=$(rows <<<"$big" | jq -r 'select((.country.name // .country.code // "") | test("Eng";"i")) | .id' 2>/dev/null | head -1)
+          [ -z "$bigid" ] && bigid=$(rows <<<"$big" | jq -r '.id' 2>/dev/null | head -1)
+          echo "  using league $bigid"
+          for d in $(seq 1 10); do
+            day=$(date -u -d "-$d day" +%F)
+            body=$(hl "/matches?leagueId=$bigid&date=$day")
+            got=$(rows <<<"$body" | jq -r 'select((.state.description // "") | test("fin|ended|ft";"i")) | "\(.id)\t\(.homeTeam.name) - \(.awayTeam.name)"' 2>/dev/null | head -1)
+            [ -z "$got" ] && continue
+            echo "  $day  $got"
+            bigmatch=$(cut -f1 <<<"$got")
+            break
+          done
+          if [ -n "${bigmatch:-}" ]; then
+            echo "  --- its lineup:"
+            answer=$(hl "/lineups/$bigmatch")
+            verdict "$answer"
+            echo "  --- first 600 characters, so the shape is visible when it is full:"
+            head -c 600 <<<"$answer"; echo
+          else
+            echo "  no finished match found in that league in ten days"
+          fi
+
+          echo
+          echo "=== 3. does the match object itself carry the names?"
+          first=$(tr ' ' '\n' <<<"$ids" | grep -v '^$' | head -1)
+          if [ -n "$first" ]; then
+            m=$(hl "/matches/$first")
+            echo "  bytes ${#m}"
+            echo "  keys: $(jq -r '[paths(scalars==null or true)|map(tostring)|join(".")]|map(split(".")[0])|unique|join(", ")' <<<"$m" 2>/dev/null | head -c 300)"
+            echo "  any lineup-shaped field: $(grep -o '\"\(lineup\|lineups\|initialLineup\|players\|squad\|substitutes\)\"' <<<"$m" | sort -u | tr '\n' ' ')"
+          fi
 
       - name: Does Highlightly fill a finished Armenian match?
         if: ${{ inputs.mode != 'site' && inputs.mode != 'sources' && inputs.mode != 'lineups' }}
