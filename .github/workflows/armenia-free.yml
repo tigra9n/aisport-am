@@ -324,7 +324,13 @@ jobs:
           echo "  statistics: bytes ${#st}"
 
       - name: Does Highlightly fill a finished Armenian match?
-        if: ${{ inputs.mode != 'site' && inputs.mode != 'sources' && inputs.mode != 'lineups' }}
+        # Named, not excluded. Every mode added since has had to be
+        # remembered here, and on 7 September one was not: a 'next' run
+        # worth seven requests fell through into this step, which spends
+        # about thirty, and the day's allowance was gone by 06:45 UTC with
+        # the live-lineup question still unasked. A default step that runs
+        # unless told otherwise will always be one edit behind.
+        if: ${{ inputs.mode == 'provider' || inputs.mode == '' }}
         env:
           HIGHLIGHTLY_KEY: ${{ secrets.HIGHLIGHTLY_KEY }}
           DAY: ${{ inputs.date }}
