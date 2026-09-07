@@ -1,4 +1,5 @@
 import { armenianPlayerName } from "./player-names-hy";
+import { armenianTeamName } from "./team-names-hy";
 import type { Squad } from "./squad-server";
 
 // The twelve Armenian squads, frozen into the repository.
@@ -48,7 +49,12 @@ export function frozenArmenianSquad(teamId: number | string): Squad | null {
   const frozen = ARMENIAN_SQUADS[id];
   if (!frozen?.players?.length) return null;
   return {
-    teamName: frozen.teamName,
+    // The club's name is translated here for the same reason the players'
+    // are. The freeze stores what API-Football sent - "Alashkert", "FC
+    // Noah" - and the live path has always run that through
+    // armenianTeamName; a fallback that printed the Latin spelling would
+    // announce itself as a fallback on a page that is otherwise Armenian.
+    teamName: armenianTeamName(frozen.teamName),
     teamLogo: frozen.teamLogo,
     players: frozen.players.map((p) => ({
       id: p.id,
