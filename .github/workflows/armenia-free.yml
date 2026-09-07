@@ -33,11 +33,11 @@ on:
   workflow_dispatch:
     inputs:
       date:
-        description: "Match day to read (YYYY-MM-DD). Empty = yesterday."
+        description: "Match day (YYYY-MM-DD), or a match id when mode is 'one'. Empty = yesterday."
         required: false
         default: ""
       mode:
-        description: "provider = ask Highlightly. site = read the deployed board. sources = look for another free provider."
+        description: "provider | site | sources | lineups | next | one (one reads a match id from the date box)"
         required: false
         default: "provider"
 
@@ -276,6 +276,52 @@ jobs:
             echo "  keys: $(jq -r '[paths(scalars==null or true)|map(tostring)|join(".")]|map(split(".")[0])|unique|join(", ")' <<<"$m" 2>/dev/null | head -c 300)"
             echo "  any lineup-shaped field: $(grep -o '\"\(lineup\|lineups\|initialLineup\|players\|squad\|substitutes\)\"' <<<"$m" | sort -u | tr '\n' ' ')"
           fi
+
+      # Does the lineup exist only while the match is being played?
+      #
+      # The finished-match answer was empty three times over, and the same
+      # question in the Premier League came back with a formation and a
+      # named bench - so the free plan does serve lineups, and it does not
+      # wipe them when the whistle goes. That is already most of an answer.
+      # But "most" is not "measured": nobody has asked Highlightly for an
+      # Armenian lineup while an Armenian match was actually on the pitch.
+      # Round two came closest and missed by eleven minutes.
+      #
+      # So: mode 'next' prints the coming Armenian fixtures with their
+      # kick-off times, and mode 'one' asks everything about a single match
+      # id given in the date box. Run 'one' in the second half and the
+      # question is closed either way.
+      - name: When is the next Armenian match?
+        if: ${{ inputs.mode == 'next' }}
+        env:
+          HIGHLIGHTLY_KEY: ${{ secrets.HIGHLIGHTLY_KEY }}
+        run: |
+          hl() { curl -sS --max-time 25 -H "x-rapidapi-key: $HIGHLIGHTLY_KEY" -H "Accept: application/json" "https://sports.highlightly.net/football$1" || true; }
+          echo "now: $(date -u +'%F %H:%MZ')  = Yerevan $(TZ=Asia/Yerevan date +'%F %H:%M')"
+          for d in $(seq 0 6); do
+            day=$(date -u -d "+$d day" +%F)
+            hl "/matches?leagueId=291826&date=$day" \
+              | jq -r --arg day "$day" '(.data // .)[]? | "  \($day)  \(.id)  \(.date)  \(.homeTeam.name) - \(.awayTeam.name)  [\(.state.description // "-")]"' 2>/dev/null
+          done
+
+      - name: Ask everything about one match
+        if: ${{ inputs.mode == 'one' }}
+        env:
+          HIGHLIGHTLY_KEY: ${{ secrets.HIGHLIGHTLY_KEY }}
+          MATCH: ${{ inputs.date }}
+        run: |
+          hl() { curl -sS --max-time 25 -H "x-rapidapi-key: $HIGHLIGHTLY_KEY" -H "Accept: application/json" "https://sports.highlightly.net/football$1" || true; }
+          id="$MATCH"
+          echo "asked at $(date -u +'%F %H:%M:%SZ') about match $id"
+          m=$(hl "/matches/$id")
+          echo "  state: $(jq -c '[(.data//[.])[]?|.state] | .[0]' <<<"$m" 2>/dev/null || head -c 200 <<<"$m")"
+          l=$(hl "/lineups/$id")
+          echo "  lineups: bytes ${#l}  home named $(jq -r '(.homeTeam.initialLineup // [])|length' <<<"$l" 2>/dev/null)  away named $(jq -r '(.awayTeam.initialLineup // [])|length' <<<"$l" 2>/dev/null)  formation $(jq -r '.homeTeam.formation // "-"' <<<"$l" 2>/dev/null)"
+          head -c 800 <<<"$l"; echo
+          e=$(hl "/events/$id")
+          echo "  events: $(jq -r '(.data // .)|length' <<<"$e" 2>/dev/null) rows"
+          st=$(hl "/statistics/$id")
+          echo "  statistics: bytes ${#st}"
 
       - name: Does Highlightly fill a finished Armenian match?
         if: ${{ inputs.mode != 'site' && inputs.mode != 'sources' && inputs.mode != 'lineups' }}
