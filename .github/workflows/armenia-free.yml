@@ -181,8 +181,31 @@ jobs:
           echo "    the plan's list: $(grep -o '"code":"[A-Z0-9]*"' <<<"$comps" | tr '\n' ' ')"
           echo "    anything Armenian: $(grep -c -i armenia <<<"$comps" || true)"
 
+      # The one question the round-three run left unread.
+      #
+      # That run measured everything else on a finished match - eight
+      # events with a playerId each, eight statistics a side, a full
+      # player profile - but its /lineups answer scrolled past unread,
+      # and it is the line that decides whether the Armenian SQUADS come
+      # back. Events name only the men who did something; a lineup names
+      # eleven and the bench. This asks that alone, in one request, and
+      # prints it whole.
+      - name: Does a played match have its lineups?
+        if: ${{ inputs.mode == 'lineups' }}
+        env:
+          HIGHLIGHTLY_KEY: ${{ secrets.HIGHLIGHTLY_KEY }}
+          MATCH: ${{ inputs.date }}
+        run: |
+          id="${MATCH:-1345873453}"
+          out=$(curl -sS --max-time 25 -H "x-rapidapi-key: $HIGHLIGHTLY_KEY" -H "Accept: application/json"             "https://sports.highlightly.net/football/lineups/$id" || true)
+          echo "bytes: ${#out}"
+          echo "starters named: $(grep -o '"initialLineup"' <<<"$out" | wc -l) blocks"
+          echo "--- whole answer, first 3000 characters:"
+          head -c 3000 <<<"$out"
+          echo
+
       - name: Does Highlightly fill a finished Armenian match?
-        if: ${{ inputs.mode != 'site' && inputs.mode != 'sources' }}
+        if: ${{ inputs.mode != 'site' && inputs.mode != 'sources' && inputs.mode != 'lineups' }}
         env:
           HIGHLIGHTLY_KEY: ${{ secrets.HIGHLIGHTLY_KEY }}
           DAY: ${{ inputs.date }}
