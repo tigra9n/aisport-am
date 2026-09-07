@@ -1,0 +1,153 @@
+# The Armenian player pages, from the fifty-a-month mirror.
+#
+# What is still missing after the squads were frozen on 7 September: the
+# individual footballer's page - date of birth, height, foot, position,
+# nationality, market value - which came from API-Football and goes with
+# the subscription on 23 September.
+#
+# The cheap discovery that makes this possible: Sofascore's
+# /team/{id}/players answers with the whole player object per row, not just
+# a name and a number. So twelve requests fill three hundred and thirty-four
+# player pages, rather than one request per footballer, which at 50 a MONTH
+# would have taken most of a year.
+#
+# Getting the twelve Sofascore team ids costs three more, from the league
+# table, rather than twelve searches:
+#   /search/all?q=...            the league's uniqueTournament id
+#   /unique-tournament/{id}/seasons          the season id
+#   /unique-tournament/{id}/season/{s}/standings/total   twelve team ids
+#
+# Fifteen of fifty. The counter below stops the run at twenty whatever
+# happens, because there is no second key and the month resets on the 7th.
+name: Freeze the Armenian player profiles
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "true = look and report, write nothing"
+        required: false
+        default: "false"
+
+jobs:
+  freeze:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+
+      - name: Read the league, then every squad in it
+        working-directory: aisport-am
+        env:
+          SPORTAPI7_KEY: ${{ secrets.SPORTAPI7_KEY }}
+          DRY: ${{ inputs.dry_run }}
+        run: |
+          cat > players.mjs <<'JS'
+          import { readFileSync, writeFileSync } from "node:fs";
+          const HOST = "https://sportapi7.p.rapidapi.com";
+          const key = process.env.SPORTAPI7_KEY;
+          if (!key) { console.log("no SPORTAPI7_KEY"); process.exit(1); }
+
+          // A hard ceiling, not a hope. The free plan is fifty requests a
+          // MONTH and a wrong guess in a loop would spend the lot in one
+          // run; the remaining count is printed after every call so the
+          // real cost is on the record rather than estimated afterwards.
+          let spent = 0;
+          const CEILING = 20;
+          let left = null;
+          async function ask(path) {
+            if (spent >= CEILING) throw new Error(`refusing to spend more than ${CEILING} in one run`);
+            spent += 1;
+            const res = await fetch(`${HOST}${path}`, {
+              headers: { "x-rapidapi-key": key, "x-rapidapi-host": "sportapi7.p.rapidapi.com", Accept: "application/json" },
+            });
+            left = res.headers.get("x-ratelimit-requests-remaining") ?? left;
+            if (!res.ok) { console.log(`  ${res.status} on ${path} (${left} left)`); return null; }
+            return res.json().catch(() => null);
+          }
+
+          // 1. The league.
+          const found = await ask(`/api/v1/search/all?q=${encodeURIComponent("Armenian Premier League")}`);
+          const tournament = (found?.results ?? [])
+            .map((r) => r.entity)
+            .find((e) => e?.category?.country?.alpha2 === "AM" || e?.country?.alpha2 === "AM");
+          console.log(`league: ${tournament?.name ?? "NOT FOUND"} id=${tournament?.id ?? "-"}  (${left} left)`);
+          if (!tournament?.id) { console.log("cannot go on without the league id"); process.exit(1); }
+
+          // 2. Its current season.
+          const seasons = await ask(`/api/v1/unique-tournament/${tournament.id}/seasons`);
+          const season = (seasons?.seasons ?? [])[0];
+          console.log(`season: ${season?.name ?? "NOT FOUND"} id=${season?.id ?? "-"}  (${left} left)`);
+          if (!season?.id) process.exit(1);
+
+          // 3. The twelve clubs, from the table.
+          const table = await ask(`/api/v1/unique-tournament/${tournament.id}/season/${season.id}/standings/total`);
+          const rows = (table?.standings ?? []).flatMap((g) => g.rows ?? []);
+          const clubs = rows.map((r) => ({ id: r.team?.id, name: r.team?.name })).filter((c) => c.id);
+          console.log(`clubs: ${clubs.length}  (${left} left)`);
+          clubs.forEach((c) => console.log(`    ${c.id}  ${c.name}`));
+          if (clubs.length < 8) { console.log("too few clubs to be the whole league - stopping"); process.exit(1); }
+
+          // 4. Every squad, whole.
+          const out = {};
+          const fields = new Set();
+          for (const club of clubs) {
+            const body = await ask(`/api/v1/team/${club.id}/players`);
+            const players = body?.players ?? [];
+            if (!players.length) { console.log(`  ${club.name}: NOTHING`); continue; }
+            players.forEach((p) => Object.keys(p.player ?? {}).forEach((k) => fields.add(k)));
+            out[club.id] = {
+              teamName: club.name,
+              players: players.map(({ player: p }) => ({
+                id: p.id, name: p.name, slug: p.slug,
+                number: p.jerseyNumber ? Number(p.jerseyNumber) : null,
+                position: p.position ?? null,
+                country: p.country?.name ?? null,
+                birth: p.dateOfBirthTimestamp ?? null,
+                height: p.height ?? null,
+                foot: p.preferredFoot ?? null,
+                value: p.proposedMarketValue ?? p.proposedMarketValueRaw?.value ?? null,
+                contractUntil: p.contractUntilTimestamp ?? null,
+              })),
+            };
+            console.log(`  ${club.name}: ${players.length} players  (${left} left)`);
+          }
+          const total = Object.values(out).reduce((n, s) => n + s.players.length, 0);
+          console.log(`\n${Object.keys(out).length} clubs, ${total} players, ${spent} requests spent, ${left} left this month`);
+          console.log(`every field the mirror gives per player:\n  ${[...fields].sort().join(", ")}`);
+
+          if (process.env.DRY === "true") { console.log("dry run - writing nothing"); process.exit(0); }
+          if (Object.keys(out).length < clubs.length) { console.log("NOT writing: some club answered with nothing, and a file that never expires must not hide it"); process.exit(1); }
+
+          const MARK = "// ---- generated below by .github/workflows/armenian-players.yml, do not edit ----";
+          const file = readFileSync("lib/armenian-players.ts", "utf8");
+          const head = file.split(MARK)[0];
+          const rows2 = Object.entries(out).map(([id, s]) => `  ${id}: ${JSON.stringify(s)},`).join("\n");
+          writeFileSync("lib/armenian-players.ts",
+            `${head}${MARK}\nexport const ARMENIAN_PLAYERS_TAKEN = "${new Date().toISOString().slice(0, 10)}";\n` +
+            `export const ARMENIAN_PLAYERS: Record<number, MirrorSquad> = {\n${rows2}\n};\n`);
+          console.log("wrote lib/armenian-players.ts");
+          JS
+          node players.mjs
+          rm -f players.mjs
+
+      - name: It has to compile before it is offered
+        if: ${{ inputs.dry_run != 'true' }}
+        working-directory: aisport-am
+        run: npm ci && npm run typecheck
+
+      - name: Commit it
+        if: ${{ inputs.dry_run != 'true' }}
+        run: |
+          if [ -z "$(git status --porcelain aisport-am/lib/armenian-players.ts)" ]; then echo "the file already says this"; exit 0; fi
+          TARGET="claude/armenian-players"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add aisport-am/lib/armenian-players.ts
+          git commit -m "Freeze the Armenian player profiles"
+          git push --force-with-lease origin HEAD:"$TARGET"
+          echo "pushed to $TARGET - open a pull request from it by hand"
