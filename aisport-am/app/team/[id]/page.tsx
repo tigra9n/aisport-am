@@ -1,5 +1,6 @@
 import { sizedImage } from "../../../lib/image-proxy";
 import type { Metadata } from "next";
+import { missingPageMetadata } from "../../../lib/seo";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
@@ -11,9 +12,9 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
-  if (!isTeamId(id)) return {};
+  if (!isTeamId(id)) return missingPageMetadata;
   const squad = await getSquad(teamId(id));
-  if (!squad) return {};
+  if (!squad) return missingPageMetadata;
   const description = `${squad.teamName}-ի կազմը, խաղացողները և մարզիչը։`;
   return {
     title: `${squad.teamName} — Կազմ | AIFootball.am`,

@@ -2,6 +2,7 @@
 import { RevealGrid } from "../../../components/reveal-grid";
 import { imageSrcSet, shareImage, sizedImage } from "../../../lib/image-proxy";
 import type { Metadata } from "next";
+import { missingPageMetadata } from "../../../lib/seo";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { NewsCard } from "../../../components/news-card";
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ code: string }> }): Promise<Metadata> {
   const { code } = await params;
   const league = LEAGUE_TAGS.find((item) => item.code === code.toUpperCase());
-  if (!league) return {};
+  if (!league) return missingPageMetadata;
   const url = `https://aifootball.am/league/${code}`;
   const description = `${league.label}-ի ամենաթարմ նորությունները, տրանսֆերները և վերլուծությունները։`;
   const lead = (await getArticlesByLeague(league.code, 1)).map(toPreview)[0] ?? null;

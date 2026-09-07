@@ -33,11 +33,11 @@ on:
   workflow_dispatch:
     inputs:
       date:
-        description: "Match day to read (YYYY-MM-DD). Empty = yesterday."
+        description: "Match day (YYYY-MM-DD), or a match id when mode is 'one'. Empty = yesterday."
         required: false
         default: ""
       mode:
-        description: "provider = ask Highlightly. site = read the deployed board. sources = look for another free provider."
+        description: "provider | site | sources | lineups | next | one | seo"
         required: false
         default: "provider"
 
@@ -181,8 +181,215 @@ jobs:
           echo "    the plan's list: $(grep -o '"code":"[A-Z0-9]*"' <<<"$comps" | tr '\n' ' ')"
           echo "    anything Armenian: $(grep -c -i armenia <<<"$comps" || true)"
 
+      # The one question the round-three run left unread.
+      #
+      # That run measured everything else on a finished match - eight
+      # events with a playerId each, eight statistics a side, a full
+      # player profile - but its /lineups answer scrolled past unread,
+      # and it is the line that decides whether the Armenian SQUADS come
+      # back. Events name only the men who did something; a lineup names
+      # eleven and the bench. This asks that alone, in one request, and
+      # prints it whole.
+      # Is the empty lineup this match's, this league's, or the plan's?
+      #
+      # MEASURED on 7 September: /lineups/1345873453 - Shirak 1:0
+      # Sardarapat, a match that had certainly been played, because its
+      # /events answer named eight things that happened in it - came back
+      # 283 bytes with formation "Unknown" and both initialLineup arrays
+      # empty. One match is not a finding. Three questions separate the
+      # three explanations, and only the third one closes the squads:
+      #
+      #   1. other finished Armenian matches - is it every Armenian match?
+      #   2. a finished match in a league everyone covers - does Highlightly
+      #      ever fill a lineup on the free plan, for anybody?
+      #   3. the match object itself - does /matches/{id} carry the names
+      #      that /lineups/{id} does not?
+      #
+      # If the big league's lineup is full and Armenia's is empty, the
+      # answer is coverage and no amount of asking will change it. If both
+      # are empty, it is the free plan, and the paid tier would be worth
+      # pricing.
+      - name: Does a played match have its lineups?
+        if: ${{ inputs.mode == 'lineups' }}
+        env:
+          HIGHLIGHTLY_KEY: ${{ secrets.HIGHLIGHTLY_KEY }}
+        run: |
+          hl() { curl -sS --max-time 25 -H "x-rapidapi-key: $HIGHLIGHTLY_KEY" -H "Accept: application/json" "https://sports.highlightly.net/football$1" || true; }
+          rows() { jq -c '(.data // .)[]?' 2>/dev/null; }
+          # A lineup answer read the same way every time it is printed, so
+          # "empty" always means the same thing: how many men each side named.
+          verdict() {
+            local body="$1"
+            echo "      bytes ${#body}  home named $(jq -r '(.homeTeam.initialLineup // [])|length' <<<"$body" 2>/dev/null)  away named $(jq -r '(.awayTeam.initialLineup // [])|length' <<<"$body" 2>/dev/null)  formation $(jq -r '.homeTeam.formation // "-"' <<<"$body" 2>/dev/null)"
+          }
+
+          echo "=== 1. finished Armenian matches, walking back from yesterday"
+          ids=""
+          for d in $(seq 1 14); do
+            day=$(date -u -d "-$d day" +%F)
+            body=$(hl "/matches?leagueId=291826&date=$day")
+            got=$(rows <<<"$body" | jq -r 'select((.state.description // "") | test("fin|ended|ft";"i")) | "\(.id)\t\(.homeTeam.name) - \(.awayTeam.name)"' 2>/dev/null)
+            [ -z "$got" ] && continue
+            echo "  $day"
+            echo "$got" | sed 's/^/    /'
+            ids="$ids $(awk -F'\t' '{print $1}' <<<"$got" | tr '\n' ' ')"
+            [ "$(wc -w <<<"$ids")" -ge 3 ] && break
+          done
+          echo "  --- their lineups:"
+          for id in $(tr ' ' '\n' <<<"$ids" | grep -v '^$' | head -3); do
+            echo "    match $id"
+            verdict "$(hl "/lineups/$id")"
+          done
+
+          echo
+          echo "=== 2. the same question in a league nobody neglects"
+          big=$(hl "/leagues?leagueName=Premier%20League&limit=5")
+          echo "  leagues answered: $(head -c 400 <<<"$big")"
+          bigid=$(rows <<<"$big" | jq -r 'select((.country.name // .country.code // "") | test("Eng";"i")) | .id' 2>/dev/null | head -1)
+          [ -z "$bigid" ] && bigid=$(rows <<<"$big" | jq -r '.id' 2>/dev/null | head -1)
+          echo "  using league $bigid"
+          for d in $(seq 1 10); do
+            day=$(date -u -d "-$d day" +%F)
+            body=$(hl "/matches?leagueId=$bigid&date=$day")
+            got=$(rows <<<"$body" | jq -r 'select((.state.description // "") | test("fin|ended|ft";"i")) | "\(.id)\t\(.homeTeam.name) - \(.awayTeam.name)"' 2>/dev/null | head -1)
+            [ -z "$got" ] && continue
+            echo "  $day  $got"
+            bigmatch=$(cut -f1 <<<"$got")
+            break
+          done
+          if [ -n "${bigmatch:-}" ]; then
+            echo "  --- its lineup:"
+            answer=$(hl "/lineups/$bigmatch")
+            verdict "$answer"
+            echo "  --- first 600 characters, so the shape is visible when it is full:"
+            head -c 600 <<<"$answer"; echo
+          else
+            echo "  no finished match found in that league in ten days"
+          fi
+
+          echo
+          echo "=== 3. does the match object itself carry the names?"
+          first=$(tr ' ' '\n' <<<"$ids" | grep -v '^$' | head -1)
+          if [ -n "$first" ]; then
+            m=$(hl "/matches/$first")
+            echo "  bytes ${#m}"
+            echo "  keys: $(jq -r '[paths(scalars==null or true)|map(tostring)|join(".")]|map(split(".")[0])|unique|join(", ")' <<<"$m" 2>/dev/null | head -c 300)"
+            echo "  any lineup-shaped field: $(grep -o '\"\(lineup\|lineups\|initialLineup\|players\|squad\|substitutes\)\"' <<<"$m" | sort -u | tr '\n' ' ')"
+          fi
+
+      # Does the lineup exist only while the match is being played?
+      #
+      # The finished-match answer was empty three times over, and the same
+      # question in the Premier League came back with a formation and a
+      # named bench - so the free plan does serve lineups, and it does not
+      # wipe them when the whistle goes. That is already most of an answer.
+      # But "most" is not "measured": nobody has asked Highlightly for an
+      # Armenian lineup while an Armenian match was actually on the pitch.
+      # Round two came closest and missed by eleven minutes.
+      #
+      # So: mode 'next' prints the coming Armenian fixtures with their
+      # kick-off times, and mode 'one' asks everything about a single match
+      # id given in the date box. Run 'one' in the second half and the
+      # question is closed either way.
+      # What Google is actually complaining about.
+      #
+      # Search Console mailed twice on 7 September: pages not indexed as
+      # "duplicate without a user-selected canonical", "not found (404)",
+      # "excluded by noindex", "server error (5xx)", "page with redirect"
+      # and "blocked by robots.txt". Four of those six are this site doing
+      # what it was told to - the old domain redirects, /control is
+      # disallowed, /search and /moderate are noindex - and two are not:
+      # a 404 or a 500 on a URL Google was told to crawl is a page the
+      # site is losing.
+      #
+      # Every page file carries alternates.canonical, so "no canonical"
+      # can only be the rendered HTML disagreeing with the source. That
+      # is exactly what a runner can check and this agent cannot: the
+      # site refuses this agent's addresses.
+      #
+      # So: read the sitemap the site is publishing right now, open a
+      # sample of every kind of URL in it, and print status, canonical
+      # and robots meta for each.
+      - name: What Google sees
+        if: ${{ inputs.mode == 'seo' }}
+        run: |
+          base="https://aifootball.am"
+          echo "=== robots.txt"
+          curl -sS --max-time 30 "$base/robots.txt"
+          echo
+          echo "=== sitemap.xml"
+          sm=$(curl -sS --max-time 60 "$base/sitemap.xml")
+          echo "  bytes ${#sm}  urls: $(grep -c '<loc>' <<<"$sm" || true)"
+          echo "  by kind:"
+          grep -o '<loc>[^<]*</loc>' <<<"$sm" | sed 's/<[^>]*>//g' \
+            | sed "s|$base/||" | awk -F/ '{print ($1==""?"(home)":$1)}' | sort | uniq -c | sort -rn
+          echo
+          echo "=== news-sitemap.xml"
+          ns=$(curl -sS --max-time 45 "$base/news-sitemap.xml")
+          echo "  bytes ${#ns}  urls: $(grep -c '<loc>' <<<"$ns" || true)"
+          echo
+          # One of each kind, plus a spread of articles, opened for real.
+          echo "=== opening a sample: status | canonical | robots | title"
+          urls=$( { printf '%s\n' "$base/" "$base/live" "$base/standings" "$base/armenia" \
+                      "$base/topscorers" "$base/opinions" "$base/about" "$base/search" \
+                      "$base/team/582" "$base/player/306" "$base/news/does-not-exist-xyz"
+                    grep -o '<loc>[^<]*</loc>' <<<"$sm" | sed 's/<[^>]*>//g' | grep '/news/' | head -12
+                    grep -o '<loc>[^<]*</loc>' <<<"$sm" | sed 's/<[^>]*>//g' | grep -E '/(category|league|opinions)/' | head -8
+                  } )
+          bad=0
+          while read -r u; do
+            [ -z "$u" ] && continue
+            code=$(curl -s -o /tmp/body -w '%{http_code}' --max-time 45 "$u" || echo "---")
+            can=$(grep -o '<link[^>]*rel="canonical"[^>]*>' /tmp/body | grep -o 'href="[^"]*"' | head -1 | cut -d'"' -f2)
+            rob=$(grep -o '<meta[^>]*name="robots"[^>]*>' /tmp/body | grep -o 'content="[^"]*"' | head -1 | cut -d'"' -f2)
+            ttl=$(grep -o '<title>[^<]*</title>' /tmp/body | sed 's/<[^>]*>//g' | head -1)
+            mark=" "
+            case "$code" in 5*) mark="!"; bad=$((bad+1));; 404) mark="?";; esac
+            printf '%s %s  %-58s  canonical=%s  robots=%s  %s\n' "$mark" "$code" "${u#https://aifootball.am}" "${can:-NONE}" "${rob:--}" "${ttl:0:40}"
+          done <<<"$urls"
+          echo
+          echo "5xx seen: $bad"
+
+      - name: When is the next Armenian match?
+        if: ${{ inputs.mode == 'next' }}
+        env:
+          HIGHLIGHTLY_KEY: ${{ secrets.HIGHLIGHTLY_KEY }}
+        run: |
+          hl() { curl -sS --max-time 25 -H "x-rapidapi-key: $HIGHLIGHTLY_KEY" -H "Accept: application/json" "https://sports.highlightly.net/football$1" || true; }
+          echo "now: $(date -u +'%F %H:%MZ')  = Yerevan $(TZ=Asia/Yerevan date +'%F %H:%M')"
+          for d in $(seq 0 6); do
+            day=$(date -u -d "+$d day" +%F)
+            hl "/matches?leagueId=291826&date=$day" \
+              | jq -r --arg day "$day" '(.data // .)[]? | "  \($day)  \(.id)  \(.date)  \(.homeTeam.name) - \(.awayTeam.name)  [\(.state.description // "-")]"' 2>/dev/null
+          done
+
+      - name: Ask everything about one match
+        if: ${{ inputs.mode == 'one' }}
+        env:
+          HIGHLIGHTLY_KEY: ${{ secrets.HIGHLIGHTLY_KEY }}
+          MATCH: ${{ inputs.date }}
+        run: |
+          hl() { curl -sS --max-time 25 -H "x-rapidapi-key: $HIGHLIGHTLY_KEY" -H "Accept: application/json" "https://sports.highlightly.net/football$1" || true; }
+          id="$MATCH"
+          echo "asked at $(date -u +'%F %H:%M:%SZ') about match $id"
+          m=$(hl "/matches/$id")
+          echo "  state: $(jq -c '[(.data//[.])[]?|.state] | .[0]' <<<"$m" 2>/dev/null || head -c 200 <<<"$m")"
+          l=$(hl "/lineups/$id")
+          echo "  lineups: bytes ${#l}  home named $(jq -r '(.homeTeam.initialLineup // [])|length' <<<"$l" 2>/dev/null)  away named $(jq -r '(.awayTeam.initialLineup // [])|length' <<<"$l" 2>/dev/null)  formation $(jq -r '.homeTeam.formation // "-"' <<<"$l" 2>/dev/null)"
+          head -c 800 <<<"$l"; echo
+          e=$(hl "/events/$id")
+          echo "  events: $(jq -r '(.data // .)|length' <<<"$e" 2>/dev/null) rows"
+          st=$(hl "/statistics/$id")
+          echo "  statistics: bytes ${#st}"
+
       - name: Does Highlightly fill a finished Armenian match?
-        if: ${{ inputs.mode != 'site' && inputs.mode != 'sources' }}
+        # Named, not excluded. Every mode added since has had to be
+        # remembered here, and on 7 September one was not: a 'next' run
+        # worth seven requests fell through into this step, which spends
+        # about thirty, and the day's allowance was gone by 06:45 UTC with
+        # the live-lineup question still unasked. A default step that runs
+        # unless told otherwise will always be one edit behind.
+        if: ${{ inputs.mode == 'provider' || inputs.mode == '' }}
         env:
           HIGHLIGHTLY_KEY: ${{ secrets.HIGHLIGHTLY_KEY }}
           DAY: ${{ inputs.date }}

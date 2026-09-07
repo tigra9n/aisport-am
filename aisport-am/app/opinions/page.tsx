@@ -5,7 +5,17 @@ import { getOpinions, OPINION_CATEGORIES } from "../../lib/opinions";
 import Link from "next/link";
 
 import type { Metadata } from "next";
-export const metadata: Metadata = { alternates: { canonical: "https://aifootball.am/opinions" } };
+// Title and description of its own. MEASURED on 7 September: this page
+// answered with "AIFootball — սպորտային լուրեր հայերեն", the site-wide
+// default from app/layout.tsx, character for character the same as the
+// home page - which is what Search Console means when it reports a page
+// as a duplicate whose canonical the site did not choose. The canonical
+// tag was there all along; the title was not.
+export const metadata: Metadata = {
+  title: "Հեղինակային նյութեր — կարծիքներ և վերլուծություն | AIFootball.am",
+  description: "Փորձագիտական տեսակետներ, տակտիկական դիտարկումներ և հայկական սպորտի խորքային պատմություններ։",
+  alternates: { canonical: "https://aifootball.am/opinions" },
+};
 
 export const dynamic = "force-dynamic";
 
