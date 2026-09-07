@@ -1,0 +1,136 @@
+# Freeze the twelve Armenian squads into the repository.
+#
+# The Pro subscription to API-Football ends on 23 September 2026 and is not
+# being renewed - $19 a month for one league, on a site that is meant to
+# cost nothing. Everything else it paid for has a free replacement that has
+# been measured: Highlightly serves the table (twelve rows of twelve right,
+# checked club by club against the league's own), the fixtures, the live
+# minute, eight events a match each carrying a playerId, and eight
+# statistics a side. The squads have none.
+#
+# Eleven providers were asked. Highlightly has no squad endpoint in seven
+# spellings, and its /lineups answers 200 for an Armenian match with both
+# initialLineup arrays empty and the formation "Unknown" - while the same
+# request for Arsenal - Chelsea the same afternoon returned a 4-2-3-1 and a
+# bench with shirt numbers. So it is coverage, not the free plan, and
+# paying them would buy the same empty arrays.
+#
+# What is left is to take the squads once, with the key that is still paid
+# for, and keep them in a file. This is that run. Twelve requests.
+name: Freeze the Armenian squads
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "apifootball (while the key lives) | sportapi (the RapidAPI mirror, 50 a MONTH)"
+        required: false
+        default: "apifootball"
+
+jobs:
+  freeze:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+
+      - name: Take the twelve squads
+        working-directory: aisport-am
+        env:
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          SPORTAPI7_KEY: ${{ secrets.SPORTAPI7_KEY }}
+          SOURCE: ${{ inputs.source }}
+        run: |
+          cat > freeze.mjs <<'JS'
+          import { readFileSync, writeFileSync } from "node:fs";
+
+          // The twelve ids are read out of lib/highlightly.ts rather than
+          // written here again. That table is already the one place this
+          // repository says which numbers the Armenian clubs have, and a
+          // second copy would be a second thing to keep right.
+          const src = readFileSync("lib/highlightly.ts", "utf8");
+          const block = src.split("ARMENIAN_CLUB_IDS: Record<string, number> = {")[1]?.split("};")[0] ?? "";
+          const clubs = [...block.matchAll(/"([^"]+)":\s*(\d+)/g)].map((m) => ({ hy: m[1], id: Number(m[2]) }));
+          if (clubs.length < 12) { console.log(`only ${clubs.length} clubs read from lib/highlightly.ts - refusing to write a short file`); process.exit(1); }
+
+          const key = process.env.API_FOOTBALL_KEY;
+          if (!key) { console.log("no API_FOOTBALL_KEY"); process.exit(1); }
+
+          const out = {};
+          let taken = 0;
+          for (const club of clubs) {
+            const res = await fetch(`https://v3.football.api-sports.io/players/squads?team=${club.id}`, {
+              headers: { "x-apisports-key": key, Accept: "application/json" },
+            });
+            const body = await res.json().catch(() => null);
+            const entry = body?.response?.[0];
+            const players = entry?.players ?? [];
+            // A club that answers with nothing is left out rather than
+            // written empty: an empty squad in the file would win over the
+            // live provider's silence and pin the page shut for good.
+            if (!players.length) {
+              console.log(`  ${club.hy} (${club.id}): NOTHING - ${JSON.stringify(body?.errors ?? body).slice(0, 120)}`);
+              continue;
+            }
+            out[club.id] = {
+              teamName: entry.team?.name ?? club.hy,
+              teamLogo: entry.team?.logo ?? null,
+              players: players.map((p) => ({
+                id: p.id, name: p.name, number: p.number ?? null,
+                position: p.position ?? "", age: p.age ?? null, photo: p.photo ?? null,
+              })),
+            };
+            taken += 1;
+            console.log(`  ${club.hy} (${club.id}): ${players.length} players`);
+          }
+          console.log(`\n${taken} of ${clubs.length} clubs taken`);
+          if (taken < clubs.length) { console.log("NOT writing the file: a partial freeze would hide the clubs it missed behind a file that never expires."); process.exit(1); }
+
+          const MARK = "// ---- generated below by .github/workflows/armenian-squads.yml, do not edit ----";
+          const file = readFileSync("lib/armenian-squads.ts", "utf8");
+          const head = file.split(MARK)[0];
+          const rows = Object.entries(out).map(([id, squad]) =>
+            `  ${id}: ${JSON.stringify(squad)},`).join("\n");
+          writeFileSync("lib/armenian-squads.ts",
+            `${head}${MARK}\n/** When these were taken. Read by whoever wonders how old they are. */\n` +
+            `export const ARMENIAN_SQUADS_TAKEN = "${new Date().toISOString().slice(0, 10)}";\n` +
+            `export const ARMENIAN_SQUADS: Record<number, FrozenSquad> = {\n${rows}\n};\n`);
+          console.log("wrote lib/armenian-squads.ts");
+          JS
+          node freeze.mjs
+          rm -f freeze.mjs
+
+      - name: It has to compile before it is offered
+        working-directory: aisport-am
+        run: npm ci && npm run typecheck
+
+      - name: Commit it
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -z "$(git status --porcelain aisport-am/lib/armenian-squads.ts)" ]; then echo "the file already says this"; exit 0; fi
+          TARGET="claude/armenian-squads"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add aisport-am/lib/armenian-squads.ts
+          git commit -m "Freeze the twelve Armenian squads before the key expires"
+          # force-with-lease onto a branch this workflow owns and rewrites
+          # whole each time. Every run regenerates the same file from main,
+          # so there is no history here worth keeping - and a plain push
+          # would be refused as a non-fast-forward on the second run, which
+          # is how the club map lost two hundred proved clubs once.
+          git push --force-with-lease origin HEAD:"$TARGET"
+          echo "pushed to $TARGET"
+          # Whether a pull request was opened, honestly. A workflow's
+          # GITHUB_TOKEN cannot create one unless the repository allows
+          # Actions to, and this one does not - so this reports the truth
+          # rather than printing success at a step that did nothing.
+          open=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls?head=${{ github.repository_owner }}:$TARGET&state=open" \
+            | grep -c '"number"' || true)
+          if [ "$open" -gt 0 ]; then echo "a pull request for $TARGET is already open"; else
+            echo "no pull request was opened - open one from $TARGET by hand"; fi

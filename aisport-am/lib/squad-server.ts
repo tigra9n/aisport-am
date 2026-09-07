@@ -424,6 +424,12 @@ export async function getSquad(teamId: number | string): Promise<Squad | null> {
         } catch { /* fall through */ }
       }
     }
-    return null;
+    // The twelve Armenian clubs, frozen in the repository before the
+    // subscription that fetched them ended. Last, deliberately: while the
+    // key still works the live squad is the true one, and a stale cache row
+    // is still newer than a file written once. This answers only when both
+    // are gone, which after 23 September is every request.
+    const { frozenArmenianSquad } = await import("./armenian-squads");
+    return frozenArmenianSquad(teamId);
   }
 }
