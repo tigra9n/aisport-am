@@ -1,5 +1,6 @@
 import { sizedImage } from "../../../lib/image-proxy";
 import type { Metadata } from "next";
+import { missingPageMetadata } from "../../../lib/seo";
 import { notFound, permanentRedirect } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
 import { SiteHeader } from "../../../components/site-header";
@@ -11,9 +12,9 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const coachId = Number.parseInt(id, 10);
-  if (!Number.isFinite(coachId)) return {};
+  if (!Number.isFinite(coachId)) return missingPageMetadata;
   const coach = await getCoachById(coachId);
-  if (!coach) return {};
+  if (!coach) return missingPageMetadata;
   const description = `${coach.name}-ի մարզչական կարիերայի պատմությունը։`;
   return {
     title: `${coach.name} — Մարզիչ | AIFootball.am`,

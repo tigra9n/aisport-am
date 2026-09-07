@@ -1,6 +1,7 @@
 import { sizedImage } from "../../../lib/image-proxy";
 import Link from "next/link";
 import type { Metadata } from "next";
+import { missingPageMetadata } from "../../../lib/seo";
 import { notFound, permanentRedirect } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
 import { SiteHeader } from "../../../components/site-header";
@@ -16,7 +17,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   if (id.startsWith("espn-")) {
     const { espnPlayer } = await import("../../../lib/espn");
     const player = await espnPlayer(id.slice(5));
-    if (!player) return {};
+    if (!player) return missingPageMetadata;
     return {
       title: `${player.name} — Խաղացողի պրոֆիլ | AIFootball.am`,
       description: `${player.name}-ի պրոֆիլը, մրցաշրջանների վիճակագրությունը և ակումբները։`,
@@ -24,9 +25,9 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
     };
   }
   const playerId = Number.parseInt(id, 10);
-  if (!Number.isFinite(playerId)) return {};
+  if (!Number.isFinite(playerId)) return missingPageMetadata;
   const profile = await getPlayerProfile(playerId);
-  if (!profile) return {};
+  if (!profile) return missingPageMetadata;
   const description = `${profile.name}-ի պրոֆիլը, վիճակագրություն և կարիերայի պատմություն։`;
   return {
     title: `${profile.name} — Խաղացողի պրոֆիլ | AIFootball.am`,

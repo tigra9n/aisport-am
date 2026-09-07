@@ -1,6 +1,7 @@
 import { shareImage, sizedImage } from "../../../lib/image-proxy";
 import { ShareRow } from "../../../components/share-row";
 import type { Metadata } from "next";
+import { missingPageMetadata } from "../../../lib/seo";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
 import { SiteHeader } from "../../../components/site-header";
@@ -13,7 +14,7 @@ const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1522778119026-d647f059
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const opinion = await getOpinionBySlug(slug);
-  if (!opinion) return {};
+  if (!opinion) return missingPageMetadata;
 
   const { title, category, imageUrl } = opinion;
   const description = opinion.content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160);

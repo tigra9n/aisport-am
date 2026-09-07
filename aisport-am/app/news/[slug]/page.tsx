@@ -4,6 +4,7 @@ import { noFollowSearch } from "../../../lib/crawl-hints";
 import { categories } from "../../../lib/content";
 import { ShareRow } from "../../../components/share-row";
 import type { Metadata } from "next";
+import { missingPageMetadata } from "../../../lib/seo";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "../../../components/site-footer";
@@ -22,7 +23,7 @@ const HERO_SIZES = "(max-width:700px) calc(100vw - 24px), 900px";
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const stored = await getArticleBySlug(slug);
-  if (!stored) return {};
+  if (!stored) return missingPageMetadata;
 
   const { title, excerpt, category, seoTitle, metaDescription } = stored;
   // seoTitle/metaDescription (from the extended AI-generation schema) are

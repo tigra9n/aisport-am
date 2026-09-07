@@ -1,5 +1,6 @@
 import { sizedImage } from "../../../../lib/image-proxy";
 import type { Metadata } from "next";
+import { missingPageMetadata } from "../../../../lib/seo";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SiteFooter } from "../../../../components/site-footer";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const details = await getLiveMatchDetailsV2(id);
-  if (!details) return {};
+  if (!details) return missingPageMetadata;
   const { match } = details;
   const title = `${match.home} ${match.homeScore ?? ""} - ${match.awayScore ?? ""} ${match.away}`.replace(/\s+/g, " ").trim();
   const description = `${match.home} - ${match.away}. ${match.competition}։ ${match.status}։`;

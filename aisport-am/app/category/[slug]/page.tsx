@@ -2,6 +2,7 @@
 import { RevealGrid } from "../../../components/reveal-grid";
 import { imageSrcSet, shareImage, sizedImage } from "../../../lib/image-proxy";
 import type { Metadata } from "next";
+import { missingPageMetadata } from "../../../lib/seo";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { NewsCard } from "../../../components/news-card";
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const category = categories.find((item) => item.slug === slug);
-  if (!category) return {};
+  if (!category) return missingPageMetadata;
   const url = `https://aifootball.am/category/${slug}`;
   const description = `${category.name}-ի հայկական և միջազգային ամենաթարմ նորությունները, արդյունքները, վերլուծություններն ու պատմությունները։`;
   const lead = (await getArticlesByCategory(category.name, 1)).map(toPreview)[0] ?? null;
