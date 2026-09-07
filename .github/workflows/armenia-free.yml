@@ -37,7 +37,7 @@ on:
         required: false
         default: ""
       mode:
-        description: "provider | site | sources | lineups | next | one | seo"
+        description: "provider | site | sources | lineups | next | one | seo | urls"
         required: false
         default: "provider"
 
@@ -349,6 +349,32 @@ jobs:
           done <<<"$urls"
           echo
           echo "5xx seen: $bad"
+
+      # Which address on a marketplace is the real one.
+      #
+      # The API-Football listing on RapidAPI was linked from memory on
+      # 7 September and answered "API not found" in the owner's browser,
+      # while a web search still returns the same address as live. Neither
+      # this agent's machine nor its search tool can open rapidapi.com -
+      # the egress proxy blocks it - so the only way to know which URL
+      # actually resolves is to have a runner open each candidate and
+      # report the status line. Guessing a second time would waste the
+      # owner's morning, not mine.
+      - name: Which marketplace address resolves
+        if: ${{ inputs.mode == 'urls' }}
+        run: |
+          for u in "https://rapidapi.com/api-sports/api/api-football" \
+                   "https://rapidapi.com/api-sports/api/api-football/pricing" \
+                   "https://rapidapi.com/api-sports/api/api-football-beta/pricing" \
+                   "https://rapidapi.com/api-sports/api/api-football-v1/pricing" \
+                   "https://rapidapi.com/search/api-football" \
+                   "https://api-sports.io/documentation/football/v3" \
+                   "https://dashboard.api-football.com/register"; do
+            out=$(curl -sSL --max-time 30 -w '\n%{http_code} %{url_effective}' "$u" 2>/dev/null || echo "no answer")
+            code=$(tail -1 <<<"$out")
+            ttl=$(grep -o '<title>[^<]*</title>' <<<"$out" | sed 's/<[^>]*>//g' | head -1)
+            printf '%s\n    title: %s\n' "$code" "${ttl:0:90}"
+          done
 
       - name: When is the next Armenian match?
         if: ${{ inputs.mode == 'next' }}
