@@ -37,7 +37,7 @@ on:
         required: false
         default: ""
       mode:
-        description: "provider | site | sources | lineups | next | one (one reads a match id from the date box)"
+        description: "provider | site | sources | lineups | next | one | seo"
         required: false
         default: "provider"
 
@@ -291,6 +291,65 @@ jobs:
       # kick-off times, and mode 'one' asks everything about a single match
       # id given in the date box. Run 'one' in the second half and the
       # question is closed either way.
+      # What Google is actually complaining about.
+      #
+      # Search Console mailed twice on 7 September: pages not indexed as
+      # "duplicate without a user-selected canonical", "not found (404)",
+      # "excluded by noindex", "server error (5xx)", "page with redirect"
+      # and "blocked by robots.txt". Four of those six are this site doing
+      # what it was told to - the old domain redirects, /control is
+      # disallowed, /search and /moderate are noindex - and two are not:
+      # a 404 or a 500 on a URL Google was told to crawl is a page the
+      # site is losing.
+      #
+      # Every page file carries alternates.canonical, so "no canonical"
+      # can only be the rendered HTML disagreeing with the source. That
+      # is exactly what a runner can check and this agent cannot: the
+      # site refuses this agent's addresses.
+      #
+      # So: read the sitemap the site is publishing right now, open a
+      # sample of every kind of URL in it, and print status, canonical
+      # and robots meta for each.
+      - name: What Google sees
+        if: ${{ inputs.mode == 'seo' }}
+        run: |
+          base="https://aifootball.am"
+          echo "=== robots.txt"
+          curl -sS --max-time 30 "$base/robots.txt"
+          echo
+          echo "=== sitemap.xml"
+          sm=$(curl -sS --max-time 60 "$base/sitemap.xml")
+          echo "  bytes ${#sm}  urls: $(grep -c '<loc>' <<<"$sm" || true)"
+          echo "  by kind:"
+          grep -o '<loc>[^<]*</loc>' <<<"$sm" | sed 's/<[^>]*>//g' \
+            | sed "s|$base/||" | awk -F/ '{print ($1==""?"(home)":$1)}' | sort | uniq -c | sort -rn
+          echo
+          echo "=== news-sitemap.xml"
+          ns=$(curl -sS --max-time 45 "$base/news-sitemap.xml")
+          echo "  bytes ${#ns}  urls: $(grep -c '<loc>' <<<"$ns" || true)"
+          echo
+          # One of each kind, plus a spread of articles, opened for real.
+          echo "=== opening a sample: status | canonical | robots | title"
+          urls=$( { printf '%s\n' "$base/" "$base/live" "$base/standings" "$base/armenia" \
+                      "$base/topscorers" "$base/opinions" "$base/about" "$base/search" \
+                      "$base/team/582" "$base/player/306" "$base/news/does-not-exist-xyz"
+                    grep -o '<loc>[^<]*</loc>' <<<"$sm" | sed 's/<[^>]*>//g' | grep '/news/' | head -12
+                    grep -o '<loc>[^<]*</loc>' <<<"$sm" | sed 's/<[^>]*>//g' | grep -E '/(category|league|opinions)/' | head -8
+                  } )
+          bad=0
+          while read -r u; do
+            [ -z "$u" ] && continue
+            code=$(curl -s -o /tmp/body -w '%{http_code}' --max-time 45 "$u" || echo "---")
+            can=$(grep -o '<link[^>]*rel="canonical"[^>]*>' /tmp/body | grep -o 'href="[^"]*"' | head -1 | cut -d'"' -f2)
+            rob=$(grep -o '<meta[^>]*name="robots"[^>]*>' /tmp/body | grep -o 'content="[^"]*"' | head -1 | cut -d'"' -f2)
+            ttl=$(grep -o '<title>[^<]*</title>' /tmp/body | sed 's/<[^>]*>//g' | head -1)
+            mark=" "
+            case "$code" in 5*) mark="!"; bad=$((bad+1));; 404) mark="?";; esac
+            printf '%s %s  %-58s  canonical=%s  robots=%s  %s\n' "$mark" "$code" "${u#https://aifootball.am}" "${can:-NONE}" "${rob:--}" "${ttl:0:40}"
+          done <<<"$urls"
+          echo
+          echo "5xx seen: $bad"
+
       - name: When is the next Armenian match?
         if: ${{ inputs.mode == 'next' }}
         env:
